@@ -15,4 +15,6 @@ description: 채팅 메시지와 컴포저 UI. 사이드바 모션은 bb-motion,
 
 사이드바 패널 모션은 `bb-motion`이다. 스레드 목록의 색과 행 표시는 `bb-thread-theme`다.
 
+전송 버튼을 눌러 보내기가 끝나면 성공 햅틱이 한 번 난다. 모바일 셸의 `haptic` capability가 있을 때만 낸다.
+
 화면을 바꾸는 등록은 `app.tsx`에 둔다. 인용 전문은 `server.ts`가 보관하고, 전송 때 멘션으로 읽는다.

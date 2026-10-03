@@ -3,6 +3,7 @@ import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { QuoteMentionBridge } from "./lib/quote-bridge";
 import { injectQuoteMentions } from "./lib/quote-mention";
 import { injectQuotePill } from "./lib/quote-pill";
+import { injectSendHaptic } from "./lib/send-haptic";
 import { injectThreadToc } from "./lib/thread-toc";
 import { injectWorkspaceDiffPill } from "./lib/workspace-diff-pill";
 
@@ -26,6 +27,12 @@ export default definePluginApp((app) => {
         stopPill();
         stopMention();
       };
+    },
+  });
+  app.contentScripts.register({
+    id: "send-haptic",
+    mount() {
+      return injectSendHaptic(document);
     },
   });
   app.contentScripts.register({
