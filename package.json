@@ -1,0 +1,27 @@
+{
+  "name": "bb-chat-ui",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "bb": ">=0.44",
+    "bbPluginSdk": ">=0.6.9"
+  },
+  "bb": {
+    "name": "Chat UI",
+    "description": "채팅 메시지와 컴포저의 화면을 담당한다.",
+    "branding": {
+      "icon": "MessageSquare"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx",
+    "skills": ["skills"]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.9",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
