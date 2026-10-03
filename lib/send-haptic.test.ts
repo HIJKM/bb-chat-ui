@@ -5,10 +5,16 @@ import {
   IDLE_SEND_HAPTIC,
   acceptJumpPulse,
   injectSendHaptic,
+  isFileDiffBlockToggle,
   postHaptic,
   postSendHaptic,
   readHapticBridge,
+  hasNewAssistantOutput,
+  openResponseWatch,
+  reduceResponseWatch,
   reduceSendHaptic,
+  RESPONSE_START_GAPS_MS,
+  shineMeansAgentResponse,
 } from "./send-haptic.ts";
 
 test("pulses once when a pressed send finishes", () => {
@@ -34,7 +40,7 @@ test("stays quiet until the send button is pressed", () => {
   assert.equal(reduceSendHaptic(IDLE_SEND_HAPTIC, "busy").pulse, false);
 });
 
-test("posts a success haptic only when the shell can buzz", () => {
+test("posts a soft selection haptic only when the shell can buzz", () => {
   const messages: unknown[] = [];
   const bridge = {
     capabilities: ["haptic"],
@@ -43,7 +49,7 @@ test("posts a success haptic only when the shell can buzz", () => {
     },
   };
   assert.equal(postSendHaptic(bridge), true);
-  assert.deepEqual(messages, [{ type: "haptic", kind: "success" }]);
+  assert.deepEqual(messages, [{ type: "haptic", kind: "selection" }]);
   assert.equal(postSendHaptic(null), false);
   assert.equal(
     postSendHaptic({
@@ -52,7 +58,58 @@ test("posts a success haptic only when the shell can buzz", () => {
     }),
     false,
   );
-  assert.deepEqual(messages, [{ type: "haptic", kind: "success" }]);
+  assert.deepEqual(messages, [{ type: "haptic", kind: "selection" }]);
+});
+
+test("pats when assistant text appears, not when working starts", () => {
+  assert.equal(hasNewAssistantOutput(["old"], new Set(["old"])), false);
+  assert.equal(hasNewAssistantOutput(["old", "new"], new Set(["old"])), true);
+  assert.deepEqual(
+    openResponseWatch({ respondingAtPress: false, hasNewOutput: false }),
+    { phase: "wait-output", sawWorking: false, pulse: null },
+  );
+  assert.deepEqual(
+    openResponseWatch({ respondingAtPress: true, hasNewOutput: true }),
+    { phase: "wait-finish", sawWorking: true, pulse: "start" },
+  );
+  const workingOnly = reduceResponseWatch(
+    { phase: "wait-output", sawWorking: false },
+    true,
+    false,
+  );
+  assert.equal(workingOnly.pulse, null);
+  assert.deepEqual(workingOnly.watch, {
+    phase: "wait-output",
+    sawWorking: true,
+  });
+  const started = reduceResponseWatch(
+    { phase: "wait-output", sawWorking: true },
+    true,
+    true,
+  );
+  assert.equal(started.pulse, "start");
+  assert.deepEqual(started.watch, { phase: "wait-finish", sawWorking: true });
+  const finished = reduceResponseWatch(
+    { phase: "wait-finish", sawWorking: true },
+    false,
+    true,
+  );
+  assert.equal(finished.pulse, "finish");
+  assert.equal(finished.watch, null);
+  assert.deepEqual(
+    reduceResponseWatch({ phase: "wait-finish", sawWorking: true }, true, true),
+    { watch: { phase: "wait-finish", sawWorking: true }, pulse: null },
+  );
+  assert.deepEqual([...RESPONSE_START_GAPS_MS], [0, 90, 180]);
+});
+
+test("reads only a visible working or thinking label as the agent response", () => {
+  assert.equal(shineMeansAgentResponse("Working...", []), true);
+  assert.equal(shineMeansAgentResponse("Thinking…", ["1"]), true);
+  assert.equal(shineMeansAgentResponse("Working...", ["1", "0"]), false);
+  assert.equal(shineMeansAgentResponse("Provisioning thread...", []), false);
+  assert.equal(shineMeansAgentResponse("Background work running", []), false);
+  assert.equal(shineMeansAgentResponse(null, []), false);
 });
 
 test("pulses a light impact for the jump button, once per press", () => {
@@ -69,6 +126,86 @@ test("pulses a light impact for the jump button, once per press", () => {
   assert.equal(acceptJumpPulse(1000, 1100), null);
   assert.equal(acceptJumpPulse(1000, 1400), 1400);
 });
+
+test("recognizes a file diff code block toggle", () => {
+  const toggle = pressable("Collapse src/app.ts", "true", false);
+  const icon = { closest: (selector: string) => (selector === "button" ? toggle : null) };
+  assert.equal(isFileDiffBlockToggle(toggle), true);
+  assert.equal(isFileDiffBlockToggle(icon), true);
+  assert.equal(isFileDiffBlockToggle(pressable("Expand src/app.ts", "false", false)), true);
+  assert.equal(isFileDiffBlockToggle(pressable("Collapse src/app.ts", "true", true)), false);
+  assert.equal(isFileDiffBlockToggle(pressable("Expand all files", null, false)), false);
+  assert.equal(
+    isFileDiffBlockToggle(pressable("src/app.ts has no changes to expand", null, true)),
+    false,
+  );
+  assert.equal(isFileDiffBlockToggle(null), false);
+});
+
+test("buzzes once when a file diff block is toggled", () => {
+  const messages: unknown[] = [];
+  const listeners = new Map<string, Array<(event: Event) => void>>();
+  const document = {
+    body: {},
+    defaultView: {
+      bb: {
+        native: {
+          capabilities: ["haptic"],
+          post(message: unknown) {
+            messages.push(message);
+          },
+        },
+      },
+      performance: { now: () => 1000 },
+      setTimeout() {
+        return 1;
+      },
+      clearTimeout() {},
+    },
+    addEventListener(type: string, listener: (event: Event) => void) {
+      const bucket = listeners.get(type) ?? [];
+      bucket.push(listener);
+      listeners.set(type, bucket);
+    },
+    removeEventListener() {},
+  };
+  const originalObserver = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {
+    observe() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  } as unknown as typeof MutationObserver;
+
+  try {
+    const cleanup = injectSendHaptic(document as unknown as Document);
+    const toggle = pressable("Expand src/app.ts", "false", false);
+    const click = listeners.get("click")?.[0];
+    const pointerup = listeners.get("pointerup")?.[0];
+    click?.({ target: toggle } as unknown as Event);
+    pointerup?.({ target: toggle, pointerType: "touch", isPrimary: true } as unknown as Event);
+    assert.deepEqual(messages, [{ type: "haptic", kind: "impact-light" }]);
+    cleanup();
+  } finally {
+    globalThis.MutationObserver = originalObserver;
+  }
+});
+
+function pressable(label: string | null, expanded: string | null, disabled: boolean) {
+  const button = {
+    getAttribute(name: string) {
+      if (name === "aria-label") return label;
+      if (name === "aria-expanded") return expanded;
+      if (name === "disabled") return disabled ? "" : null;
+      return null;
+    },
+    closest(selector: string) {
+      return selector === "button" ? button : null;
+    },
+  };
+  return button;
+}
 
 test("reads the native bridge from the page", () => {
   const native = { capabilities: ["haptic"], post() {} };

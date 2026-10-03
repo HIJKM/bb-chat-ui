@@ -3,7 +3,71 @@ const JUMP_BUTTON = 'button[aria-label="Scroll to latest event"]';
 const WAIT_MS = 80;
 const JUMP_GAP_MS = 400;
 
-export type HapticKind = "success" | "impact-light";
+export type HapticKind = "success" | "impact-light" | "selection";
+
+export const RESPONSE_START_GAPS_MS = [0, 90, 180] as const;
+export const RESPONSE_FINISH_KIND: HapticKind = "success";
+
+export type ResponseWatchPhase = "wait-output" | "wait-finish";
+
+export interface ResponseWatchState {
+  phase: ResponseWatchPhase;
+  sawWorking: boolean;
+}
+
+export function hasNewAssistantOutput(
+  rowIds: readonly string[],
+  baseline: ReadonlySet<string>,
+): boolean {
+  for (let index = 0; index < rowIds.length; index += 1) {
+    const id = rowIds[index];
+    if (id !== undefined && !baseline.has(id)) return true;
+  }
+  return false;
+}
+
+export function openResponseWatch(input: {
+  respondingAtPress: boolean;
+  hasNewOutput: boolean;
+}): ResponseWatchState & { pulse: "start" | null } {
+  if (input.hasNewOutput) {
+    return {
+      phase: "wait-finish",
+      sawWorking: input.respondingAtPress,
+      pulse: "start",
+    };
+  }
+  return {
+    phase: "wait-output",
+    sawWorking: input.respondingAtPress,
+    pulse: null,
+  };
+}
+
+export function reduceResponseWatch(
+  watch: ResponseWatchState,
+  working: boolean,
+  hasNewOutput: boolean,
+): { watch: ResponseWatchState | null; pulse: "start" | "finish" | null } {
+  const sawWorking = watch.sawWorking || working;
+  if (watch.phase === "wait-output") {
+    if (!hasNewOutput) {
+      return { watch: { phase: "wait-output", sawWorking }, pulse: null };
+    }
+    return { watch: { phase: "wait-finish", sawWorking }, pulse: "start" };
+  }
+  if (sawWorking && !working) return { watch: null, pulse: "finish" };
+  return { watch: { phase: "wait-finish", sawWorking }, pulse: null };
+}
+
+export function shineMeansAgentResponse(
+  text: string | null,
+  ancestorOpacities: readonly string[],
+): boolean {
+  const value = text?.trim() ?? "";
+  if (value !== "Working..." && value !== "Thinking…") return false;
+  return !ancestorOpacities.includes("0");
+}
 
 export interface SendHapticState {
   armed: boolean;
@@ -51,12 +115,22 @@ export function postHaptic(
 }
 
 export function postSendHaptic(bridge: HapticBridge | null): boolean {
-  return postHaptic(bridge, "success");
+  return postHaptic(bridge, "selection");
 }
 
 export function acceptJumpPulse(lastAt: number | null, now: number): number | null {
   if (lastAt !== null && now - lastAt < JUMP_GAP_MS) return null;
   return now;
+}
+
+export function isFileDiffBlockToggle(target: EventTarget | null): boolean {
+  const element = asElement(target);
+  if (element === null) return false;
+  const button = element.closest("button");
+  if (button === null || button.getAttribute("disabled") !== null) return false;
+  if (button.getAttribute("aria-expanded") === null) return false;
+  const label = button.getAttribute("aria-label");
+  return label?.startsWith("Expand ") === true || label?.startsWith("Collapse ") === true;
 }
 
 export function readHapticBridge(root: unknown): HapticBridge | null {
@@ -70,19 +144,94 @@ export function readHapticBridge(root: unknown): HapticBridge | null {
 export function injectSendHaptic(document: Document): () => void {
   let state = IDLE_SEND_HAPTIC;
   let armedButton: HTMLButtonElement | null = null;
+  let armedWindow: HTMLElement | null = null;
+  let respondingAtPress = false;
+  let outputBaseline = new Set<string>();
   let timer: number | null = null;
   let lastJumpAt: number | null = null;
+  let lastDiffToggleAt: number | null = null;
+  const responseWatch = new Map<
+    HTMLElement,
+    ResponseWatchState & { baseline: ReadonlySet<string> }
+  >();
+  const startTimers: number[] = [];
   const view = document.defaultView;
 
+  const playStart = () => {
+    const bridge = readHapticBridge(view);
+    for (let index = 0; index < RESPONSE_START_GAPS_MS.length; index += 1) {
+      const gap = RESPONSE_START_GAPS_MS[index] ?? 0;
+      const timeout =
+        view?.setTimeout(() => {
+          postHaptic(bridge, "selection");
+        }, gap) ?? null;
+      if (timeout !== null) startTimers.push(timeout);
+    }
+  };
+
+  const syncResponse = () => {
+    for (const [root, phase] of responseWatch) {
+      if (!root.isConnected) {
+        responseWatch.delete(root);
+        continue;
+      }
+      const next = reduceResponseWatch(
+        phase,
+        agentResponseVisible(root),
+        hasNewAssistantOutput(assistantOutputIds(root), phase.baseline),
+      );
+      if (next.watch === null) responseWatch.delete(root);
+      else responseWatch.set(root, { ...next.watch, baseline: phase.baseline });
+      if (next.pulse === "start") playStart();
+      if (next.pulse === "finish") {
+        postHaptic(readHapticBridge(view), RESPONSE_FINISH_KIND);
+      }
+    }
+  };
+
+  const watchResponse = (
+    root: HTMLElement | null,
+    wasRespondingAtPress: boolean,
+    baseline: ReadonlySet<string>,
+  ) => {
+    if (root === null) return;
+    const opened = openResponseWatch({
+      respondingAtPress: wasRespondingAtPress,
+      hasNewOutput: hasNewAssistantOutput(assistantOutputIds(root), baseline),
+    });
+    responseWatch.set(root, {
+      phase: opened.phase,
+      sawWorking: opened.sawWorking,
+      baseline,
+    });
+    if (opened.pulse === "start") playStart();
+    syncResponse();
+  };
+
   const apply = (event: SendHapticEvent) => {
+    const root = armedWindow;
+    const wasRespondingAtPress = respondingAtPress;
+    const baseline = outputBaseline;
     const next = reduceSendHaptic(state, event);
     state = next.state;
-    if (!state.armed) armedButton = null;
-    if (next.pulse) postSendHaptic(readHapticBridge(view));
+    if (!state.armed) {
+      armedButton = null;
+      armedWindow = null;
+      respondingAtPress = false;
+      outputBaseline = new Set();
+    }
+    if (!next.pulse) return;
+    postSendHaptic(readHapticBridge(view));
+    watchResponse(root, wasRespondingAtPress, baseline);
   };
 
   const arm = (button: HTMLButtonElement) => {
     armedButton = button;
+    const root = button.closest("[data-thread-window]");
+    armedWindow = root instanceof HTMLElement ? root : null;
+    respondingAtPress =
+      armedWindow !== null && agentResponseVisible(armedWindow);
+    outputBaseline = new Set(assistantOutputIds(armedWindow));
     apply("press");
     if (timer !== null) view?.clearTimeout(timer);
     timer =
@@ -111,7 +260,19 @@ export function injectSendHaptic(document: Document): () => void {
     postHaptic(readHapticBridge(view), "impact-light");
   };
 
+  const pulseDiffToggle = () => {
+    const now = view?.performance?.now() ?? Date.now();
+    const next = acceptJumpPulse(lastDiffToggleAt, now);
+    if (next === null) return;
+    lastDiffToggleAt = next;
+    postHaptic(readHapticBridge(view), "impact-light");
+  };
+
   const onPointerUp = (event: PointerEvent) => {
+    if (isFileDiffBlockToggle(event.target)) {
+      pulseDiffToggle();
+      return;
+    }
     if (event.pointerType !== "touch" || !event.isPrimary) return;
     const jump = jumpButtonFrom(event.target);
     if (jump && releasedInside(jump, event)) {
@@ -124,6 +285,10 @@ export function injectSendHaptic(document: Document): () => void {
   };
 
   const onJumpClick = (event: MouseEvent) => {
+    if (isFileDiffBlockToggle(event.target)) {
+      pulseDiffToggle();
+      return;
+    }
     if (!jumpButtonFrom(event.target)) return;
     pulseJump();
   };
@@ -143,10 +308,13 @@ export function injectSendHaptic(document: Document): () => void {
   if (document.body && typeof MutationObserver !== "undefined") {
     observer = new MutationObserver(() => {
       syncBusy();
+      syncResponse();
     });
     observer.observe(document.body, {
       attributes: true,
-      attributeFilter: ["aria-busy"],
+      attributeFilter: ["aria-busy", "style"],
+      characterData: true,
+      childList: true,
       subtree: true,
     });
   }
@@ -161,7 +329,56 @@ export function injectSendHaptic(document: Document): () => void {
     document.removeEventListener("submit", onSubmit, true);
     observer?.disconnect();
     if (timer !== null) view?.clearTimeout(timer);
+    for (let index = 0; index < startTimers.length; index += 1) {
+      view?.clearTimeout(startTimers[index]);
+    }
   };
+}
+
+const ASSISTANT_OUTPUT = '[data-message-column].group\\/message';
+
+function assistantOutputIds(root: ParentNode | null): string[] {
+  if (root === null) return [];
+  const nodes = root.querySelectorAll(ASSISTANT_OUTPUT);
+  const ids: string[] = [];
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes.item(index);
+    if (!(node instanceof HTMLElement)) continue;
+    if ((node.textContent ?? "").trim() === "") continue;
+    const id = node
+      .closest("[data-timeline-row-id]")
+      ?.getAttribute("data-timeline-row-id");
+    if (id != null && id !== "") ids.push(id);
+  }
+  return ids;
+}
+
+function agentResponseVisible(root: ParentNode): boolean {
+  const nodes = root.querySelectorAll(".animate-shine");
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes.item(index);
+    if (!(node instanceof HTMLElement)) continue;
+    if (shineMeansAgentResponse(node.textContent, ancestorOpacities(node))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function ancestorOpacities(node: HTMLElement): string[] {
+  const opacities: string[] = [];
+  let current: HTMLElement | null = node;
+  while (current) {
+    if (current.style.opacity !== "") opacities.push(current.style.opacity);
+    current = current.parentElement;
+  }
+  return opacities;
+}
+
+function asElement(target: EventTarget | null): Element | null {
+  if (target === null || typeof target !== "object" || !("closest" in target)) return null;
+  if (typeof target.closest !== "function") return null;
+  return target as Element;
 }
 
 function jumpButtonFrom(target: EventTarget | null): HTMLButtonElement | null {
