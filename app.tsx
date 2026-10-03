@@ -5,6 +5,7 @@ import { injectComposerGlass } from "./lib/composer-glass";
 import { injectQuoteMentions } from "./lib/quote-mention";
 import { injectQuotePill } from "./lib/quote-pill";
 import { injectSendHaptic } from "./lib/send-haptic";
+import { injectQueuedMessages } from "./lib/queued-messages";
 import { injectThreadToc } from "./lib/thread-toc";
 import { injectWorkspaceDiffPill } from "./lib/workspace-diff-pill";
 
@@ -46,6 +47,12 @@ export default definePluginApp((app) => {
     id: "thread-toc",
     mount() {
       return injectThreadToc(document);
+    },
+  });
+  app.contentScripts.register({
+    id: "queued-messages",
+    mount() {
+      return injectQueuedMessages(document);
     },
   });
 });
