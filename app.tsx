@@ -1,5 +1,12 @@
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 
-export default definePluginApp((_app) => {
-  // Composer, message actions, and message directives register here.
+import { injectWorkspaceDiffPill } from "./lib/workspace-diff-pill";
+
+export default definePluginApp((app) => {
+  app.contentScripts.register({
+    id: "workspace-diff-pill",
+    mount() {
+      return injectWorkspaceDiffPill(document);
+    },
+  });
 });

@@ -17,6 +17,7 @@
     "skills": ["skills"]
   },
   "scripts": {
+    "test": "node --experimental-strip-types --test lib/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

@@ -10,5 +10,6 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["server.ts", "app.tsx"]
+  "include": ["server.ts", "app.tsx", "lib/**/*.ts"],
+  "exclude": ["lib/**/*.test.ts"]
 }
