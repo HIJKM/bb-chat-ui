@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  applyPlateHeight,
+  applyFadeHeight,
   composerGlassCss,
+  fadeHeight,
   jumpButtonTop,
+  jumpButtonTopAboveComposer,
 } from "./composer-glass.ts";
 
 test("fades messages above the composer without pulling the footer up", () => {
@@ -16,7 +18,16 @@ test("fades messages above the composer without pulling the footer up", () => {
   assert.match(css, /bottom:\s*0 !important/);
   assert.match(
     css,
-    /height:\s*calc\(100% \+ var\(--bb-chat-ui-plate-height, 12rem\)\) !important/,
+    /height:\s*var\(--bb-chat-ui-fade-height, 50%\) !important/,
+  );
+  assert.doesNotMatch(css, /100% \+ var\(--bb-chat-ui-plate-height/);
+  assert.equal(
+    fadeHeight({ plateBottom: 640, composerTop: 560, composerHeight: 80 }),
+    40,
+  );
+  assert.equal(
+    fadeHeight({ plateBottom: 100, composerTop: 90, composerHeight: 40 }),
+    0,
   );
   assert.match(
     css,
@@ -72,7 +83,7 @@ test("places the jump button on the diff pill row", () => {
   const css = composerGlassCss;
   assert.match(
     css,
-    /:has\(#thread-prompt-banner-git-toggle\) button\[aria-label="Scroll to latest event"\]\s*\{[^}]*position:\s*absolute;[^}]*margin-top:\s*0 !important;[^}]*top:\s*var\(--bb-chat-ui-jump-top, 0px\);[^}]*right:\s*1rem;[^}]*transform:\s*none;/,
+    /\[data-scroll-footer\]:has\(\.chat-prompt-box\) button\[aria-label="Scroll to latest event"\]\s*\{[^}]*position:\s*absolute;[^}]*margin-top:\s*0 !important;[^}]*top:\s*var\(--bb-chat-ui-jump-top, 0px\);[^}]*right:\s*1rem;[^}]*left:\s*auto;[^}]*transform:\s*none;/,
   );
   assert.match(css, /button\[aria-label="Scroll to latest event"\]:not\(\.invisible\)/);
   assert.match(css, /padding-right:\s*2\.5rem/);
@@ -86,9 +97,17 @@ test("places the jump button on the diff pill row", () => {
     }),
     18,
   );
+  assert.equal(
+    jumpButtonTopAboveComposer({
+      columnTop: 80,
+      composerTop: 200,
+      buttonHeight: 32,
+    }),
+    80,
+  );
 });
 
-test("reserves scroll space equal to the measured plate", () => {
+test("sets the fade height from the composer midline", () => {
   const writes: string[] = [];
   const node = {
     style: {
@@ -100,8 +119,8 @@ test("reserves scroll space equal to the measured plate", () => {
       },
     },
   };
-  applyPlateHeight(node, 180.2);
-  assert.deepEqual(writes, ["181px"]);
-  applyPlateHeight(node, 0);
-  assert.deepEqual(writes, ["181px", "cleared"]);
+  applyFadeHeight(node, 40.2);
+  assert.deepEqual(writes, ["40px"]);
+  applyFadeHeight(node, 0);
+  assert.deepEqual(writes, ["40px", "cleared"]);
 });

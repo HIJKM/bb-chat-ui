@@ -1,4 +1,7 @@
 const FOOTER = "[data-scroll-footer]:has(.chat-prompt-box)";
+const PLATE = ":scope > .relative";
+const COMPOSER = "[data-promptbox]";
+const FADE_HEIGHT = "--bb-chat-ui-fade-height";
 const PLATE_HEIGHT = "--bb-chat-ui-plate-height";
 const JUMP_TOP = "--bb-chat-ui-jump-top";
 const PILL = "#thread-prompt-banner-git-toggle";
@@ -33,7 +36,7 @@ ${FOOTER} [data-overflow-fade="above"] {
   right: 0 !important;
   bottom: 0 !important;
   left: 0 !important;
-  height: calc(100% + var(--bb-chat-ui-plate-height, 12rem)) !important;
+  height: var(--bb-chat-ui-fade-height, 50%) !important;
   background-image: linear-gradient(
     to bottom,
     transparent,
@@ -85,7 +88,7 @@ ${darkScope(`${FOOTER} [data-promptbox]:focus-within`)} {
 ${FOOTER} .chat-prompt-box {
   position: relative;
 }
-${FOOTER}:has(${PILL}) ${JUMP_BUTTON} {
+${FOOTER} ${JUMP_BUTTON} {
   position: absolute;
   margin-top: 0 !important;
   top: var(${JUMP_TOP}, 0px);
@@ -106,12 +109,35 @@ export interface PlateHeightTarget {
   };
 }
 
-export function applyPlateHeight(node: PlateHeightTarget, height: number): void {
+export function fadeHeight(input: {
+  plateBottom: number;
+  composerTop: number;
+  composerHeight: number;
+}): number {
+  const height = input.plateBottom - (input.composerTop + input.composerHeight / 2);
+  if (!Number.isFinite(height) || height <= 0) return 0;
+  return Math.round(height);
+}
+
+export function applyFadeHeight(node: PlateHeightTarget, height: number): void {
   if (!Number.isFinite(height) || height <= 0) {
-    node.style.removeProperty(PLATE_HEIGHT);
+    node.style.removeProperty(FADE_HEIGHT);
     return;
   }
-  node.style.setProperty(PLATE_HEIGHT, `${Math.ceil(height)}px`);
+  node.style.setProperty(FADE_HEIGHT, `${Math.round(height)}px`);
+}
+
+export const JUMP_ABOVE_COMPOSER_PX = 8;
+
+export function jumpButtonTopAboveComposer(input: {
+  columnTop: number;
+  composerTop: number;
+  buttonHeight: number;
+}): number {
+  const buttonHeight = input.buttonHeight > 0 ? input.buttonHeight : 32;
+  return Math.round(
+    input.composerTop - buttonHeight - JUMP_ABOVE_COMPOSER_PX - input.columnTop,
+  );
 }
 
 export function jumpButtonTop(input: {
@@ -139,11 +165,10 @@ export function injectComposerGlass(document: Document): () => void {
 
   const sync = () => {
     const footer = document.querySelector(FOOTER);
-    const frame = footer?.closest("[data-thread-window]");
-    if (footer instanceof HTMLElement && frame instanceof HTMLElement) {
-      applyPlateHeight(frame, footer.getBoundingClientRect().height);
+    if (footer instanceof HTMLElement) {
+      alignFade(footer);
+      alignJumpButton(footer);
     }
-    if (footer instanceof HTMLElement) alignJumpButton(footer);
     if (footer === observed || typeof ResizeObserver === "undefined") {
       bindStack(footer);
       return;
@@ -193,6 +218,11 @@ export function injectComposerGlass(document: Document): () => void {
       const frame = frames.item(index);
       if (frame instanceof HTMLElement) frame.style.removeProperty(PLATE_HEIGHT);
     }
+    const plates = document.querySelectorAll(`${FOOTER} > .relative`);
+    for (let index = 0; index < plates.length; index += 1) {
+      const plate = plates.item(index);
+      if (plate instanceof HTMLElement) plate.style.removeProperty(FADE_HEIGHT);
+    }
     const columns = document.querySelectorAll(".chat-prompt-box");
     for (let index = 0; index < columns.length; index += 1) {
       const column = columns.item(index);
@@ -201,23 +231,62 @@ export function injectComposerGlass(document: Document): () => void {
   };
 }
 
+function alignFade(footer: HTMLElement): void {
+  const plate = footer.querySelector(PLATE);
+  if (!(plate instanceof HTMLElement)) return;
+  const composer = footer.querySelector(COMPOSER);
+  if (!(composer instanceof HTMLElement)) {
+    plate.style.removeProperty(FADE_HEIGHT);
+    return;
+  }
+  const plateRect = plate.getBoundingClientRect();
+  const composerRect = composer.getBoundingClientRect();
+  applyFadeHeight(
+    plate,
+    fadeHeight({
+      plateBottom: plateRect.bottom,
+      composerTop: composerRect.top,
+      composerHeight: composerRect.height,
+    }),
+  );
+}
+
 function alignJumpButton(footer: HTMLElement): void {
   const column = footer.querySelector(".chat-prompt-box");
   if (!(column instanceof HTMLElement)) return;
-  const pill = footer.querySelector(PILL);
   const button = footer.querySelector(JUMP_BUTTON);
-  if (!(pill instanceof HTMLElement) || !(button instanceof HTMLElement)) {
+  if (!(button instanceof HTMLElement)) {
     column.style.removeProperty(JUMP_TOP);
     return;
   }
   const columnRect = column.getBoundingClientRect();
-  const pillRect = pill.getBoundingClientRect();
   const buttonRect = button.getBoundingClientRect();
-  const top = jumpButtonTop({
-    columnTop: columnRect.top,
-    pillTop: pillRect.top,
-    pillHeight: pillRect.height,
-    buttonHeight: buttonRect.height,
-  });
-  column.style.setProperty(JUMP_TOP, `${top}px`);
+  const pill = footer.querySelector(PILL);
+  if (pill instanceof HTMLElement) {
+    const pillRect = pill.getBoundingClientRect();
+    column.style.setProperty(
+      JUMP_TOP,
+      `${jumpButtonTop({
+        columnTop: columnRect.top,
+        pillTop: pillRect.top,
+        pillHeight: pillRect.height,
+        buttonHeight: buttonRect.height,
+      })}px`,
+    );
+    return;
+  }
+  const composer = footer.querySelector(COMPOSER);
+  if (!(composer instanceof HTMLElement)) {
+    column.style.removeProperty(JUMP_TOP);
+    return;
+  }
+  const composerRect = composer.getBoundingClientRect();
+  column.style.setProperty(
+    JUMP_TOP,
+    `${jumpButtonTopAboveComposer({
+      columnTop: columnRect.top,
+      composerTop: composerRect.top,
+      buttonHeight: buttonRect.height,
+    })}px`,
+  );
 }
