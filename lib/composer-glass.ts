@@ -28,6 +28,29 @@ function darkScope(selectors: string): string {
 export const COMPOSER_GLASS_STYLE_ID = "bb-chat-ui-composer-glass";
 
 export const composerGlassCss = `
+[data-thread-window]:not([data-surface-tone="sidebar"]) {
+  --bb-chat-ui-canvas: oklch(0.97 0 0);
+  background-color: var(--bb-chat-ui-canvas) !important;
+}
+[data-thread-window]:not([data-surface-tone="sidebar"]) .thread-scrollbar {
+  background-color: var(--bb-chat-ui-canvas) !important;
+}
+.dark [data-thread-window]:not([data-surface-tone="sidebar"]) {
+  --bb-chat-ui-canvas: oklch(0.17 0 0);
+}
+main[data-sidebar="inset"]:has([data-thread-window]:not([data-surface-tone="sidebar"])) {
+  --bb-chat-ui-canvas: oklch(0.97 0 0);
+  background-color: var(--bb-chat-ui-canvas) !important;
+}
+.dark main[data-sidebar="inset"]:has([data-thread-window]:not([data-surface-tone="sidebar"])) {
+  --bb-chat-ui-canvas: oklch(0.17 0 0);
+}
+:has(> [data-thread-window]:not([data-surface-tone="sidebar"])) > header {
+  background-color: var(--bb-chat-ui-canvas) !important;
+}
+header:has(+ :has([data-thread-window]:not([data-surface-tone="sidebar"]))) {
+  background-color: var(--bb-chat-ui-canvas) !important;
+}
 ${FOOTER} > .relative {
   background: transparent !important;
 }
@@ -40,12 +63,12 @@ ${FOOTER} [data-overflow-fade="above"] {
   background-image: linear-gradient(
     to bottom,
     transparent,
-    var(--background)
+    var(--bb-chat-ui-canvas, var(--background)) 50%
   ) !important;
 }
 ${FACE} {
   background: color-mix(in oklab, white 78%, transparent) !important;
-  border-color: color-mix(in oklab, ${INK} 10%, transparent) !important;
+  border-color: transparent !important;
   backdrop-filter: blur(14px) saturate(1.25);
   -webkit-backdrop-filter: blur(14px) saturate(1.25);
   box-shadow:
@@ -53,7 +76,9 @@ ${FACE} {
     inset 0 1px 0 ${LIGHT_EDGE};
 }
 ${FOOTER} [data-promptbox] {
+  border-color: transparent !important;
   border-radius: 1.375rem !important;
+  transition: box-shadow 320ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
   box-shadow:
     0 12px 32px -14px ${LIGHT_SHADOW},
     inset 0 1px 0 ${LIGHT_EDGE};
@@ -69,28 +94,51 @@ ${FOOTER} [data-promptbox] [data-promptbox-send-menu] {
   border-radius: 999px !important;
 }
 ${FOOTER} [data-promptbox]:focus-within {
-  border-color: color-mix(in oklab, ${INK} 24%, transparent) !important;
+  border-color: transparent !important;
   box-shadow:
     0 18px 44px -16px color-mix(in oklab, ${INK} 34%, transparent),
     inset 0 1px 0 ${LIGHT_EDGE};
 }
 ${darkScope(FACE)} {
   background: oklch(0.27 0.008 275 / 0.86) !important;
-  border-color: ${DARK_EDGE} !important;
+  border-color: transparent !important;
   box-shadow:
     0 6px 18px -12px ${DARK_SHADOW},
     inset 0 1px 0 ${DARK_EDGE};
 }
 ${darkScope(`${FOOTER} [data-promptbox]`)} {
+  border-color: transparent !important;
   box-shadow:
     0 12px 32px -14px ${DARK_SHADOW},
     inset 0 1px 0 ${DARK_EDGE};
 }
 ${darkScope(`${FOOTER} [data-promptbox]:focus-within`)} {
-  border-color: color-mix(in oklab, ${INK} 24%, transparent) !important;
+  border-color: transparent !important;
   box-shadow:
     0 18px 44px -16px color-mix(in oklab, ${INK} 34%, transparent),
     inset 0 1px 0 ${DARK_EDGE};
+}
+@media (width < 48rem) and (pointer: coarse) {
+  ${FOOTER} [data-promptbox] {
+    box-shadow:
+      0 6px 16px -10px ${LIGHT_SHADOW},
+      inset 0 1px 0 ${LIGHT_EDGE};
+  }
+  ${FOOTER} [data-promptbox]:focus-within {
+    box-shadow:
+      0 8px 20px -12px color-mix(in oklab, ${INK} 34%, transparent),
+      inset 0 1px 0 ${LIGHT_EDGE};
+  }
+  ${darkScope(`${FOOTER} [data-promptbox]`)} {
+    box-shadow:
+      0 6px 16px -10px ${DARK_SHADOW},
+      inset 0 1px 0 ${DARK_EDGE};
+  }
+  ${darkScope(`${FOOTER} [data-promptbox]:focus-within`)} {
+    box-shadow:
+      0 8px 20px -12px color-mix(in oklab, ${INK} 34%, transparent),
+      inset 0 1px 0 ${DARK_EDGE};
+  }
 }
 ${FOOTER} .chat-prompt-box {
   position: relative;

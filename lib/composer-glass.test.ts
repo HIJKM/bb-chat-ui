@@ -39,6 +39,42 @@ test("fades messages above the composer without pulling the footer up", () => {
   );
 });
 
+test("paints the chat surface slightly darker than the app canvas", () => {
+  const css = composerGlassCss;
+  assert.match(
+    css,
+    /\[data-thread-window\]:not\(\[data-surface-tone="sidebar"\]\)\s*\{[^}]*--bb-chat-ui-canvas:\s*oklch\(0\.97 0 0\);[^}]*background-color:\s*var\(--bb-chat-ui-canvas\) !important;/,
+  );
+  assert.match(
+    css,
+    /\.dark \[data-thread-window\]:not\(\[data-surface-tone="sidebar"\]\)\s*\{[^}]*--bb-chat-ui-canvas:\s*oklch\(0\.17 0 0\);/,
+  );
+  assert.match(
+    css,
+    /\.thread-scrollbar\s*\{[^}]*background-color:\s*var\(--bb-chat-ui-canvas\) !important;/,
+  );
+  assert.match(
+    css,
+    /linear-gradient\(\s*to bottom,\s*transparent,\s*var\(--bb-chat-ui-canvas, var\(--background\)\) 50%\s*\)/,
+  );
+  assert.match(
+    css,
+    /main\[data-sidebar="inset"\]:has\(\[data-thread-window\]:not\(\[data-surface-tone="sidebar"\]\)\)\s*\{[^}]*--bb-chat-ui-canvas:\s*oklch\(0\.97 0 0\);[^}]*background-color:\s*var\(--bb-chat-ui-canvas\) !important;/,
+  );
+  assert.match(
+    css,
+    /\.dark main\[data-sidebar="inset"\]:has\(\[data-thread-window\]:not\(\[data-surface-tone="sidebar"\]\)\)\s*\{[^}]*--bb-chat-ui-canvas:\s*oklch\(0\.17 0 0\);/,
+  );
+  assert.match(
+    css,
+    /:has\(> \[data-thread-window\]:not\(\[data-surface-tone="sidebar"\]\)\) > header\s*\{[^}]*background-color:\s*var\(--bb-chat-ui-canvas\) !important;/,
+  );
+  assert.match(
+    css,
+    /header:has\(\+ :has\(\[data-thread-window\]:not\(\[data-surface-tone="sidebar"\]\)\)\)\s*\{[^}]*background-color:\s*var\(--bb-chat-ui-canvas\) !important;/,
+  );
+});
+
 test("paints the composer, diff pill, and jump button with the mobile glass", () => {
   const css = composerGlassCss;
   assert.match(
@@ -48,7 +84,7 @@ test("paints the composer, diff pill, and jump button with the mobile glass", ()
   assert.match(css, /color-mix\(in oklab, white 78%, transparent\)/);
   assert.match(
     css,
-    /border-color:\s*color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 10%, transparent\)/,
+    /#thread-prompt-banner-git-toggle,\s*\[data-scroll-footer\]:has\(\.chat-prompt-box\) button\[aria-label="Scroll to latest event"\]\s*\{[^}]*border-color:\s*transparent !important;/,
   );
   assert.match(
     css,
@@ -61,13 +97,46 @@ test("paints the composer, diff pill, and jump button with the mobile glass", ()
   assert.match(css, /oklch\(0\.27 0\.008 275 \/ 0\.86\)/);
   assert.match(
     css,
-    /border-color:\s*color-mix\(in oklab, white 12%, transparent\)/,
+    /\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) #thread-prompt-banner-git-toggle,\s*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) button\[aria-label="Scroll to latest event"\]\s*\{[^}]*border-color:\s*transparent !important;/,
   );
   assert.match(
     css,
     /inset 0 1px 0 color-mix\(in oklab, white 12%, transparent\)/,
   );
   assert.match(css, /color-mix\(in oklab, black 60%, transparent\)/);
+  assert.match(css, /\[data-promptbox\]\s*\{[^}]*border-color:\s*transparent !important;/);
+  assert.match(
+    css,
+    /\[data-promptbox\]\s*\{[^}]*transition:\s*box-shadow 320ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\) !important;/,
+  );
+  assert.match(
+    css,
+    /\[data-promptbox\]:focus-within\s*\{[^}]*border-color:\s*transparent !important;/,
+  );
+  assert.match(
+    css,
+    /@media \(width < 48rem\) and \(pointer: coarse\)\s*\{[\s\S]*\[data-promptbox\]\s*\{[^}]*box-shadow:\s*0 6px 16px -10px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 22%, transparent\),/,
+  );
+  assert.match(
+    css,
+    /@media \(width < 48rem\) and \(pointer: coarse\)\s*\{[\s\S]*\[data-promptbox\]:focus-within\s*\{[^}]*box-shadow:\s*0 8px 20px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 34%, transparent\),/,
+  );
+  assert.match(
+    css,
+    /@media \(width < 48rem\) and \(pointer: coarse\)\s*\{[\s\S]*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\]\s*\{[^}]*box-shadow:\s*0 6px 16px -10px color-mix\(in oklab, black 60%, transparent\),/,
+  );
+  assert.match(
+    css,
+    /@media \(width < 48rem\) and \(pointer: coarse\)\s*\{[\s\S]*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\]:focus-within\s*\{[^}]*box-shadow:\s*0 8px 20px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 34%, transparent\),/,
+  );
+  assert.match(
+    css,
+    /\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\]\s*\{[^}]*border-color:\s*transparent !important;/,
+  );
+  assert.doesNotMatch(
+    css,
+    /\[data-promptbox\]:focus-within\s*\{[^}]*border-color:\s*color-mix/,
+  );
   assert.match(css, /\[data-promptbox\]\s*\{[^}]*border-radius:\s*1\.375rem/);
   assert.match(
     css,
