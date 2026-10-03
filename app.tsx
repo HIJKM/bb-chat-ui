@@ -1,6 +1,7 @@
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 
 import { QuoteMentionBridge } from "./lib/quote-bridge";
+import { injectComposerGlass } from "./lib/composer-glass";
 import { injectQuoteMentions } from "./lib/quote-mention";
 import { injectQuotePill } from "./lib/quote-pill";
 import { injectSendHaptic } from "./lib/send-haptic";
@@ -27,6 +28,12 @@ export default definePluginApp((app) => {
         stopPill();
         stopMention();
       };
+    },
+  });
+  app.contentScripts.register({
+    id: "composer-glass",
+    mount() {
+      return injectComposerGlass(document);
     },
   });
   app.contentScripts.register({
