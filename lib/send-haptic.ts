@@ -1,5 +1,9 @@
 const SEND_BUTTON = "[data-promptbox-submit-action][type='submit']";
+const JUMP_BUTTON = 'button[aria-label="Scroll to latest event"]';
 const WAIT_MS = 80;
+const JUMP_GAP_MS = 400;
+
+export type HapticKind = "success" | "impact-light";
 
 export interface SendHapticState {
   armed: boolean;
@@ -37,10 +41,22 @@ export function reduceSendHaptic(
   return { state: IDLE_SEND_HAPTIC, pulse: true };
 }
 
-export function postSendHaptic(bridge: HapticBridge | null): boolean {
+export function postHaptic(
+  bridge: HapticBridge | null,
+  kind: HapticKind,
+): boolean {
   if (!bridge?.capabilities?.includes("haptic")) return false;
-  bridge.post({ type: "haptic", kind: "success" });
+  bridge.post({ type: "haptic", kind });
   return true;
+}
+
+export function postSendHaptic(bridge: HapticBridge | null): boolean {
+  return postHaptic(bridge, "success");
+}
+
+export function acceptJumpPulse(lastAt: number | null, now: number): number | null {
+  if (lastAt !== null && now - lastAt < JUMP_GAP_MS) return null;
+  return now;
 }
 
 export function readHapticBridge(root: unknown): HapticBridge | null {
@@ -55,6 +71,7 @@ export function injectSendHaptic(document: Document): () => void {
   let state = IDLE_SEND_HAPTIC;
   let armedButton: HTMLButtonElement | null = null;
   let timer: number | null = null;
+  let lastJumpAt: number | null = null;
   const view = document.defaultView;
 
   const apply = (event: SendHapticEvent) => {
@@ -86,11 +103,29 @@ export function injectSendHaptic(document: Document): () => void {
     );
   };
 
+  const pulseJump = () => {
+    const now = view?.performance?.now() ?? Date.now();
+    const next = acceptJumpPulse(lastJumpAt, now);
+    if (next === null) return;
+    lastJumpAt = next;
+    postHaptic(readHapticBridge(view), "impact-light");
+  };
+
   const onPointerUp = (event: PointerEvent) => {
     if (event.pointerType !== "touch" || !event.isPrimary) return;
+    const jump = jumpButtonFrom(event.target);
+    if (jump && releasedInside(jump, event)) {
+      pulseJump();
+      return;
+    }
     const button = sendButtonFrom(event.target);
     if (!button || !releasedInside(button, event)) return;
     arm(button);
+  };
+
+  const onJumpClick = (event: MouseEvent) => {
+    if (!jumpButtonFrom(event.target)) return;
+    pulseJump();
   };
 
   const onSubmit = (event: SubmitEvent) => {
@@ -117,14 +152,24 @@ export function injectSendHaptic(document: Document): () => void {
   }
 
   document.addEventListener("pointerup", onPointerUp, true);
+  document.addEventListener("click", onJumpClick, true);
   document.addEventListener("submit", onSubmit, true);
 
   return () => {
     document.removeEventListener("pointerup", onPointerUp, true);
+    document.removeEventListener("click", onJumpClick, true);
     document.removeEventListener("submit", onSubmit, true);
     observer?.disconnect();
     if (timer !== null) view?.clearTimeout(timer);
   };
+}
+
+function jumpButtonFrom(target: EventTarget | null): HTMLButtonElement | null {
+  if (!(target instanceof Element)) return null;
+  const button = target.closest(JUMP_BUTTON);
+  if (!(button instanceof HTMLButtonElement)) return null;
+  if (button.disabled || button.classList.contains("invisible")) return null;
+  return button;
 }
 
 function sendButtonFrom(target: EventTarget | null): HTMLButtonElement | null {

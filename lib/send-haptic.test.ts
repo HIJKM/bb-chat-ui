@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   IDLE_SEND_HAPTIC,
+  acceptJumpPulse,
   injectSendHaptic,
+  postHaptic,
   postSendHaptic,
   readHapticBridge,
   reduceSendHaptic,
@@ -51,6 +53,21 @@ test("posts a success haptic only when the shell can buzz", () => {
     false,
   );
   assert.deepEqual(messages, [{ type: "haptic", kind: "success" }]);
+});
+
+test("pulses a light impact for the jump button, once per press", () => {
+  const messages: unknown[] = [];
+  const bridge = {
+    capabilities: ["haptic"],
+    post(message: unknown) {
+      messages.push(message);
+    },
+  };
+  assert.equal(postHaptic(bridge, "impact-light"), true);
+  assert.deepEqual(messages, [{ type: "haptic", kind: "impact-light" }]);
+  assert.equal(acceptJumpPulse(null, 1000), 1000);
+  assert.equal(acceptJumpPulse(1000, 1100), null);
+  assert.equal(acceptJumpPulse(1000, 1400), 1400);
 });
 
 test("reads the native bridge from the page", () => {
