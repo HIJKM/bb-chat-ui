@@ -61,6 +61,13 @@ ${FOOTER} [data-promptbox] {
 ${FOOTER} [data-promptbox][data-promptbox-compact] {
   border-radius: 999px !important;
 }
+${FOOTER} [data-promptbox] button,
+${FOOTER} [data-promptbox] [role="button"] {
+  border-radius: 999px !important;
+}
+${FOOTER} [data-promptbox] [data-promptbox-send-menu] {
+  border-radius: 999px !important;
+}
 ${FOOTER} [data-promptbox]:focus-within {
   border-color: color-mix(in oklab, ${INK} 24%, transparent) !important;
   box-shadow:

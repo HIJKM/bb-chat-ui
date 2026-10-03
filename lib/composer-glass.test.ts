@@ -79,6 +79,22 @@ test("paints the composer, diff pill, and jump button with the mobile glass", ()
   );
 });
 
+test("rounds buttons inside the composer like the mobile composer", () => {
+  const css = composerGlassCss;
+  assert.match(
+    css,
+    /\[data-promptbox\] button,\s*\[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\] \[role="button"\]\s*\{[^}]*border-radius:\s*999px !important;/,
+  );
+  assert.match(
+    css,
+    /\[data-promptbox-send-menu\]\s*\{[^}]*border-radius:\s*999px !important;/,
+  );
+  assert.doesNotMatch(
+    css,
+    /\[aria-label="Stop run"\]\s*\{[^}]*border-radius:\s*10px/,
+  );
+});
+
 test("places the jump button on the diff pill row", () => {
   const css = composerGlassCss;
   assert.match(
