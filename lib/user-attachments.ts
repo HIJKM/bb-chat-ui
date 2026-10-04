@@ -26,16 +26,16 @@ ${USER_BUBBLE} > .mt-2.space-y-2 > .flex:last-child {
 ${FILE_CHIP} {
   box-sizing: border-box;
   gap: 6px;
-  min-height: 32px;
+  min-height: 64px;
   padding: 6px 14px 6px 12px;
   font-size: 0.875rem;
   line-height: 1.25;
 }
 ${FILE_CHIP}::before {
   content: "";
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
   background-color: currentColor;
   -webkit-mask: ${FILE_ICON_MASK};
   mask: ${FILE_ICON_MASK};
