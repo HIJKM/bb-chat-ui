@@ -28,6 +28,7 @@ ${FILE_CHIP} {
   gap: 6px;
   min-height: 64px;
   padding: 6px 14px 6px 12px;
+  border-radius: 20px;
   font-size: 0.875rem;
   line-height: 1.25;
 }
