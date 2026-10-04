@@ -161,8 +161,8 @@ ${FOOTER} [data-promptbox][data-promptbox-compact] {
 ${FOOTER} [data-promptbox][data-promptbox-compact]:has([aria-label="Exit handoff"]) {
   border-radius: 1.375rem !important;
 }
-${FOOTER} [data-promptbox] button,
-${FOOTER} [data-promptbox] [role="button"] {
+${FOOTER} [data-promptbox] button:not(:has(img)),
+${FOOTER} [data-promptbox] [role="button"]:not(:has(img)) {
   border-radius: 999px !important;
 }
 ${FOOTER} [data-promptbox] [data-promptbox-send-menu] {

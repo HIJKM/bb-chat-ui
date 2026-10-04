@@ -424,7 +424,7 @@ test("rounds buttons inside the composer like the mobile composer", () => {
   const css = composerGlassCss;
   assert.match(
     css,
-    /\[data-promptbox\] button,\s*\[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\] \[role="button"\]\s*\{[^}]*border-radius:\s*999px !important;/,
+    /\[data-promptbox\] button:not\(:has\(img\)\),\s*\[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\] \[role="button"\]:not\(:has\(img\)\)\s*\{[^}]*border-radius:\s*999px !important;/,
   );
   assert.match(
     css,
