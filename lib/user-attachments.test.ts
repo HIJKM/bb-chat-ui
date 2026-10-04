@@ -70,3 +70,17 @@ test("lifts user photos and files above the message bubble", () => {
   assert.doesNotMatch(css, /var\(--radius-xl\)/);
   assert.doesNotMatch(css, /width < 48rem/);
 });
+
+test("thickens user file chips and paints a file icon", () => {
+  const css = userAttachmentsCss();
+  const chip = `${USER_BUBBLE} > \\.mt-2\\.space-y-2 > \\.flex:not\\(:has\\(img\\)\\) > :is\\(a, button, span\\)`;
+  assert.match(css, new RegExp(`${chip}\\s*\\{[^}]*min-height:\\s*32px;`));
+  assert.match(
+    css,
+    new RegExp(`${chip}\\s*\\{[^}]*padding:\\s*6px 14px 6px 12px;`),
+  );
+  assert.match(css, new RegExp(`${chip}\\s*\\{[^}]*gap:\\s*6px;`));
+  assert.match(css, new RegExp(`${chip}::before\\s*\\{[^}]*width:\\s*14px;`));
+  assert.match(css, new RegExp(`${chip}::before\\s*\\{[^}]*height:\\s*14px;`));
+  assert.match(css, new RegExp(`${chip}::before\\s*\\{[^}]*mask:`));
+});
