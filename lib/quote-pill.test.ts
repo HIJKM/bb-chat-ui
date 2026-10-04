@@ -186,6 +186,14 @@ test("paints the pill without watching or rewriting the quote node", () => {
   assert.match(css, /@media \(hover: hover\) and \(pointer: fine\)/);
   assert.doesNotMatch(css, /max-height:\s*20px/);
   assert.doesNotMatch(css, /contenteditable/i);
+  const sentMention = css.match(
+    /\[data-message-column\] \[data-markdown-preview\] \.prompt-mention-pill\s*\{[^}]*\}/,
+  );
+  assert.ok(sentMention);
+  assert.match(sentMention[0], /padding:\s*6px 14px 6px 12px !important/);
+  assert.match(sentMention[0], /min-height:\s*32px/);
+  assert.match(sentMention[0], /font-size:\s*inherit !important/);
+  assert.doesNotMatch(sentMention[0], /itemId/);
 
   let observed = false;
   const originalObserver = globalThis.MutationObserver;

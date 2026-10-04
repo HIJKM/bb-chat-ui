@@ -8,6 +8,8 @@ const QUOTE_MENTION_PILL =
   '.prompt-mention-pill[data-prompt-mention-resource*=\'"itemId":"quote:\']';
 const COMPOSER_QUOTE_MENTION = `[data-promptbox-editor-scroll] [data-promptbox-editor-content] ${QUOTE_MENTION_PILL}`;
 const COMPACT_QUOTE_MENTION_LINE = `[data-promptbox-compact-content] .ProseMirror:has(${QUOTE_MENTION_PILL})`;
+const SENT_MENTION_PILL =
+  "[data-message-column] [data-markdown-preview] .prompt-mention-pill";
 
 const QUOTE_ICON = encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="black" d="M3.2 6.1c0-1.9 1.3-3.3 3-3.3.4 0 .6.2.6.6v.7c0 .3-.2.5-.6.5-1 0-1.6.7-1.6 1.7v.2h1.5c.6 0 1.1.5 1.1 1.1v1.7c0 .6-.5 1.1-1.1 1.1H4.3c-.6 0-1.1-.5-1.1-1.1V6.1zm6.4 0c0-1.9 1.3-3.3 3-3.3.4 0 .6.2.6.6v.7c0 .3-.2.5-.6.5-1 0-1.6.7-1.6 1.7v.2H12c.6 0 1.1.5 1.1 1.1v1.7c0 .6-.5 1.1-1.1 1.1H10.7c-.6 0-1.1-.5-1.1-1.1V6.1z"/></svg>`,
@@ -189,6 +191,16 @@ ${COMPACT_QUOTE_MENTION_LINE} > * {
   height: 100%;
   min-width: 0;
   margin: 0 !important;
+}
+${SENT_MENTION_PILL} {
+  align-items: center !important;
+  box-sizing: border-box;
+  gap: 6px !important;
+  min-height: 32px;
+  padding: 6px 14px 6px 12px !important;
+  font-size: inherit !important;
+  line-height: 1.25 !important;
+  vertical-align: middle;
 }
 `;
 }
