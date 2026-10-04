@@ -4,6 +4,10 @@ const REMOVE_ZONE_PX = 28;
 const USER_QUOTE = "[data-message-column] > .group\\/message blockquote";
 const COMPOSER_QUOTE =
   "[data-promptbox-editor-scroll] [data-promptbox-editor-content]:not([data-promptbox-compact-content]) .ProseMirror blockquote";
+const QUOTE_MENTION_PILL =
+  '.prompt-mention-pill[data-prompt-mention-resource*=\'"itemId":"quote:\']';
+const COMPOSER_QUOTE_MENTION = `[data-promptbox-editor-scroll] [data-promptbox-editor-content] ${QUOTE_MENTION_PILL}`;
+const COMPACT_QUOTE_MENTION_LINE = `[data-promptbox-compact-content] .ProseMirror:has(${QUOTE_MENTION_PILL})`;
 
 const QUOTE_ICON = encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="black" d="M3.2 6.1c0-1.9 1.3-3.3 3-3.3.4 0 .6.2.6.6v.7c0 .3-.2.5-.6.5-1 0-1.6.7-1.6 1.7v.2h1.5c.6 0 1.1.5 1.1 1.1v1.7c0 .6-.5 1.1-1.1 1.1H4.3c-.6 0-1.1-.5-1.1-1.1V6.1zm6.4 0c0-1.9 1.3-3.3 3-3.3.4 0 .6.2.6.6v.7c0 .3-.2.5-.6.5-1 0-1.6.7-1.6 1.7v.2H12c.6 0 1.1.5 1.1 1.1v1.7c0 .6-.5 1.1-1.1 1.1H10.7c-.6 0-1.1-.5-1.1-1.1V6.1z"/></svg>`,
@@ -99,7 +103,7 @@ ${COMPOSER_QUOTE} {
   background: var(--pill-surface, var(--card));
   color: var(--pill-foreground, var(--muted-foreground));
   box-shadow: var(--pill-shadow);
-  padding: 2px 10px 2px 8px !important;
+  padding: 6px 14px 6px 12px !important;
   overflow: hidden;
   vertical-align: middle;
   white-space: nowrap !important;
@@ -143,13 +147,15 @@ ${COMPOSER_QUOTE}::after {
   right: 0;
   z-index: 1;
   box-sizing: border-box;
+  align-items: center;
+  justify-content: flex-end;
   width: 32px;
   height: 100%;
-  padding-right: 9px;
+  padding-right: 14px;
   border-radius: 0 9999px 9999px 0;
   background-image: linear-gradient(90deg, transparent, var(--pill-surface, var(--card)) 58%);
   color: var(--pill-icon, currentColor);
-  font: 500 15px/26px inherit;
+  font: 500 15px/1 inherit;
   text-align: right;
   pointer-events: none;
   backdrop-filter: blur(6px);
@@ -157,8 +163,32 @@ ${COMPOSER_QUOTE}::after {
 }
 @media (hover: hover) and (pointer: fine) {
   ${COMPOSER_QUOTE}:hover::after {
-    display: block;
+    display: flex;
   }
+}
+${COMPOSER_QUOTE_MENTION} {
+  align-items: center !important;
+  flex-shrink: 0 !important;
+  gap: 6px !important;
+  box-sizing: border-box;
+  min-height: 32px;
+  max-height: none !important;
+  padding: 6px 14px 6px 12px !important;
+  vertical-align: middle;
+}
+${COMPACT_QUOTE_MENTION_LINE} {
+  display: flex !important;
+  align-items: center !important;
+  height: 100%;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+${COMPACT_QUOTE_MENTION_LINE} > * {
+  display: flex !important;
+  align-items: center !important;
+  height: 100%;
+  min-width: 0;
+  margin: 0 !important;
 }
 `;
 }

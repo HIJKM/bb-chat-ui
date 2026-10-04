@@ -169,6 +169,20 @@ test("paints the pill without watching or rewriting the quote node", () => {
   assert.match(css, /white-space:\s*nowrap/);
   assert.match(css, /text-overflow:\s*ellipsis/);
   assert.match(css, /border-radius:\s*9999px/);
+  assert.match(css, /padding:\s*6px 14px 6px 12px !important/);
+  assert.match(css, /data-prompt-mention-resource\*='"itemId":"quote:'/);
+  assert.match(css, /:not\(\[data-promptbox-compact-content\]\)/);
+  const mentionAt = css.indexOf(".prompt-mention-pill");
+  const mentionSelector = css.slice(css.lastIndexOf("\n", mentionAt), mentionAt);
+  assert.doesNotMatch(mentionSelector, /:not\(\[data-promptbox-compact-content\]\)/);
+  assert.match(
+    css,
+    /\[data-promptbox-compact-content\] \.ProseMirror:has\(\.prompt-mention-pill\[data-prompt-mention-resource\*='"itemId":"quote:'\]\)\s*\{[^}]*display:\s*flex !important;[^}]*align-items:\s*center !important;/,
+  );
+  assert.match(
+    css,
+    /\[data-promptbox-compact-content\] \.ProseMirror:has\(\.prompt-mention-pill\[data-prompt-mention-resource\*='"itemId":"quote:'\]\) > \*\s*\{[^}]*display:\s*flex !important;[^}]*align-items:\s*center !important;[^}]*height:\s*100%;/,
+  );
   assert.match(css, /@media \(hover: hover\) and \(pointer: fine\)/);
   assert.doesNotMatch(css, /max-height:\s*20px/);
   assert.doesNotMatch(css, /contenteditable/i);
