@@ -2,11 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applyComposerRadius,
   applyFadeHeight,
+  composerCollapseHeight,
   composerGlassCss,
+  composerHeightTransition,
+  composerRadiusChange,
   fadeHeight,
   jumpButtonTop,
   jumpButtonTopAboveComposer,
+  nextPinnedScroll,
+  planComposerHeight,
 } from "./composer-glass.ts";
 
 test("fades messages above the composer without pulling the footer up", () => {
@@ -107,8 +113,9 @@ test("paints the composer, diff pill, and jump button with the mobile glass", ()
   assert.match(css, /\[data-promptbox\]\s*\{[^}]*border-color:\s*transparent !important;/);
   assert.match(
     css,
-    /\[data-promptbox\]\s*\{[^}]*transition:\s*box-shadow 320ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\) !important;/,
+    /\[data-promptbox\]\s*\{[^}]*transition:\s*box-shadow 320ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\);/,
   );
+  assert.doesNotMatch(css, /transition:[^;]*!important/);
   assert.match(
     css,
     /\[data-promptbox\]:focus-within\s*\{[^}]*border-color:\s*transparent !important;/,
@@ -149,6 +156,222 @@ test("paints the composer, diff pill, and jump button with the mobile glass", ()
   assert.doesNotMatch(
     css,
     /#thread-prompt-banner-git-toggle\s*\{[^}]*border-radius:/,
+  );
+});
+
+test("keeps the collapsing composer on the bottom edge", () => {
+  const css = composerGlassCss;
+  assert.match(
+    css,
+    /\[data-promptbox\]\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*justify-content:\s*flex-end;/,
+  );
+  assert.match(
+    css,
+    /@media \(width < 48rem\)\s*\{[\s\S]*:has\(\[data-promptbox-compact\]\)[\s\S]*max-height:\s*100dvh;[\s\S]*\[data-promptbox-shell\] > \.grid\s*\{[^}]*overflow-y:\s*auto;/,
+  );
+});
+
+test("eases composer height and corner on a fine pointer", () => {
+  const css = composerGlassCss;
+  assert.match(css, /@keyframes bb-chat-ui-composer-radius/);
+  assert.match(
+    css,
+    /@media \(pointer: fine\)\s*\{[\s\S]*?\[data-promptbox\]\s*\{[^}]*height 480ms cubic-bezier\(0\.22, 1, 0\.36, 1\),\s*border-radius 480ms cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
+  );
+  assert.match(
+    css,
+    /@media \(pointer: fine\) and \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?transition:\s*box-shadow 320ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\);/,
+  );
+  assert.deepEqual(
+    composerRadiusChange({
+      previousCompact: false,
+      nextCompact: true,
+      handoff: false,
+      finePointer: true,
+      reducedMotion: false,
+    }),
+    { from: "1.375rem", to: "999px" },
+  );
+  assert.deepEqual(
+    composerRadiusChange({
+      previousCompact: true,
+      nextCompact: false,
+      handoff: false,
+      finePointer: true,
+      reducedMotion: false,
+    }),
+    { from: "999px", to: "1.375rem" },
+  );
+  assert.equal(
+    composerRadiusChange({
+      previousCompact: false,
+      nextCompact: true,
+      handoff: true,
+      finePointer: true,
+      reducedMotion: false,
+    }),
+    null,
+  );
+  assert.equal(
+    composerRadiusChange({
+      previousCompact: false,
+      nextCompact: true,
+      handoff: false,
+      finePointer: false,
+      reducedMotion: false,
+    }),
+    null,
+  );
+  assert.equal(
+    composerRadiusChange({
+      previousCompact: false,
+      nextCompact: true,
+      handoff: false,
+      finePointer: true,
+      reducedMotion: true,
+    }),
+    null,
+  );
+
+  const writes: string[] = [];
+  const element = {
+    style: {
+      setProperty(name: string, value: string) {
+        writes.push(`${name}:${value}`);
+      },
+      animation: "",
+    },
+    getBoundingClientRect() {
+      writes.push("measure");
+    },
+  };
+  applyComposerRadius(element, { from: "1.375rem", to: "999px" });
+  assert.deepEqual(writes, [
+    "--bb-chat-ui-radius-from:1.375rem",
+    "--bb-chat-ui-radius-to:999px",
+    "measure",
+  ]);
+  assert.equal(
+    element.style.animation,
+    "bb-chat-ui-composer-radius 480ms cubic-bezier(0.22, 1, 0.36, 1)",
+  );
+});
+
+test("lengthens the host height flip and keeps a bottom scroll pinned", () => {
+  const host = "height 240ms cubic-bezier(0.22, 1, 0.36, 1)";
+  assert.equal(
+    composerHeightTransition(host),
+    "height 480ms cubic-bezier(0.22, 1, 0.36, 1)",
+  );
+  assert.equal(composerHeightTransition("height 480ms ease"), null);
+  assert.equal(composerHeightTransition(""), null);
+
+  const started = planComposerHeight({
+    transition: host,
+    height: "48px",
+    now: 1_000,
+    idleHeight: 120,
+    motion: null,
+  });
+  assert.equal(started.rewrite?.from, 120);
+  assert.equal(started.rewrite?.to, 48);
+  assert.equal(
+    started.rewrite?.transition,
+    "height 480ms cubic-bezier(0.22, 1, 0.36, 1)",
+  );
+  assert.equal(started.resume, null);
+  assert.deepEqual(started.motion, {
+    from: 120,
+    to: 48,
+    startedAt: 1_000,
+    durationMs: 480,
+  });
+
+  const cutOff = planComposerHeight({
+    transition: "",
+    height: "",
+    now: 1_320,
+    idleHeight: 120,
+    motion: started.motion,
+  });
+  assert.ok(cutOff.resume);
+  assert.equal(cutOff.resume?.from, 120);
+  assert.equal(cutOff.resume?.to, 48);
+  assert.equal(cutOff.resume?.remainingMs, 160);
+  assert.match(cutOff.resume?.transition ?? "", /height 480ms/);
+  assert.match(cutOff.resume?.transition ?? "", /-320ms/);
+  assert.equal(cutOff.motion, started.motion);
+  const resumedHeight = composerCollapseHeight({
+    from: 120,
+    to: 48,
+    elapsedMs: 320,
+    durationMs: 480,
+  });
+  assert.ok(resumedHeight < 60);
+  assert.ok(resumedHeight > 48);
+
+  const finished = planComposerHeight({
+    transition: "",
+    height: "",
+    now: 1_480,
+    idleHeight: 48,
+    motion: started.motion,
+  });
+  assert.equal(finished.motion, null);
+  assert.equal(finished.resume, null);
+
+  assert.equal(composerCollapseHeight({
+    from: 120,
+    to: 48,
+    elapsedMs: 0,
+    durationMs: 480,
+  }), 120);
+  assert.equal(composerCollapseHeight({
+    from: 120,
+    to: 48,
+    elapsedMs: 480,
+    durationMs: 480,
+  }), 48);
+
+  assert.deepEqual(
+    nextPinnedScroll({
+      scrollTop: 400,
+      scrollHeight: 500,
+      clientHeight: 80,
+      stick: true,
+      lastPinned: null,
+    }),
+    { scrollTop: 420, stick: true },
+  );
+  assert.deepEqual(
+    nextPinnedScroll({
+      scrollTop: 420,
+      scrollHeight: 500,
+      clientHeight: 80,
+      stick: true,
+      lastPinned: 420,
+    }),
+    { scrollTop: null, stick: true },
+  );
+  assert.deepEqual(
+    nextPinnedScroll({
+      scrollTop: 300,
+      scrollHeight: 500,
+      clientHeight: 80,
+      stick: true,
+      lastPinned: 420,
+    }),
+    { scrollTop: null, stick: false },
+  );
+  assert.deepEqual(
+    nextPinnedScroll({
+      scrollTop: 10,
+      scrollHeight: 80,
+      clientHeight: 100,
+      stick: false,
+      lastPinned: null,
+    }),
+    { scrollTop: null, stick: false },
   );
 });
 

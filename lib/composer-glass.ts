@@ -26,8 +26,23 @@ function darkScope(selectors: string): string {
 }
 
 export const COMPOSER_GLASS_STYLE_ID = "bb-chat-ui-composer-glass";
+export const COMPOSER_RADIUS_FROM = "--bb-chat-ui-radius-from";
+export const COMPOSER_RADIUS_TO = "--bb-chat-ui-radius-to";
+const COMPOSER_COLLAPSE_MS = 480;
+const COMPOSER_COLLAPSE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+const HOST_HEIGHT_TRANSITION = /height\s+240ms\b/;
+const PIN_RELEASE_PX = 8;
+const WIDE_RADIUS = "1.375rem";
+const PILL_RADIUS = "999px";
+const SHADOW_TRANSITION = "box-shadow 320ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+const COLLAPSE_TRANSITION = `height ${COMPOSER_COLLAPSE_MS}ms ${COMPOSER_COLLAPSE_EASE}, border-radius ${COMPOSER_COLLAPSE_MS}ms ${COMPOSER_COLLAPSE_EASE}`;
 
 export const composerGlassCss = `
+@keyframes bb-chat-ui-composer-radius {
+  from { border-radius: var(${COMPOSER_RADIUS_FROM}) !important; }
+  to { border-radius: var(${COMPOSER_RADIUS_TO}) !important; }
+}
+
 [data-thread-window]:not([data-surface-tone="sidebar"]) {
   --bb-chat-ui-canvas: oklch(0.97 0 0);
   background-color: var(--bb-chat-ui-canvas) !important;
@@ -76,12 +91,51 @@ ${FACE} {
     inset 0 1px 0 ${LIGHT_EDGE};
 }
 ${FOOTER} [data-promptbox] {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   border-color: transparent !important;
   border-radius: 1.375rem !important;
-  transition: box-shadow 320ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  transition: ${SHADOW_TRANSITION};
   box-shadow:
     0 12px 32px -14px ${LIGHT_SHADOW},
     inset 0 1px 0 ${LIGHT_EDGE};
+}
+@media (width < 48rem) {
+  ${FOOTER}:has([data-promptbox-compact]) {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    max-height: 100dvh;
+  }
+  ${FOOTER}:has([data-promptbox-compact]) > .relative,
+  ${FOOTER}:has([data-promptbox-compact]) .chat-prompt-box,
+  ${FOOTER}:has([data-promptbox-compact]) [data-promptbox-shell] {
+    display: flex;
+    min-height: 0;
+    max-height: 100%;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  ${FOOTER}:has([data-promptbox-compact]) [data-promptbox-shell] > .grid {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  ${FOOTER}:has([data-promptbox-compact]) [data-follow-up-composer-anchor] {
+    flex-shrink: 0;
+  }
+}
+@media (pointer: fine) {
+  ${FOOTER} [data-promptbox] {
+    transition:
+      ${SHADOW_TRANSITION},
+      ${COLLAPSE_TRANSITION};
+  }
+}
+@media (pointer: fine) and (prefers-reduced-motion: reduce) {
+  ${FOOTER} [data-promptbox] {
+    transition: ${SHADOW_TRANSITION};
+  }
 }
 ${FOOTER} [data-promptbox][data-promptbox-compact] {
   border-radius: 999px !important;
@@ -177,6 +231,152 @@ export function fadeHeight(input: {
   return Math.round(height);
 }
 
+export function composerCornerRadius(compact: boolean, handoff: boolean): string {
+  return compact && !handoff ? PILL_RADIUS : WIDE_RADIUS;
+}
+
+export function composerRadiusChange(input: {
+  previousCompact: boolean;
+  nextCompact: boolean;
+  handoff: boolean;
+  finePointer: boolean;
+  reducedMotion: boolean;
+}): { from: string; to: string } | null {
+  if (input.previousCompact === input.nextCompact) return null;
+  if (!input.finePointer || input.reducedMotion) return null;
+  const from = composerCornerRadius(input.previousCompact, input.handoff);
+  const to = composerCornerRadius(input.nextCompact, input.handoff);
+  if (from === to) return null;
+  return { from, to };
+}
+
+function unitBezier(p1: number, p2: number, t: number): number {
+  const rest = 1 - t;
+  return 3 * rest * rest * t * p1 + 3 * rest * t * t * p2 + t * t * t;
+}
+
+function collapseProgress(elapsedMs: number, durationMs: number): number {
+  if (!(durationMs > 0)) return 1;
+  const x = Math.min(1, Math.max(0, elapsedMs / durationMs));
+  if (x === 0 || x === 1) return x;
+  let low = 0;
+  let high = 1;
+  for (let step = 0; step < 24; step += 1) {
+    const mid = (low + high) / 2;
+    if (unitBezier(0.22, 0.36, mid) < x) low = mid;
+    else high = mid;
+  }
+  return unitBezier(1, 1, (low + high) / 2);
+}
+
+export function composerCollapseHeight(input: {
+  from: number;
+  to: number;
+  elapsedMs: number;
+  durationMs: number;
+}): number {
+  const progress = collapseProgress(input.elapsedMs, input.durationMs);
+  return input.from + (input.to - input.from) * progress;
+}
+
+export function composerHeightTransition(current: string): string | null {
+  if (!HOST_HEIGHT_TRANSITION.test(current)) return null;
+  return current.replace(HOST_HEIGHT_TRANSITION, `height ${COMPOSER_COLLAPSE_MS}ms`);
+}
+
+function parsePx(value: string): number | null {
+  if (!value.endsWith("px")) return null;
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
+}
+
+export interface ComposerHeightMotion {
+  from: number;
+  to: number;
+  startedAt: number;
+  durationMs: number;
+}
+
+export function planComposerHeight(input: {
+  transition: string;
+  height: string;
+  now: number;
+  idleHeight: number;
+  motion: ComposerHeightMotion | null;
+}): {
+  motion: ComposerHeightMotion | null;
+  rewrite: { from: number; to: number; transition: string } | null;
+  resume: { from: number; to: number; remainingMs: number; transition: string } | null;
+} {
+  const none = { motion: input.motion, rewrite: null, resume: null };
+  const lengthened = composerHeightTransition(input.transition);
+  if (lengthened) {
+    const to = parsePx(input.height);
+    if (to == null || !(input.idleHeight > 0)) return none;
+    return {
+      motion: {
+        from: input.idleHeight,
+        to,
+        startedAt: input.now,
+        durationMs: COMPOSER_COLLAPSE_MS,
+      },
+      rewrite: { from: input.idleHeight, to, transition: lengthened },
+      resume: null,
+    };
+  }
+  if (!input.motion || input.height !== "") return none;
+  const elapsed = input.now - input.motion.startedAt;
+  if (elapsed >= input.motion.durationMs) {
+    return { motion: null, rewrite: null, resume: null };
+  }
+  return {
+    motion: input.motion,
+    rewrite: null,
+    resume: {
+      from: input.motion.from,
+      to: input.motion.to,
+      remainingMs: input.motion.durationMs - elapsed,
+      transition: `height ${input.motion.durationMs}ms ${COMPOSER_COLLAPSE_EASE} -${elapsed}ms`,
+    },
+  };
+}
+
+export function nextPinnedScroll(input: {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+  stick: boolean;
+  lastPinned: number | null;
+}): { scrollTop: number | null; stick: boolean } {
+  if (!input.stick) return { scrollTop: null, stick: false };
+  const max = Math.max(0, input.scrollHeight - input.clientHeight);
+  const userMovedUp =
+    input.lastPinned != null &&
+    input.scrollTop < input.lastPinned - PIN_RELEASE_PX &&
+    input.scrollTop < max - 1;
+  if (userMovedUp) return { scrollTop: null, stick: false };
+  if (Math.abs(max - input.scrollTop) < 1) return { scrollTop: null, stick: true };
+  return { scrollTop: max, stick: true };
+}
+
+export function applyComposerRadius(
+  element: {
+    style: {
+      setProperty(name: string, value: string): void;
+      animation: string;
+    };
+    getBoundingClientRect(): unknown;
+  },
+  change: { from: string; to: string },
+): void {
+  element.style.setProperty(COMPOSER_RADIUS_FROM, change.from);
+  element.style.setProperty(COMPOSER_RADIUS_TO, change.to);
+  element.style.animation = "none";
+  element.getBoundingClientRect();
+  element.style.animation = `bb-chat-ui-composer-radius ${COMPOSER_COLLAPSE_MS}ms ${COMPOSER_COLLAPSE_EASE}`;
+}
+
 export function applyFadeHeight(node: PlateHeightTarget, height: number): void {
   if (!Number.isFinite(height) || height <= 0) {
     node.style.removeProperty(FADE_HEIGHT);
@@ -220,8 +420,193 @@ export function injectComposerGlass(document: Document): () => void {
   let observer: ResizeObserver | null = null;
   let stackObserved: Element | null = null;
   let stackMutations: MutationObserver | null = null;
+  const radiusWatches = new Set<() => void>();
+  const watchedComposers = new WeakSet<HTMLElement>();
+  const idleHeights = new WeakMap<HTMLElement, number>();
+  const animating = new WeakSet<HTMLElement>();
+
+  const bindComposerRadius = (composer: HTMLElement) => {
+    if (watchedComposers.has(composer) || typeof MutationObserver === "undefined") return;
+    watchedComposers.add(composer);
+    let compact = composer.hasAttribute("data-promptbox-compact");
+    let generation = 0;
+    let motion: ComposerHeightMotion | null = null;
+    let finishTimer = 0;
+    let pinFrame = 0;
+    let pinning = false;
+    let lastPinned: number | null = null;
+    const viewOf = () => composer.ownerDocument.defaultView;
+
+    const stopPin = () => {
+      const view = viewOf();
+      if (pinFrame && view) view.cancelAnimationFrame(pinFrame);
+      pinFrame = 0;
+      pinning = false;
+      lastPinned = null;
+    };
+
+    const stopFinish = () => {
+      const view = viewOf();
+      if (finishTimer && view) view.clearTimeout(finishTimer);
+      finishTimer = 0;
+    };
+
+    const scrollerOf = () => {
+      const scroller = composer.closest(".thread-scrollbar");
+      return scroller instanceof HTMLElement ? scroller : null;
+    };
+
+    const keepScroll = (scroller: HTMLElement | null, scrollTop: number | null) => {
+      if (scroller && scrollTop != null) scroller.scrollTop = scrollTop;
+    };
+
+    const startPin = () => {
+      const view = viewOf();
+      const scroller = scrollerOf();
+      stopPin();
+      if (!view || !scroller) return;
+      if (scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop > 4) return;
+      pinning = true;
+      lastPinned = scroller.scrollTop;
+      const tick = () => {
+        pinFrame = 0;
+        if (!pinning) return;
+        const node = scrollerOf();
+        if (!node) {
+          pinning = false;
+          return;
+        }
+        const planned = nextPinnedScroll({
+          scrollTop: node.scrollTop,
+          scrollHeight: node.scrollHeight,
+          clientHeight: node.clientHeight,
+          stick: true,
+          lastPinned,
+        });
+        if (!planned.stick) {
+          pinning = false;
+          lastPinned = null;
+          return;
+        }
+        if (planned.scrollTop != null) node.scrollTop = planned.scrollTop;
+        lastPinned = node.scrollTop;
+        pinFrame = view.requestAnimationFrame(tick);
+      };
+      pinFrame = view.requestAnimationFrame(tick);
+    };
+
+    const finishMotion = () => {
+      motion = null;
+      animating.delete(composer);
+      composer.style.transition = "none";
+      composer.style.height = "";
+      composer.style.transition = "";
+      composer.style.willChange = "";
+      composer.style.overflow = "";
+      stopPin();
+    };
+
+    const changes = new MutationObserver(() => {
+      const nextCompact = composer.hasAttribute("data-promptbox-compact");
+      const view = viewOf();
+      const change = composerRadiusChange({
+        previousCompact: compact,
+        nextCompact,
+        handoff: composer.querySelector('[aria-label="Exit handoff"]') != null,
+        finePointer: view?.matchMedia("(pointer: fine)").matches ?? false,
+        reducedMotion:
+          view?.matchMedia("(prefers-reduced-motion: reduce)").matches ?? false,
+      });
+      compact = nextCompact;
+      if (change != null) {
+        const current = ++generation;
+        applyComposerRadius(composer, change);
+        const onEnd = (event: AnimationEvent) => {
+          if (event.animationName !== "bb-chat-ui-composer-radius") return;
+          composer.removeEventListener("animationend", onEnd);
+          if (current !== generation) return;
+          composer.style.animation = "";
+        };
+        composer.addEventListener("animationend", onEnd);
+      }
+
+      const plan = planComposerHeight({
+        transition: composer.style.transition,
+        height: composer.style.height,
+        now: view?.performance.now() ?? 0,
+        idleHeight: idleHeights.get(composer) ?? 0,
+        motion,
+      });
+      if (plan.rewrite) {
+        stopFinish();
+        motion = plan.motion;
+        animating.add(composer);
+        const scroller = scrollerOf();
+        const savedScroll = scroller?.scrollTop ?? null;
+        composer.style.transition = "none";
+        composer.style.height = `${plan.rewrite.from}px`;
+        composer.getBoundingClientRect();
+        composer.style.transition = plan.rewrite.transition;
+        composer.style.height = `${plan.rewrite.to}px`;
+        keepScroll(scroller, savedScroll);
+        startPin();
+        return;
+      }
+      if (plan.resume) {
+        motion = plan.motion;
+        animating.add(composer);
+        const scroller = scrollerOf();
+        const savedScroll = scroller?.scrollTop ?? null;
+        composer.style.transition = "none";
+        composer.style.height = `${plan.resume.from}px`;
+        composer.getBoundingClientRect();
+        composer.style.overflow = "hidden";
+        composer.style.willChange = "height";
+        composer.style.transition = plan.resume.transition;
+        composer.style.height = `${plan.resume.to}px`;
+        keepScroll(scroller, savedScroll);
+        if (!view) return;
+        stopFinish();
+        finishTimer = view.setTimeout(() => {
+          finishTimer = 0;
+          finishMotion();
+        }, plan.resume.remainingMs);
+        return;
+      }
+      if (motion && !plan.motion) {
+        motion = null;
+        animating.delete(composer);
+        stopPin();
+      }
+    });
+    changes.observe(composer, {
+      attributes: true,
+      attributeFilter: ["data-promptbox-compact", "style"],
+    });
+    radiusWatches.add(() => {
+      changes.disconnect();
+      stopFinish();
+      stopPin();
+      animating.delete(composer);
+    });
+  };
 
   const sync = () => {
+    const footers = document.querySelectorAll(FOOTER);
+    for (let index = 0; index < footers.length; index += 1) {
+      const footerNode = footers.item(index);
+      if (!(footerNode instanceof HTMLElement)) continue;
+      const composers = footerNode.querySelectorAll(COMPOSER);
+      for (let composerIndex = 0; composerIndex < composers.length; composerIndex += 1) {
+        const composer = composers.item(composerIndex);
+        if (!(composer instanceof HTMLElement)) continue;
+        bindComposerRadius(composer);
+        if (!animating.has(composer)) {
+          const height = composer.getBoundingClientRect().height;
+          if (height > 0) idleHeights.set(composer, height);
+        }
+      }
+    }
     const footer = document.querySelector(FOOTER);
     if (footer instanceof HTMLElement) {
       alignFade(footer);
@@ -270,6 +655,8 @@ export function injectComposerGlass(document: Document): () => void {
     mutations?.disconnect();
     stackMutations?.disconnect();
     observer?.disconnect();
+    for (const stop of radiusWatches) stop();
+    radiusWatches.clear();
     style.remove();
     const frames = document.querySelectorAll("[data-thread-window]");
     for (let index = 0; index < frames.length; index += 1) {
