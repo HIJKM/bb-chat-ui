@@ -86,7 +86,7 @@ test("folds a drawer once, and leaves an open editor alone", () => {
   );
 });
 
-test("paints queued messages as a right pill and faded bubbles", () => {
+test("paints queued messages as a right pill and solid bubbles", () => {
   const css = queuedMessagesCss;
   assert.match(css, /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)/);
   assert.match(
@@ -181,6 +181,10 @@ test("paints queued messages as a right pill and faded bubbles", () => {
   );
   assert.match(css, /margin-left:\s*auto/);
   assert.match(css, /border-radius:\s*18px !important/);
+  assert.match(
+    css,
+    /header\[data-queued-messages-mode\]\s*\{[^}]*opacity:\s*1;/,
+  );
   assert.match(css, /button\[aria-label\^="Reorder"\]\s*\{[^}]*display:\s*none !important;/);
   assert.match(
     css,
@@ -201,7 +205,7 @@ test("paints queued messages as a right pill and faded bubbles", () => {
   );
   assert.match(
     css,
-    /\[data-queued-message-row\] > \.flex > \.min-w-0\s*\{[^}]*opacity:\s*0\.7;/,
+    /\[data-queued-message-row\] > \.flex > \.min-w-0\s*\{[^}]*opacity:\s*1;/,
   );
   assert.doesNotMatch(css, /26px 26px 10px 26px/);
   assert.match(

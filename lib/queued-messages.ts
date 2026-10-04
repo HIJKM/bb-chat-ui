@@ -87,7 +87,7 @@ ${QUEUE} header[data-queued-messages-mode] {
   border: 0 !important;
   border-radius: 18px !important;
   background: var(--foreground) !important;
-  opacity: 0.7;
+  opacity: 1;
   gap: 6px;
 }
 ${QUEUE} header[data-queued-messages-mode][data-bb-chat-ui-queue-label]::before {
@@ -142,7 +142,7 @@ ${QUEUE} [data-queued-message-row] > .flex > .min-w-0 {
   padding: 0.625rem 1rem;
   font-size: 0.875rem;
   line-height: 1.625;
-  opacity: 0.7;
+  opacity: 1;
 }
 ${QUEUE} [data-queued-message-row] .truncate {
   overflow: visible !important;
