@@ -40,6 +40,10 @@ ${PAINTED} > .truncate {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+${PAINTED}:not([${WIDE}]) > .truncate {
+  /* Bound the label's intrinsic width when the parent sizes to its contents. */
+  max-width: calc(240px - 12px - 14px - 2px - 6px - 16px);
+}
 ${PAINTED} [data-icon-root],
 ${PAINTED} [data-section-mention-marker],
 ${PAINTED} [data-bb-chat-ui-quote-glyph] {
@@ -101,6 +105,9 @@ ${PAINTED} > button[${REMOVE}]:focus-visible {
   }
   ${PAINTED}[${WIDE}] {
     max-width: calc(100% - 6px) !important;
+  }
+  ${PAINTED}:not([${WIDE}]) > .truncate {
+    max-width: calc(140px - 10px - 12px - 2px - 4px - 14px);
   }
   ${PAINTED} [data-icon-root],
   ${PAINTED} [data-section-mention-marker],
