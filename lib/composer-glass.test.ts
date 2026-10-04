@@ -437,24 +437,24 @@ test("rounds buttons inside the composer like the mobile composer", () => {
 
 test("stacks each side independently above the to-do card", () => {
   const all = { width: 358, diffHeight: 32, agentation: true,
-    agentationWidth: 160, queue: true, jumpHeight: 32, rightWidth: 36 };
+    agentationWidth: 160, queue: true, jumpHeight: 32, rightWidth: 32 };
   assert.deepEqual(composerControlsLayout(all), {
-    height: 76, agentationBottom: 40, queueBottom: 40,
-    agentationWidth: 314, queueWidth: 358,
+    height: 72, agentationBottom: 40, queueBottom: 40,
+    agentationWidth: 318, queueWidth: 358,
   });
   assert.deepEqual(composerControlsLayout({ ...all, diffHeight: 0 }), {
-    height: 76, agentationBottom: 0, queueBottom: 40,
-    agentationWidth: 314, queueWidth: 358,
+    height: 72, agentationBottom: 0, queueBottom: 40,
+    agentationWidth: 318, queueWidth: 358,
   });
   assert.deepEqual(composerControlsLayout({ ...all, jumpHeight: 0 }), {
     height: 72, agentationBottom: 40, queueBottom: 0,
-    agentationWidth: 314, queueWidth: 190,
+    agentationWidth: 318, queueWidth: 190,
   });
   assert.deepEqual(composerControlsLayout({ ...all, queue: false, jumpHeight: 0, rightWidth: 0 }), {
     height: 72, agentationBottom: 40, queueBottom: 0,
     agentationWidth: 358, queueWidth: 358,
   });
-  assert.equal(composerControlsLayout({ ...all, agentation: false }).height, 76);
+  assert.equal(composerControlsLayout({ ...all, agentation: false }).height, 72);
   assert.equal(composerControlsLayout({ ...all, diffHeight: 48 }).queueBottom, 40);
   assert.equal(composerControlsLayout({ ...all, queue: false, rightWidth: 32 }).agentationWidth, 318);
 });

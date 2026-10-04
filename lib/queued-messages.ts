@@ -13,9 +13,9 @@ ${QUEUE}:has([data-queued-messages-mode]) {
   padding-right: 0 !important;
   padding-left: 0 !important;
   display: block !important;
-  height: 36px !important;
-  min-height: 36px !important;
-  max-height: 36px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
   padding-bottom: 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -64,10 +64,10 @@ ${QUEUE} header[data-queued-messages-mode] {
   display: flex !important;
   align-items: center;
   justify-content: center;
-  width: 36px !important;
-  min-width: 36px !important;
-  max-width: 36px !important;
-  height: 36px !important;
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  height: 32px !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
@@ -95,7 +95,7 @@ ${QUEUE} header[data-queued-messages-mode="workspace"]::before {
 }
 ${QUEUE} header[data-queued-messages-mode] > div:last-child {
   display: flex !important;
-  width: 36px;
+  width: 32px;
   min-width: 0;
   justify-content: center;
 }
@@ -104,8 +104,8 @@ ${QUEUE} header[data-queued-messages-mode="collapsed"] button[aria-expanded] svg
 }
 ${QUEUE} header[data-queued-messages-mode] > div:last-child button[aria-expanded] {
   display: inline-flex !important;
-  width: 36px !important;
-  height: 36px !important;
+  width: 32px !important;
+  height: 32px !important;
   align-items: center;
   justify-content: center;
   padding: 0 !important;

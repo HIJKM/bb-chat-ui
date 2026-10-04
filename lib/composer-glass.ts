@@ -222,6 +222,10 @@ ${FOOTER} .chat-prompt-box {
 }
 ${FOOTER} ${JUMP_BUTTON} {
   position: absolute;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
   margin-top: 0 !important;
   top: auto;
   bottom: var(${JUMP_BOTTOM}, 0px);
@@ -517,9 +521,9 @@ export function composerControlsLayout(input: {
   const agentationBottom = input.diffHeight > 0 ? input.diffHeight + 8 : 0;
   const queueBottom = input.jumpHeight > 0 ? input.jumpHeight + 8 : 0;
   const leftHeight = input.agentation ? agentationBottom + 32 : input.diffHeight;
-  const rightHeight = input.queue ? queueBottom + 36 : input.jumpHeight;
+  const rightHeight = input.queue ? queueBottom + 32 : input.jumpHeight;
   const queueOverlapsAgentation = input.queue && input.agentation &&
-    agentationBottom + 32 > queueBottom + 36 + 8;
+    agentationBottom + 32 > queueBottom + 32 + 8;
   return {
     height: Math.max(leftHeight, rightHeight),
     agentationBottom,
@@ -891,7 +895,7 @@ function alignComposerControls(footer: HTMLElement): void {
     agentationWidth: agentation?.getBoundingClientRect().width ?? 0,
     queue: queue !== null,
     jumpHeight: jumpVisible ? button.getBoundingClientRect().height : 0,
-    rightWidth: queue ? 36 : jumpVisible ? button.getBoundingClientRect().width : 0,
+    rightWidth: queue ? 32 : jumpVisible ? button.getBoundingClientRect().width : 0,
   });
   if (layout.height > 0) stack.setAttribute(CONTROLS, "");
   else stack.removeAttribute(CONTROLS);

@@ -143,11 +143,11 @@ test("paints queued messages as a right pill and solid bubbles", () => {
   );
   assert.match(
     css,
-    /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)\s*\{[^}]*height:\s*36px !important;/,
+    /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)\s*\{[^}]*height:\s*32px !important;/,
   );
   assert.match(
     css,
-    /header\[data-queued-messages-mode\]\s*\{[^}]*width:\s*36px !important;[^}]*height:\s*36px !important;[^}]*border-radius:\s*50% !important;/,
+    /header\[data-queued-messages-mode\]\s*\{[^}]*width:\s*32px !important;[^}]*height:\s*32px !important;[^}]*border-radius:\s*50% !important;/,
   );
   assert.match(
     css,
@@ -164,7 +164,7 @@ test("paints queued messages as a right pill and solid bubbles", () => {
   assert.match(css, /content:\s*attr\(data-bb-chat-ui-queue-label\)/);
   assert.match(
     css,
-    /header\[data-queued-messages-mode\]\s*\{[^}]*position:\s*absolute !important;[^}]*width:\s*36px !important;[^}]*height:\s*36px !important;[^}]*border-radius:\s*50% !important;/,
+    /header\[data-queued-messages-mode\]\s*\{[^}]*position:\s*absolute !important;[^}]*width:\s*32px !important;[^}]*height:\s*32px !important;[^}]*border-radius:\s*50% !important;/,
   );
   assert.doesNotMatch(css, /margin-left:\s*auto/);
   assert.doesNotMatch(css, /border-radius:\s*18px !important/);
