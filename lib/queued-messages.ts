@@ -165,7 +165,7 @@ ${QUEUE} [data-queued-message-row] > .flex > .min-w-0 {
   line-height: 1.625;
   opacity: 1;
 }
-${QUEUE} [data-queued-message-row] .truncate {
+${QUEUE} [data-queued-message-row] .truncate:not(.prompt-mention-pill, .prompt-mention-pill *) {
   overflow: visible !important;
   text-overflow: unset !important;
   white-space: normal !important;
