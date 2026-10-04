@@ -48,6 +48,7 @@ ${QUEUE}:has([data-queued-messages-mode="collapsed"]) [data-queued-messages-scro
 ${QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll] {
   height: auto !important;
   min-height: 0 !important;
+  padding: 4px;
   overflow-y: auto !important;
   overflow-x: hidden !important;
 }
@@ -182,6 +183,14 @@ ${QUEUE} [data-queued-message-actions] {
   pointer-events: auto !important;
   display: flex !important;
   background: var(--surface-raised-solid) !important;
+}
+${QUEUE} [data-queued-message-row] > .flex > .min-w-0,
+${QUEUE} [data-queued-message-actions] {
+  box-shadow: 0 4px 12px -4px color-mix(in oklab, var(--ink, var(--foreground)) 20%, transparent) !important;
+}
+.dark ${QUEUE} [data-queued-message-row] > .flex > .min-w-0,
+.dark ${QUEUE} [data-queued-message-actions] {
+  box-shadow: 0 4px 12px -4px color-mix(in oklab, black 50%, transparent) !important;
 }
 ${QUEUE} [data-queued-message-actions] button[aria-label^="Delete"] {
   order: 1;
