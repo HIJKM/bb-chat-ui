@@ -46,6 +46,13 @@ test("fades messages above the composer without pulling the footer up", () => {
   );
 });
 
+test("keeps the expanded editor minimum height independent of banners", () => {
+  assert.match(
+    composerGlassCss,
+    /\[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-follow-up-composer-anchor\] \[data-promptbox\]:not\(\[data-promptbox-compact\]\) \[data-promptbox-editor-scroll\]\s*\{\s*min-height:\s*68px !important;\s*\}/,
+  );
+});
+
 test("paints the chat surface slightly darker than the app canvas", () => {
   const css = composerGlassCss;
   assert.match(

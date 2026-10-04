@@ -93,6 +93,9 @@ ${FACE} {
     0 6px 18px -12px ${LIGHT_SHADOW},
     inset 0 1px 0 ${LIGHT_EDGE};
 }
+${FOOTER} [data-follow-up-composer-anchor] [data-promptbox]:not([data-promptbox-compact]) [data-promptbox-editor-scroll] {
+  min-height: 68px !important;
+}
 ${FOOTER} [data-promptbox] {
   display: flex;
   flex-direction: column;
