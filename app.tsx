@@ -4,6 +4,7 @@ import { QuoteMentionBridge } from "./lib/quote-bridge";
 import { injectComposerGlass } from "./lib/composer-glass";
 import { injectQuoteMentions } from "./lib/quote-mention";
 import { injectQuotePill } from "./lib/quote-pill";
+import { injectMentionPills } from "./lib/mention-pill";
 import { injectSendHaptic } from "./lib/send-haptic";
 import { injectQueuedMessages } from "./lib/queued-messages";
 import { injectThreadToc } from "./lib/thread-toc";
@@ -36,6 +37,12 @@ export default definePluginApp((app) => {
     id: "composer-glass",
     mount() {
       return injectComposerGlass(document);
+    },
+  });
+  app.contentScripts.register({
+    id: "mention-pills",
+    mount() {
+      return injectMentionPills(document);
     },
   });
   app.contentScripts.register({
