@@ -85,6 +85,17 @@ ${USER_BUBBLE} > .break-words[style*="mask-image"] > * {
   mask-image: linear-gradient(to bottom, black calc(100% - 2.5rem), transparent);
   -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 2.5rem), transparent);
 }
+@media (width >= 48rem) {
+${FILE_CHIP} {
+  min-height: 40px;
+  border-radius: 12px;
+}
+${FILE_CHIP}::before {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+}
+}
 `;
 }
 

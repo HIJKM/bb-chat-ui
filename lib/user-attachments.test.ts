@@ -85,3 +85,17 @@ test("thickens user file chips and paints a file icon", () => {
   assert.match(css, new RegExp(`${chip}::before\\s*\\{[^}]*height:\\s*28px;`));
   assert.match(css, new RegExp(`${chip}::before\\s*\\{[^}]*mask:`));
 });
+
+test("shrinks sent file chips on wide screens", () => {
+  const css = userAttachmentsCss();
+  const chip = `${USER_BUBBLE} > \\.mt-2\\.space-y-2 > \\.flex:not\\(:has\\(img\\)\\) > :is\\(a, button, span\\)`;
+  const [base, desktop] = css.split("@media (width >= 48rem)");
+  assert.ok(desktop);
+  assert.match(base, new RegExp(`${chip}\\s*\\{[^}]*min-height:\\s*64px;`));
+  assert.match(base, new RegExp(`${chip}::before\\s*\\{[^}]*width:\\s*28px;`));
+  assert.match(desktop, new RegExp(`${chip}\\s*\\{[^}]*min-height:\\s*40px;`));
+  assert.match(desktop, new RegExp(`${chip}\\s*\\{[^}]*border-radius:\\s*12px;`));
+  assert.match(desktop, new RegExp(`${chip}::before\\s*\\{[^}]*flex:\\s*0 0 18px;`));
+  assert.match(desktop, new RegExp(`${chip}::before\\s*\\{[^}]*width:\\s*18px;`));
+  assert.match(desktop, new RegExp(`${chip}::before\\s*\\{[^}]*height:\\s*18px;`));
+});

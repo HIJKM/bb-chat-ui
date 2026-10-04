@@ -139,22 +139,21 @@ function bindRail(button: HTMLButtonElement, cleanups: Array<() => void>) {
     clearTickWidths(button);
     if (root instanceof HTMLElement) hoveredTickByRoot.delete(root);
   });
-  if (root instanceof HTMLElement) bindRootLeave(root, button, cleanups);
+  if (root instanceof HTMLElement) bindRootLeave(root, cleanups);
 }
 
-function bindRootLeave(
-  root: HTMLElement,
-  button: HTMLButtonElement,
-  cleanups: Array<() => void>,
-) {
+function bindRootLeave(root: HTMLElement, cleanups: Array<() => void>) {
   if (root.hasAttribute(ROOT_MARK)) return;
   root.setAttribute(ROOT_MARK, "");
   const onLeave = (event: MouseEvent) => {
     const next = event.relatedTarget;
     if (next instanceof Node && root.contains(next)) return;
     releaseTocFocus(root);
-    clearTickWidths(button);
+    clearTickWidths(root);
     for (const tick of tickElements(root)) tick.removeAttribute(SELECTED_MARK);
+    for (const item of Array.from(root.querySelectorAll(`[${CURRENT_MARK}]`))) {
+      item.removeAttribute(CURRENT_MARK);
+    }
     hoveredTickByRoot.delete(root);
   };
   root.addEventListener("mouseleave", onLeave, true);
@@ -240,8 +239,8 @@ function applyTickWidths(button: HTMLButtonElement, clientY: number) {
   }
 }
 
-function clearTickWidths(button: HTMLButtonElement) {
-  for (const tick of tickElements(button)) {
+function clearTickWidths(root: ParentNode) {
+  for (const tick of tickElements(root)) {
     tick.style.removeProperty("width");
   }
 }
