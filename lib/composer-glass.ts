@@ -28,14 +28,15 @@ function darkScope(selectors: string): string {
 export const COMPOSER_GLASS_STYLE_ID = "bb-chat-ui-composer-glass";
 export const COMPOSER_RADIUS_FROM = "--bb-chat-ui-radius-from";
 export const COMPOSER_RADIUS_TO = "--bb-chat-ui-radius-to";
-const COMPOSER_COLLAPSE_MS = 480;
+const COMPOSER_HEIGHT_MS = 360;
+const COMPOSER_RADIUS_MS = 480;
 const COMPOSER_COLLAPSE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 const HOST_HEIGHT_TRANSITION = /height\s+240ms\b/;
 const PIN_RELEASE_PX = 8;
 const WIDE_RADIUS = "1.375rem";
 const PILL_RADIUS = "999px";
 const SHADOW_TRANSITION = "box-shadow 320ms cubic-bezier(0.2, 0.8, 0.2, 1)";
-const COLLAPSE_TRANSITION = `height ${COMPOSER_COLLAPSE_MS}ms ${COMPOSER_COLLAPSE_EASE}, border-radius ${COMPOSER_COLLAPSE_MS}ms ${COMPOSER_COLLAPSE_EASE}`;
+const COLLAPSE_TRANSITION = `height ${COMPOSER_HEIGHT_MS}ms ${COMPOSER_COLLAPSE_EASE}, border-radius ${COMPOSER_RADIUS_MS}ms ${COMPOSER_COLLAPSE_EASE}`;
 
 export const composerGlassCss = `
 @keyframes bb-chat-ui-composer-radius {
@@ -298,7 +299,7 @@ export function composerCollapseHeight(input: {
 
 export function composerHeightTransition(current: string): string | null {
   if (!HOST_HEIGHT_TRANSITION.test(current)) return null;
-  return current.replace(HOST_HEIGHT_TRANSITION, `height ${COMPOSER_COLLAPSE_MS}ms`);
+  return current.replace(HOST_HEIGHT_TRANSITION, `height ${COMPOSER_HEIGHT_MS}ms`);
 }
 
 function parsePx(value: string): number | null {
@@ -336,7 +337,7 @@ export function planComposerHeight(input: {
         from: input.idleHeight,
         to,
         startedAt: input.now,
-        durationMs: COMPOSER_COLLAPSE_MS,
+        durationMs: COMPOSER_HEIGHT_MS,
       },
       rewrite: { from: input.idleHeight, to, transition: lengthened },
       resume: null,
@@ -417,7 +418,7 @@ export function applyComposerRadius(
   element.style.setProperty(COMPOSER_RADIUS_TO, change.to);
   element.style.animation = "none";
   element.getBoundingClientRect();
-  element.style.animation = `bb-chat-ui-composer-radius ${COMPOSER_COLLAPSE_MS}ms ${COMPOSER_COLLAPSE_EASE}`;
+  element.style.animation = `bb-chat-ui-composer-radius ${COMPOSER_RADIUS_MS}ms ${COMPOSER_COLLAPSE_EASE}`;
 }
 
 export function applyFadeHeight(node: PlateHeightTarget, height: number): void {

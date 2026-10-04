@@ -221,7 +221,7 @@ test("eases composer height and corner on a fine pointer", () => {
   assert.match(css, /@keyframes bb-chat-ui-composer-radius/);
   assert.match(
     css,
-    /@media \(pointer: fine\)\s*\{[\s\S]*?\[data-promptbox\]\s*\{[^}]*height 480ms cubic-bezier\(0\.22, 1, 0\.36, 1\),\s*border-radius 480ms cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
+    /@media \(pointer: fine\)\s*\{[\s\S]*?\[data-promptbox\]\s*\{[^}]*height 360ms cubic-bezier\(0\.22, 1, 0\.36, 1\),\s*border-radius 480ms cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
   );
   assert.match(
     css,
@@ -306,7 +306,7 @@ test("lengthens the host height flip and keeps a bottom scroll pinned", () => {
   const host = "height 240ms cubic-bezier(0.22, 1, 0.36, 1)";
   assert.equal(
     composerHeightTransition(host),
-    "height 480ms cubic-bezier(0.22, 1, 0.36, 1)",
+    "height 360ms cubic-bezier(0.22, 1, 0.36, 1)",
   );
   assert.equal(composerHeightTransition("height 480ms ease"), null);
   assert.equal(composerHeightTransition(""), null);
@@ -322,14 +322,14 @@ test("lengthens the host height flip and keeps a bottom scroll pinned", () => {
   assert.equal(started.rewrite?.to, 48);
   assert.equal(
     started.rewrite?.transition,
-    "height 480ms cubic-bezier(0.22, 1, 0.36, 1)",
+    "height 360ms cubic-bezier(0.22, 1, 0.36, 1)",
   );
   assert.equal(started.resume, null);
   assert.deepEqual(started.motion, {
     from: 120,
     to: 48,
     startedAt: 1_000,
-    durationMs: 480,
+    durationMs: 360,
   });
 
   const cutOff = planComposerHeight({
@@ -342,15 +342,15 @@ test("lengthens the host height flip and keeps a bottom scroll pinned", () => {
   assert.ok(cutOff.resume);
   assert.equal(cutOff.resume?.from, 120);
   assert.equal(cutOff.resume?.to, 48);
-  assert.equal(cutOff.resume?.remainingMs, 160);
-  assert.match(cutOff.resume?.transition ?? "", /height 480ms/);
+  assert.equal(cutOff.resume?.remainingMs, 40);
+  assert.match(cutOff.resume?.transition ?? "", /height 360ms/);
   assert.match(cutOff.resume?.transition ?? "", /-320ms/);
   assert.equal(cutOff.motion, started.motion);
   const resumedHeight = composerCollapseHeight({
     from: 120,
     to: 48,
     elapsedMs: 320,
-    durationMs: 480,
+    durationMs: 360,
   });
   assert.ok(resumedHeight < 60);
   assert.ok(resumedHeight > 48);
@@ -358,7 +358,7 @@ test("lengthens the host height flip and keeps a bottom scroll pinned", () => {
   const finished = planComposerHeight({
     transition: "",
     height: "",
-    now: 1_480,
+    now: 1_360,
     idleHeight: 48,
     motion: started.motion,
   });
