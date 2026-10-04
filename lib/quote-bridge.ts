@@ -1,13 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   experimental_usePluginId,
   useComposer,
   useRpc,
 } from "@get-bb/plugin-sdk/app";
-import type { ComposerMention } from "@get-bb/plugin-sdk";
+import type { ComposerDraftSnapshot, ComposerMention } from "@get-bb/plugin-sdk";
 
 import { quoteRpcContract } from "./quote-contract.ts";
 import { firstQuoteSpan, replaceQuoteSpan } from "./quote-draft.ts";
+import { inlineInsertedMentions, inlineQuoteMention } from "./mention-draft.ts";
 import {
   QUOTE_GESTURE_ATTR,
   QUOTE_PROVIDER_ID,
@@ -21,6 +22,21 @@ export function QuoteMentionBridge(): null {
   const pluginId = experimental_usePluginId();
   const rpc = useRpc<typeof quoteRpcContract>();
   const draft = composer.draft;
+  const scope = JSON.stringify(composer.scope);
+  const previous = useRef<{ scope: string; draft: ComposerDraftSnapshot }>({ scope, draft });
+  const before = previous.current;
+
+  useEffect(() => {
+    previous.current = { scope, draft };
+    if (before.scope !== scope) return;
+    const next = inlineInsertedMentions(before.draft, draft);
+    if (!next) return;
+    composer.replace((current) =>
+      current.text === draft.text &&
+      JSON.stringify(current.mentions) === JSON.stringify(draft.mentions)
+        ? next : current,
+    );
+  }, [composer, draft, scope]);
 
   useEffect(() => {
     const gesture = readQuoteGesture(
@@ -62,7 +78,9 @@ export function QuoteMentionBridge(): null {
           const next = replaceQuoteSpan(current, again, mention);
           if (!next) return current;
           applied = true;
-          return next;
+          if (!gesture) return next;
+          return (before.scope === scope ? inlineInsertedMentions(before.draft, next) : null)
+            ?? inlineQuoteMention(next, mention);
         });
         if (
           applied &&
@@ -77,7 +95,7 @@ export function QuoteMentionBridge(): null {
     return () => {
       cancelled = true;
     };
-  }, [composer, draft, pluginId, rpc]);
+  }, [composer, draft, pluginId, rpc, scope]);
 
   return null;
 }
