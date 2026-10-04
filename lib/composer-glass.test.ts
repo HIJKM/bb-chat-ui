@@ -142,6 +142,10 @@ test("paints the composer, diff pill, and jump button with the mobile glass", ()
     css,
     /\[data-promptbox\]\[data-promptbox-compact\]\s*\{[^}]*border-radius:\s*999px/,
   );
+  assert.match(
+    css,
+    /\[data-promptbox\]\[data-promptbox-compact\]:has\(\[aria-label="Exit handoff"\]\)\s*\{[^}]*border-radius:\s*1\.375rem !important;/,
+  );
   assert.doesNotMatch(
     css,
     /#thread-prompt-banner-git-toggle\s*\{[^}]*border-radius:/,

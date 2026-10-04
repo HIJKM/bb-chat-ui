@@ -86,6 +86,9 @@ ${FOOTER} [data-promptbox] {
 ${FOOTER} [data-promptbox][data-promptbox-compact] {
   border-radius: 999px !important;
 }
+${FOOTER} [data-promptbox][data-promptbox-compact]:has([aria-label="Exit handoff"]) {
+  border-radius: 1.375rem !important;
+}
 ${FOOTER} [data-promptbox] button,
 ${FOOTER} [data-promptbox] [role="button"] {
   border-radius: 999px !important;
