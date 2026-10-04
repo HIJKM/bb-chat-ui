@@ -1,7 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { listIndexForTick, tickWidth } from "./thread-toc.ts";
+import { listIndexForTick, threadTocCss, tickWidth } from "./thread-toc.ts";
+
+test("frosts the toc card with the composer glass", () => {
+  const card = String.raw`\[id\^="thread-toc-panel-"\] > \.rounded-lg`;
+  assert.match(
+    threadTocCss,
+    new RegExp(
+      `${card}\\s*\\{[^}]*backdrop-filter:\\s*blur\\(14px\\) saturate\\(1\\.25\\);`,
+    ),
+  );
+  assert.match(
+    threadTocCss,
+    new RegExp(
+      `${card}\\s*\\{[^}]*background:\\s*color-mix\\(in oklab, white 78%, transparent\\) !important;`,
+    ),
+  );
+  assert.match(threadTocCss, /oklch\(0\.27 0\.008 275 \/ 0\.86\)/);
+  assert.match(
+    threadTocCss,
+    /\.dark \[id\^="thread-toc-panel-"\] > \.rounded-lg\s*\{[^}]*background:\s*oklch\(0\.27 0\.008 275 \/ 0\.86\) !important;/,
+  );
+});
 
 test("gives the tick under the pointer the long hover length", () => {
   assert.equal(tickWidth(0), 32);

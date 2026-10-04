@@ -9,7 +9,7 @@ const TICK_MIN_PX = 10;
 const TICK_REACH_PX = 48;
 const TICK_GAP_PX = 4;
 
-const TOC_CSS = `
+export const threadTocCss = `
 [id^="thread-toc-panel-"] > .rounded-lg > .flex.items-center {
   display: none !important;
 }
@@ -36,6 +36,20 @@ const TOC_CSS = `
 [id^="thread-toc-panel-"] > .rounded-lg {
   transform-origin: right center;
   transition: transform 140ms ease-out;
+  background: color-mix(in oklab, white 78%, transparent) !important;
+  border-color: transparent !important;
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  box-shadow:
+    0 6px 18px -12px color-mix(in oklab, var(--ink, var(--foreground)) 22%, transparent),
+    inset 0 1px 0 color-mix(in oklab, white 85%, transparent);
+}
+.dark [id^="thread-toc-panel-"] > .rounded-lg {
+  background: oklch(0.27 0.008 275 / 0.86) !important;
+  border-color: transparent !important;
+  box-shadow:
+    0 6px 18px -12px color-mix(in oklab, black 60%, transparent),
+    inset 0 1px 0 color-mix(in oklab, white 12%, transparent);
 }
 [id^="thread-toc-panel-"]:hover > .rounded-lg {
   transform: scale(1.05);
@@ -79,7 +93,7 @@ export function listIndexForTick(
 export function injectThreadToc(document: Document): () => void {
   const style = document.createElement("style");
   style.id = STYLE_ID;
-  style.textContent = TOC_CSS;
+  style.textContent = threadTocCss;
   document.head.append(style);
 
   const cleanups: Array<() => void> = [];
