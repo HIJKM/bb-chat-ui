@@ -274,7 +274,11 @@ ${FOOTER} ${STACK} .agentation-staging-shell {
 }
 ${FOOTER} ${STACK} .agentation-staging-shell:not(.agentation-staging-shell--expanded) {
   height: 32px;
+  overflow: clip;
   justify-content: center;
+}
+${FOOTER} ${STACK} .agentation-staging-shell > .grid {
+  position: relative;
 }
 ${FOOTER} ${STACK} .agentation-staging-shell:not(.agentation-staging-shell--expanded) > div:first-child {
   padding-top: 4px;
