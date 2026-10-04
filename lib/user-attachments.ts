@@ -78,12 +78,25 @@ ${USER_BUBBLE} > span.line-clamp-1 {
   margin-left: 1rem;
 }
 ${USER_BUBBLE} > .break-words[style*="mask-image"] {
+  position: relative;
+  max-height: calc(15lh - 8px);
   mask-image: none !important;
   -webkit-mask-image: none !important;
 }
-${USER_BUBBLE} > .break-words[style*="mask-image"] > * {
-  mask-image: linear-gradient(to bottom, black calc(100% - 2.5rem), transparent);
-  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 2.5rem), transparent);
+${USER_BUBBLE} > .break-words[style*="mask-image"]::after {
+  content: "";
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  left: 1px;
+  z-index: 1;
+  height: calc(2.5rem + 1.75rem);
+  background:
+    linear-gradient(var(--surface-recessed), var(--surface-recessed)),
+    var(--bb-chat-ui-canvas, var(--background));
+  mask-image: linear-gradient(to bottom, transparent, black 2.5rem);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 2.5rem);
+  pointer-events: none;
 }
 @media (width >= 48rem) {
 ${FILE_CHIP} {
