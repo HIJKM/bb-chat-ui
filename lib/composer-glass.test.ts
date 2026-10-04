@@ -9,7 +9,7 @@ import {
   composerHeightTransition,
   composerRadiusChange,
   fadeHeight,
-  jumpButtonTop,
+  jumpButtonTopInSlot,
   jumpButtonTopAboveComposer,
   composerLift,
   desktopCollapseStick,
@@ -439,11 +439,15 @@ test("rounds buttons inside the composer like the mobile composer", () => {
 test("puts the to-do card closest to the composer", () => {
   assert.match(
     composerGlassCss,
-    /\[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox-shell\] > \.grid > section\[aria-label="To-do list"\]\s*\{[^}]*order:\s*1;/,
+    /\[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox-shell\] > \.grid > section\[aria-label="To-do list"\]\s*\{[^}]*order:\s*4;/,
   );
+  assert.match(composerGlassCss, /section\[aria-label="Queued messages"\]\s*\{\s*order:\s*2;/);
+  assert.match(composerGlassCss, /section:has\(#thread-prompt-banner-git-toggle\)\s*\{\s*order:\s*3;/);
+  assert.match(composerGlassCss, /:has\(> \.agentation-staging-shell\)\s*\{\s*order:\s*1;/);
+  assert.match(composerGlassCss, /::before\s*\{\s*content: "";\s*order: 3;\s*height: 32px;/);
 });
 
-test("places the jump button on the diff pill row", () => {
+test("places the jump button in the diff pill slot without reading pill height", () => {
   const css = composerGlassCss;
   assert.match(
     css,
@@ -452,15 +456,7 @@ test("places the jump button on the diff pill row", () => {
   assert.match(css, /button\[aria-label="Scroll to latest event"\]:not\(\.invisible\)/);
   assert.match(css, /padding-right:\s*2\.5rem/);
   assert.doesNotMatch(css, /-mt-20/);
-  assert.equal(
-    jumpButtonTop({
-      columnTop: 80,
-      pillTop: 100,
-      pillHeight: 28,
-      buttonHeight: 32,
-    }),
-    18,
-  );
+  assert.equal(jumpButtonTopInSlot({ columnTop: 80, slotTop: 100 }), 20);
   assert.equal(
     jumpButtonTopAboveComposer({
       columnTop: 80,

@@ -3,39 +3,6 @@ const QUEUE = 'section[aria-label="Queued messages"]';
 const LABEL_ATTR = "data-bb-chat-ui-queue-label";
 const COLLAPSE_LABEL = "Collapse queued messages";
 
-export function messageColumnBeforeFooter(footer: {
-  previousElementSibling: {
-    classList: { contains: (name: string) => boolean };
-    previousElementSibling: unknown;
-  } | null;
-} | null): unknown {
-  const anchor = footer?.previousElementSibling ?? null;
-  if (anchor == null || !anchor.classList.contains("scroll-bottom-anchor")) {
-    return null;
-  }
-  return anchor.previousElementSibling;
-}
-
-export function conversationTimelineInColumn(column: {
-  firstElementChild: {
-    classList: { contains: (name: string) => boolean };
-  } | null;
-} | null): unknown {
-  const child = column?.firstElementChild ?? null;
-  if (child == null || !child.classList.contains("flex-1")) return null;
-  return child;
-}
-
-export function shouldPlaceQueueInColumn(
-  parent: unknown,
-  column: unknown,
-  lastChild: unknown,
-  section: unknown,
-): boolean {
-  if (column == null || section == null) return false;
-  return parent !== column || lastChild !== section;
-}
-
 export const queuedMessagesCss = `
 ${QUEUE}:has([data-queued-messages-mode]) {
   position: static !important;
@@ -200,27 +167,6 @@ export function shouldFoldQueue(input: {
   return input.mode === "drawer";
 }
 
-function placeQueueAtConversationEnd(section: HTMLElement): void {
-  const root = section.closest("[data-thread-window]");
-  const footer = root?.querySelector("[data-scroll-footer]");
-  if (!(footer instanceof HTMLElement)) return;
-  const column = messageColumnBeforeFooter(footer);
-  if (!(column instanceof HTMLElement)) return;
-  const timeline = conversationTimelineInColumn(column);
-  if (
-    !(timeline instanceof HTMLElement) ||
-    !shouldPlaceQueueInColumn(
-      section.parentElement,
-      timeline,
-      timeline.lastElementChild,
-      section,
-    )
-  ) {
-    return;
-  }
-  timeline.append(section);
-}
-
 function syncSection(
   section: HTMLElement,
   folded: WeakSet<HTMLElement>,
@@ -270,7 +216,6 @@ export function injectQueuedMessages(document: Document): () => void {
       const section = sections.item(index);
       if (!(section instanceof HTMLElement)) continue;
       if (!section.querySelector("[data-queued-messages-mode]")) continue;
-      placeQueueAtConversationEnd(section);
       const collapse = syncSection(section, folded);
       collapse?.click();
     }

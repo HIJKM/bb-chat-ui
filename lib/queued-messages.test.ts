@@ -5,10 +5,7 @@ import {
   queuePillLabel,
   queuedMessagesCss,
   readQueueCount,
-  conversationTimelineInColumn,
-  messageColumnBeforeFooter,
   shouldFoldQueue,
-  shouldPlaceQueueInColumn,
 } from "./queued-messages.ts";
 
 test("names the folded queue pill after the held count", () => {
@@ -103,63 +100,6 @@ test("paints queued messages as a right pill and solid bubbles", () => {
   );
   assert.doesNotMatch(css, /position:\s*absolute/);
   assert.doesNotMatch(css, /min\(760px,\s*100%\)/);
-  const column = { id: "column" };
-  const anchor = {
-    classList: {
-      contains: (name: string) => name === "scroll-bottom-anchor",
-    },
-    previousElementSibling: column,
-  };
-  assert.equal(
-    messageColumnBeforeFooter({ previousElementSibling: anchor }),
-    column,
-  );
-  assert.equal(messageColumnBeforeFooter(null), null);
-  assert.equal(
-    messageColumnBeforeFooter({ previousElementSibling: null }),
-    null,
-  );
-  assert.equal(
-    messageColumnBeforeFooter({
-      previousElementSibling: {
-        classList: { contains: () => false },
-        previousElementSibling: column,
-      },
-    }),
-    null,
-  );
-  const timeline = {
-    id: "timeline",
-    classList: { contains: (name: string) => name === "flex-1" },
-  };
-  assert.equal(
-    conversationTimelineInColumn({ firstElementChild: timeline }),
-    timeline,
-  );
-  assert.equal(conversationTimelineInColumn(null), null);
-  assert.equal(
-    conversationTimelineInColumn({ firstElementChild: null }),
-    null,
-  );
-  assert.equal(
-    conversationTimelineInColumn({
-      firstElementChild: {
-        classList: { contains: () => false },
-      },
-    }),
-    null,
-  );
-  const section = { id: "queue" };
-  assert.equal(shouldPlaceQueueInColumn(null, null, null, section), false);
-  assert.equal(shouldPlaceQueueInColumn(null, column, null, section), true);
-  assert.equal(
-    shouldPlaceQueueInColumn(column, column, section, section),
-    false,
-  );
-  assert.equal(
-    shouldPlaceQueueInColumn(column, column, { id: "message" }, section),
-    true,
-  );
   assert.match(css, /height:\s*auto !important/);
   assert.match(css, /background:\s*transparent !important/);
   assert.match(

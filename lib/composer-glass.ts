@@ -230,8 +230,22 @@ ${FOOTER} ${JUMP_BUTTON} {
 ${FOOTER}:has(${JUMP_BUTTON}:not(.invisible)) section:has(${PILL}) {
   padding-right: 2.5rem;
 }
-${FOOTER} [data-promptbox-shell] > .grid > section[aria-label="To-do list"] {
+${FOOTER} ${STACK} > :has(> .agentation-staging-shell) {
   order: 1;
+}
+${FOOTER} ${STACK} > section[aria-label="Queued messages"] {
+  order: 2;
+}
+${FOOTER} ${STACK} > section:has(${PILL}) {
+  order: 3;
+}
+${FOOTER} [data-promptbox-shell] > .grid > section[aria-label="To-do list"] {
+  order: 4;
+}
+${FOOTER} ${STACK}:not(:has(> section:has(${PILL}))):has(${JUMP_BUTTON}:not(.invisible))::before {
+  content: "";
+  order: 3;
+  height: 32px;
 }
 `;
 
@@ -445,16 +459,11 @@ export function jumpButtonTopAboveComposer(input: {
   );
 }
 
-export function jumpButtonTop(input: {
+export function jumpButtonTopInSlot(input: {
   columnTop: number;
-  pillTop: number;
-  pillHeight: number;
-  buttonHeight: number;
+  slotTop: number;
 }): number {
-  const buttonHeight = input.buttonHeight > 0 ? input.buttonHeight : 32;
-  return Math.round(
-    input.pillTop + input.pillHeight / 2 - buttonHeight / 2 - input.columnTop,
-  );
+  return Math.round(input.slotTop - input.columnTop);
 }
 
 export function injectComposerGlass(document: Document): () => void {
@@ -803,29 +812,29 @@ function alignJumpButton(footer: HTMLElement): void {
   const buttonRect = button.getBoundingClientRect();
   const pill = footer.querySelector(PILL);
   if (pill instanceof HTMLElement) {
-    const pillRect = pill.getBoundingClientRect();
+    const slot = pill.closest("section");
+    const slotRect = slot instanceof HTMLElement ? slot.getBoundingClientRect() : pill.getBoundingClientRect();
     column.style.setProperty(
       JUMP_TOP,
-      `${jumpButtonTop({
+      `${jumpButtonTopInSlot({
         columnTop: columnRect.top,
-        pillTop: pillRect.top,
-        pillHeight: pillRect.height,
-        buttonHeight: buttonRect.height,
+        slotTop: slotRect.top,
       })}px`,
     );
     return;
   }
-  const composer = footer.querySelector(COMPOSER);
-  if (!(composer instanceof HTMLElement)) {
+  const todo = footer.querySelector(`${STACK} > section[aria-label="To-do list"]`);
+  const anchor = todo instanceof HTMLElement ? todo : footer.querySelector(COMPOSER);
+  if (!(anchor instanceof HTMLElement)) {
     column.style.removeProperty(JUMP_TOP);
     return;
   }
-  const composerRect = composer.getBoundingClientRect();
+  const anchorRect = anchor.getBoundingClientRect();
   column.style.setProperty(
     JUMP_TOP,
     `${jumpButtonTopAboveComposer({
       columnTop: columnRect.top,
-      composerTop: composerRect.top,
+      composerTop: anchorRect.top,
       buttonHeight: buttonRect.height,
     })}px`,
   );
