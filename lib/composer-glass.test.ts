@@ -11,6 +11,8 @@ import {
   fadeHeight,
   jumpButtonTop,
   jumpButtonTopAboveComposer,
+  composerLift,
+  desktopCollapseStick,
   nextPinnedScroll,
   planComposerHeight,
 } from "./composer-glass.ts";
@@ -169,6 +171,49 @@ test("keeps the collapsing composer on the bottom edge", () => {
     css,
     /@media \(width < 48rem\)\s*\{[\s\S]*:has\(\[data-promptbox-compact\]\)[\s\S]*max-height:\s*100dvh;[\s\S]*\[data-promptbox-shell\] > \.grid\s*\{[^}]*overflow-y:\s*auto;/,
   );
+  const desktop = css.match(
+    /@media \(width >= 48rem\)\s*\{[\s\S]*\n\}(?=\n@media \(pointer: fine\))/,
+  );
+  assert.ok(desktop);
+  assert.match(desktop[0], /:has\(\[data-promptbox-compact\]\)/);
+  assert.match(desktop[0], /justify-content:\s*flex-end;/);
+  assert.doesNotMatch(desktop[0], /100dvh|overflow-y:\s*auto/);
+  assert.equal(
+    desktopCollapseStick({
+      desktop: false,
+      scrollGap: 10,
+      footerBottom: 800,
+      scrollerBottom: 800,
+    }),
+    false,
+  );
+  assert.equal(
+    desktopCollapseStick({
+      desktop: true,
+      scrollGap: 10,
+      footerBottom: 796,
+      scrollerBottom: 800,
+    }),
+    true,
+  );
+  assert.equal(composerLift({
+    desktop: false,
+    stick: true,
+    scrollerBottom: 800,
+    plateBottom: 780,
+  }), null);
+  assert.equal(composerLift({
+    desktop: true,
+    stick: true,
+    scrollerBottom: 800,
+    plateBottom: 780,
+  }), "translateY(20px)");
+  assert.equal(composerLift({
+    desktop: true,
+    stick: true,
+    scrollerBottom: 800,
+    plateBottom: 800,
+  }), null);
 });
 
 test("eases composer height and corner on a fine pointer", () => {

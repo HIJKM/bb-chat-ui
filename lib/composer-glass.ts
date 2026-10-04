@@ -125,6 +125,23 @@ ${FOOTER} [data-promptbox] {
     flex-shrink: 0;
   }
 }
+@media (width >= 48rem) {
+  ${FOOTER}:has([data-promptbox-compact]) {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  ${FOOTER}:has([data-promptbox-compact]) > .relative,
+  ${FOOTER}:has([data-promptbox-compact]) .chat-prompt-box,
+  ${FOOTER}:has([data-promptbox-compact]) [data-promptbox-shell] {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  ${FOOTER}:has([data-promptbox-compact]) [data-follow-up-composer-anchor] {
+    flex-shrink: 0;
+  }
+}
 @media (pointer: fine) {
   ${FOOTER} [data-promptbox] {
     transition:
@@ -342,6 +359,32 @@ export function planComposerHeight(input: {
   };
 }
 
+const DESKTOP_LAYOUT_QUERY = "(width >= 48rem)";
+const VISUAL_BOTTOM_PX = 8;
+
+export function desktopCollapseStick(input: {
+  desktop: boolean;
+  scrollGap: number;
+  footerBottom: number;
+  scrollerBottom: number;
+}): boolean {
+  if (input.scrollGap <= 4) return true;
+  if (!input.desktop) return false;
+  return Math.abs(input.scrollerBottom - input.footerBottom) <= VISUAL_BOTTOM_PX;
+}
+
+export function composerLift(input: {
+  desktop: boolean;
+  stick: boolean;
+  scrollerBottom: number;
+  plateBottom: number;
+}): string | null {
+  if (!input.desktop || !input.stick) return null;
+  const delta = input.scrollerBottom - input.plateBottom;
+  if (Math.abs(delta) < 1) return null;
+  return `translateY(${delta}px)`;
+}
+
 export function nextPinnedScroll(input: {
   scrollTop: number;
   scrollHeight: number;
@@ -435,7 +478,20 @@ export function injectComposerGlass(document: Document): () => void {
     let pinFrame = 0;
     let pinning = false;
     let lastPinned: number | null = null;
+    let anchorHold: { node: HTMLElement; previous: string } | null = null;
+    let liftPlate: HTMLElement | null = null;
     const viewOf = () => composer.ownerDocument.defaultView;
+
+    const clearDesktopHold = () => {
+      if (anchorHold) {
+        anchorHold.node.style.overflowAnchor = anchorHold.previous;
+        anchorHold = null;
+      }
+      if (liftPlate) {
+        liftPlate.style.transform = "";
+        liftPlate = null;
+      }
+    };
 
     const stopPin = () => {
       const view = viewOf();
@@ -443,6 +499,7 @@ export function injectComposerGlass(document: Document): () => void {
       pinFrame = 0;
       pinning = false;
       lastPinned = null;
+      clearDesktopHold();
     };
 
     const stopFinish = () => {
@@ -465,7 +522,26 @@ export function injectComposerGlass(document: Document): () => void {
       const scroller = scrollerOf();
       stopPin();
       if (!view || !scroller) return;
-      if (scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop > 4) return;
+      const desktop = view.matchMedia(DESKTOP_LAYOUT_QUERY).matches;
+      const footer = composer.closest("[data-scroll-footer]");
+      const footerEl = footer instanceof HTMLElement ? footer : null;
+      const scrollerBottom = scroller.getBoundingClientRect().bottom;
+      const stick = desktopCollapseStick({
+        desktop,
+        scrollGap: scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop,
+        footerBottom: footerEl?.getBoundingClientRect().bottom ?? scrollerBottom,
+        scrollerBottom,
+      });
+      if (!stick) return;
+      if (desktop) {
+        const content = scroller.firstElementChild;
+        if (content instanceof HTMLElement) {
+          anchorHold = { node: content, previous: content.style.overflowAnchor };
+          content.style.overflowAnchor = "none";
+        }
+        const plate = footerEl?.querySelector(":scope > .relative");
+        if (plate instanceof HTMLElement) liftPlate = plate;
+      }
       pinning = true;
       lastPinned = scroller.scrollTop;
       const tick = () => {
@@ -474,6 +550,7 @@ export function injectComposerGlass(document: Document): () => void {
         const node = scrollerOf();
         if (!node) {
           pinning = false;
+          clearDesktopHold();
           return;
         }
         const planned = nextPinnedScroll({
@@ -486,10 +563,24 @@ export function injectComposerGlass(document: Document): () => void {
         if (!planned.stick) {
           pinning = false;
           lastPinned = null;
+          clearDesktopHold();
           return;
         }
         if (planned.scrollTop != null) node.scrollTop = planned.scrollTop;
         lastPinned = node.scrollTop;
+        if (liftPlate) {
+          const previousLift = liftPlate.style.transform;
+          liftPlate.style.transform = "none";
+          const plateBottom = liftPlate.getBoundingClientRect().bottom;
+          liftPlate.style.transform = previousLift;
+          const lift = composerLift({
+            desktop: true,
+            stick: true,
+            scrollerBottom: node.getBoundingClientRect().bottom,
+            plateBottom,
+          });
+          liftPlate.style.transform = lift ?? "";
+        }
         pinFrame = view.requestAnimationFrame(tick);
       };
       pinFrame = view.requestAnimationFrame(tick);
