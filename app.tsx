@@ -7,6 +7,7 @@ import { injectQuotePill } from "./lib/quote-pill";
 import { injectSendHaptic } from "./lib/send-haptic";
 import { injectQueuedMessages } from "./lib/queued-messages";
 import { injectThreadToc } from "./lib/thread-toc";
+import { injectUserAttachments } from "./lib/user-attachments";
 import { injectWorkspaceDiffPill } from "./lib/workspace-diff-pill";
 
 export default definePluginApp((app) => {
@@ -47,6 +48,12 @@ export default definePluginApp((app) => {
     id: "thread-toc",
     mount() {
       return injectThreadToc(document);
+    },
+  });
+  app.contentScripts.register({
+    id: "user-attachments",
+    mount() {
+      return injectUserAttachments(document);
     },
   });
   app.contentScripts.register({
