@@ -230,6 +230,9 @@ ${FOOTER} ${JUMP_BUTTON} {
 ${FOOTER}:has(${JUMP_BUTTON}:not(.invisible)) section:has(${PILL}) {
   padding-right: 2.5rem;
 }
+${FOOTER} [data-promptbox-shell] > .grid > section[aria-label="To-do list"] {
+  order: 1;
+}
 `;
 
 export interface PlateHeightTarget {

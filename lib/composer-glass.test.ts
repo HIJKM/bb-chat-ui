@@ -436,6 +436,13 @@ test("rounds buttons inside the composer like the mobile composer", () => {
   );
 });
 
+test("puts the to-do card closest to the composer", () => {
+  assert.match(
+    composerGlassCss,
+    /\[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox-shell\] > \.grid > section\[aria-label="To-do list"\]\s*\{[^}]*order:\s*1;/,
+  );
+});
+
 test("places the jump button on the diff pill row", () => {
   const css = composerGlassCss;
   assert.match(
