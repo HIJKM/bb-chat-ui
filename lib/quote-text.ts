@@ -61,7 +61,21 @@ export function quoteLabel(body: string): string | null {
     .map((part) => part.trim())
     .find((part) => part.length > 0);
   if (!line) return null;
-  const flat = quoteCodeFileName(line) ?? line.replace(/\s+/g, " ");
+  const file = quoteCodeFileName(line);
+  if (file) {
+    const firstFile = body.split(/\n(?=diff --git )/, 1)[0] ?? body;
+    const ranges = Array.from(firstFile.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm))
+      .map((match) => {
+        const removed = Number(match[4] ?? 1) === 0;
+        const start = Number(removed ? match[1] : match[3]);
+        const count = Number((removed ? match[2] : match[4]) ?? 1);
+        if (start < 1 || count < 1) return null;
+        return count === 1 ? `${start}` : `${start}–${start + count - 1}`;
+      })
+      .filter((range): range is string => range !== null);
+    return ranges.length > 0 ? `${file}:${Array.from(new Set(ranges)).join(", ")}` : file;
+  }
+  const flat = line.replace(/\s+/g, " ");
   if (flat.length <= QUOTE_LABEL_MAX) return flat;
   const clipped = flat.slice(0, QUOTE_LABEL_MAX - 1).trimEnd();
   return `${clipped}…`;
