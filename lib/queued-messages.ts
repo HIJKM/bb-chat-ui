@@ -138,7 +138,7 @@ ${QUEUE} [data-queued-message-row] > .flex > .min-w-0 {
   background: var(--surface-recessed);
   color: var(--foreground);
   border: 1px solid var(--border-seam);
-  border-radius: var(--radius-xl);
+  border-radius: calc(var(--radius) + 4px);
   padding: 0.625rem 1rem;
   font-size: 0.875rem;
   line-height: 1.625;

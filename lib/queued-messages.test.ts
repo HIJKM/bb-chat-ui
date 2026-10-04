@@ -192,8 +192,9 @@ test("paints queued messages as a right pill and faded bubbles", () => {
   );
   assert.match(
     css,
-    /\[data-queued-message-row\] > \.flex > \.min-w-0\s*\{[^}]*border-radius:\s*var\(--radius-xl\);/,
+    /\[data-queued-message-row\] > \.flex > \.min-w-0\s*\{[^}]*border-radius:\s*calc\(var\(--radius\) \+ 4px\);/,
   );
+  assert.doesNotMatch(css, /var\(--radius-xl\)/);
   assert.match(
     css,
     /\[data-queued-message-row\] > \.flex > \.min-w-0\s*\{[^}]*max-width:\s*70%;/,
