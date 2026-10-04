@@ -186,7 +186,7 @@ test("paints queued messages as a right pill and solid bubbles", () => {
   assert.match(css, /button\[aria-label\^="Reorder"\]\s*\{[^}]*display:\s*none !important;/);
   assert.match(
     css,
-    /\[data-queued-message-row\] > \.flex > \.min-w-0\s*\{[^}]*background:\s*var\(--surface-recessed\);/,
+    /\[data-queued-message-row\] > \.flex > \.min-w-0\s*\{[^}]*background:\s*var\(--surface-recessed-solid\);/,
   );
   assert.match(
     css,
@@ -225,5 +225,9 @@ test("paints queued messages as a right pill and solid bubbles", () => {
   assert.match(
     css,
     /\[data-queued-message-actions\]\s*\{[^}]*opacity:\s*1 !important;/,
+  );
+  assert.match(
+    css,
+    /\[data-queued-message-actions\]\s*\{[^}]*background:\s*var\(--surface-raised-solid\) !important;/,
   );
 });

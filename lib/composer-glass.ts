@@ -5,6 +5,7 @@ const FADE_HEIGHT = "--bb-chat-ui-fade-height";
 const PLATE_HEIGHT = "--bb-chat-ui-plate-height";
 const JUMP_BOTTOM = "--bb-chat-ui-jump-bottom";
 const CONTROLS = "data-bb-chat-ui-controls";
+const CONTROLS_MOTION = "data-bb-chat-ui-controls-motion";
 const PILL = "#thread-prompt-banner-git-toggle";
 const JUMP_BUTTON = 'button[aria-label="Scroll to latest event"]';
 const STACK = "[data-promptbox-shell] > .grid";
@@ -281,9 +282,22 @@ ${FOOTER} ${STACK} .agentation-staging-shell--expanded {
 }
 ${FOOTER} ${STACK} > section[aria-label="Queued messages"] {
   position: absolute !important;
-  bottom: calc(var(--bb-chat-ui-controls-bottom, 0px) + var(--bb-chat-ui-queue-bottom, 0px));
+  bottom: var(--bb-chat-ui-controls-bottom, 0px);
+  transform: translateY(calc(-1 * var(--bb-chat-ui-queue-bottom, 0px)));
   right: 0;
   width: 100%;
+}
+${FOOTER} ${STACK}[${CONTROLS_MOTION}] :has(> .agentation-staging-shell) {
+  transition: width 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+${FOOTER} ${STACK}[${CONTROLS_MOTION}] > section[aria-label="Queued messages"] {
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  ${FOOTER} ${STACK}[${CONTROLS_MOTION}] :has(> .agentation-staging-shell),
+  ${FOOTER} ${STACK}[${CONTROLS_MOTION}] > section[aria-label="Queued messages"] {
+    transition: none;
+  }
 }
 
 `;
@@ -826,6 +840,7 @@ export function injectComposerGlass(document: Document): () => void {
     }
     for (const stack of Array.from(document.querySelectorAll(STACK))) {
       stack.removeAttribute(CONTROLS);
+      stack.removeAttribute(CONTROLS_MOTION);
       if (!(stack instanceof HTMLElement)) continue;
       for (const name of ["controls-height", "controls-bottom", "agentation-bottom", "queue-bottom", "agentation-width", "queue-width"]) {
         stack.style.removeProperty(`--bb-chat-ui-${name}`);
@@ -902,5 +917,10 @@ function alignComposerControls(footer: HTMLElement): void {
   const jumpBottom = `${Math.round(column.getBoundingClientRect().bottom - base)}px`;
   if (column.style.getPropertyValue(JUMP_BOTTOM) !== jumpBottom) {
     column.style.setProperty(JUMP_BOTTOM, jumpBottom);
+  }
+  if (!stack.hasAttribute(CONTROLS_MOTION)) {
+    // Resolve the initial geometry before enabling transitions.
+    stack.getBoundingClientRect();
+    stack.setAttribute(CONTROLS_MOTION, "");
   }
 }

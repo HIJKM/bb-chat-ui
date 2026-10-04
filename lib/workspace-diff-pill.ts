@@ -14,11 +14,15 @@ const PILL_CSS = `
 }
 #${TOGGLE_ID} {
   width: fit-content;
-  min-height: 28px;
+  min-height: 32px;
   border-radius: 9999px !important;
   border: 1px solid var(--border);
   background: var(--card);
   padding: 4px 10px !important;
+}
+#${TOGGLE_ID} [data-icon-root] {
+  width: 16px;
+  height: 16px;
 }
 section[${SOLO_MARK}] {
   justify-self: start;

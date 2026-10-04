@@ -155,7 +155,7 @@ ${QUEUE} [data-queued-message-row] > .flex > .min-w-0 {
   flex: 0 1 auto;
   max-width: 70%;
   overflow: visible !important;
-  background: var(--surface-recessed);
+  background: var(--surface-recessed-solid);
   color: var(--foreground);
   border: 1px solid var(--border-seam);
   border-radius: calc(var(--radius) + 4px);
@@ -181,7 +181,7 @@ ${QUEUE} [data-queued-message-actions] {
   opacity: 1 !important;
   pointer-events: auto !important;
   display: flex !important;
-  background: transparent !important;
+  background: var(--surface-raised-solid) !important;
 }
 ${QUEUE} [data-queued-message-actions] button[aria-label^="Delete"] {
   order: 1;
