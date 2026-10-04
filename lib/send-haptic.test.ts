@@ -11,9 +11,9 @@ import {
   readHapticBridge,
   hasNewAssistantOutput,
   openResponseWatch,
+  isStopRunButton,
   reduceResponseWatch,
   reduceSendHaptic,
-  RESPONSE_START_GAPS_MS,
   shineMeansAgentResponse,
 } from "./send-haptic.ts";
 
@@ -61,7 +61,7 @@ test("posts a soft selection haptic only when the shell can buzz", () => {
   assert.deepEqual(messages, [{ type: "haptic", kind: "selection" }]);
 });
 
-test("pats when assistant text appears, not when working starts", () => {
+test("stays quiet when assistant text appears and pulses when the response ends", () => {
   assert.equal(hasNewAssistantOutput(["old"], new Set(["old"])), false);
   assert.equal(hasNewAssistantOutput(["old", "new"], new Set(["old"])), true);
   assert.deepEqual(
@@ -70,7 +70,7 @@ test("pats when assistant text appears, not when working starts", () => {
   );
   assert.deepEqual(
     openResponseWatch({ respondingAtPress: true, hasNewOutput: true }),
-    { phase: "wait-finish", sawWorking: true, pulse: "start" },
+    { phase: "wait-finish", sawWorking: true, pulse: null },
   );
   const workingOnly = reduceResponseWatch(
     { phase: "wait-output", sawWorking: false },
@@ -87,7 +87,7 @@ test("pats when assistant text appears, not when working starts", () => {
     true,
     true,
   );
-  assert.equal(started.pulse, "start");
+  assert.equal(started.pulse, null);
   assert.deepEqual(started.watch, { phase: "wait-finish", sawWorking: true });
   const finished = reduceResponseWatch(
     { phase: "wait-finish", sawWorking: true },
@@ -100,7 +100,6 @@ test("pats when assistant text appears, not when working starts", () => {
     reduceResponseWatch({ phase: "wait-finish", sawWorking: true }, true, true),
     { watch: { phase: "wait-finish", sawWorking: true }, pulse: null },
   );
-  assert.deepEqual([...RESPONSE_START_GAPS_MS], [0, 90, 180]);
 });
 
 test("reads only a visible working or thinking label as the agent response", () => {
@@ -125,6 +124,73 @@ test("pulses a light impact for the jump button, once per press", () => {
   assert.equal(acceptJumpPulse(null, 1000), 1000);
   assert.equal(acceptJumpPulse(1000, 1100), null);
   assert.equal(acceptJumpPulse(1000, 1400), 1400);
+});
+
+test("recognizes the composer stop button", () => {
+  const stop = pressable("Stop run", null, false);
+  const icon = { closest: (selector: string) => (selector === "button" ? stop : null) };
+  assert.equal(isStopRunButton(stop), true);
+  assert.equal(isStopRunButton(icon), true);
+  assert.equal(isStopRunButton(pressable("Stop run", null, true)), false);
+  assert.equal(isStopRunButton(pressable("Stop and transcribe recording", null, false)), false);
+  assert.equal(isStopRunButton(pressable("Send", null, false)), false);
+  assert.equal(isStopRunButton(null), false);
+});
+
+test("buzzes once when the stop button is pressed", () => {
+  const messages: unknown[] = [];
+  const listeners = new Map<string, Array<(event: Event) => void>>();
+  const document = {
+    body: {},
+    defaultView: {
+      bb: {
+        native: {
+          capabilities: ["haptic"],
+          post(message: unknown) {
+            messages.push(message);
+          },
+        },
+      },
+      performance: { now: () => 1000 },
+      setTimeout() {
+        return 1;
+      },
+      clearTimeout() {},
+    },
+    addEventListener(type: string, listener: (event: Event) => void) {
+      const bucket = listeners.get(type) ?? [];
+      bucket.push(listener);
+      listeners.set(type, bucket);
+    },
+    removeEventListener() {},
+  };
+  const originalObserver = globalThis.MutationObserver;
+  globalThis.MutationObserver = class {
+    observe() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  } as unknown as typeof MutationObserver;
+
+  try {
+    const cleanup = injectSendHaptic(document as unknown as Document);
+    const stop = pressable("Stop run", null, false);
+    const click = listeners.get("click")?.[0];
+    const pointerup = listeners.get("pointerup")?.[0];
+    click?.({ target: stop } as unknown as Event);
+    pointerup?.({
+      target: stop,
+      pointerType: "touch",
+      isPrimary: true,
+      clientX: 10,
+      clientY: 10,
+    } as unknown as Event);
+    assert.deepEqual(messages, [{ type: "haptic", kind: "selection" }]);
+    cleanup();
+  } finally {
+    globalThis.MutationObserver = originalObserver;
+  }
 });
 
 test("recognizes a file diff code block toggle", () => {
@@ -202,6 +268,9 @@ function pressable(label: string | null, expanded: string | null, disabled: bool
     },
     closest(selector: string) {
       return selector === "button" ? button : null;
+    },
+    getBoundingClientRect() {
+      return { left: 0, top: 0, right: 40, bottom: 40 };
     },
   };
   return button;

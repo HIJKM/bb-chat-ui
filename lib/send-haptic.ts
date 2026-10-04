@@ -5,8 +5,8 @@ const JUMP_GAP_MS = 400;
 
 export type HapticKind = "success" | "impact-light" | "selection";
 
-export const RESPONSE_START_GAPS_MS = [0, 90, 180] as const;
 export const RESPONSE_FINISH_KIND: HapticKind = "success";
+const STOP_BUTTON_LABEL = "Stop run";
 
 export type ResponseWatchPhase = "wait-output" | "wait-finish";
 
@@ -29,12 +29,12 @@ export function hasNewAssistantOutput(
 export function openResponseWatch(input: {
   respondingAtPress: boolean;
   hasNewOutput: boolean;
-}): ResponseWatchState & { pulse: "start" | null } {
+}): ResponseWatchState & { pulse: null } {
   if (input.hasNewOutput) {
     return {
       phase: "wait-finish",
       sawWorking: input.respondingAtPress,
-      pulse: "start",
+      pulse: null,
     };
   }
   return {
@@ -48,13 +48,13 @@ export function reduceResponseWatch(
   watch: ResponseWatchState,
   working: boolean,
   hasNewOutput: boolean,
-): { watch: ResponseWatchState | null; pulse: "start" | "finish" | null } {
+): { watch: ResponseWatchState | null; pulse: "finish" | null } {
   const sawWorking = watch.sawWorking || working;
   if (watch.phase === "wait-output") {
     if (!hasNewOutput) {
       return { watch: { phase: "wait-output", sawWorking }, pulse: null };
     }
-    return { watch: { phase: "wait-finish", sawWorking }, pulse: "start" };
+    return { watch: { phase: "wait-finish", sawWorking }, pulse: null };
   }
   if (sawWorking && !working) return { watch: null, pulse: "finish" };
   return { watch: { phase: "wait-finish", sawWorking }, pulse: null };
@@ -123,6 +123,14 @@ export function acceptJumpPulse(lastAt: number | null, now: number): number | nu
   return now;
 }
 
+export function isStopRunButton(target: EventTarget | null): boolean {
+  const element = asElement(target);
+  if (element === null) return false;
+  const button = element.closest("button");
+  if (button === null || button.getAttribute("disabled") !== null) return false;
+  return button.getAttribute("aria-label") === STOP_BUTTON_LABEL;
+}
+
 export function isFileDiffBlockToggle(target: EventTarget | null): boolean {
   const element = asElement(target);
   if (element === null) return false;
@@ -150,24 +158,12 @@ export function injectSendHaptic(document: Document): () => void {
   let timer: number | null = null;
   let lastJumpAt: number | null = null;
   let lastDiffToggleAt: number | null = null;
+  let lastStopAt: number | null = null;
   const responseWatch = new Map<
     HTMLElement,
     ResponseWatchState & { baseline: ReadonlySet<string> }
   >();
-  const startTimers: number[] = [];
   const view = document.defaultView;
-
-  const playStart = () => {
-    const bridge = readHapticBridge(view);
-    for (let index = 0; index < RESPONSE_START_GAPS_MS.length; index += 1) {
-      const gap = RESPONSE_START_GAPS_MS[index] ?? 0;
-      const timeout =
-        view?.setTimeout(() => {
-          postHaptic(bridge, "selection");
-        }, gap) ?? null;
-      if (timeout !== null) startTimers.push(timeout);
-    }
-  };
 
   const syncResponse = () => {
     for (const [root, phase] of responseWatch) {
@@ -182,7 +178,6 @@ export function injectSendHaptic(document: Document): () => void {
       );
       if (next.watch === null) responseWatch.delete(root);
       else responseWatch.set(root, { ...next.watch, baseline: phase.baseline });
-      if (next.pulse === "start") playStart();
       if (next.pulse === "finish") {
         postHaptic(readHapticBridge(view), RESPONSE_FINISH_KIND);
       }
@@ -204,7 +199,6 @@ export function injectSendHaptic(document: Document): () => void {
       sawWorking: opened.sawWorking,
       baseline,
     });
-    if (opened.pulse === "start") playStart();
     syncResponse();
   };
 
@@ -268,9 +262,24 @@ export function injectSendHaptic(document: Document): () => void {
     postHaptic(readHapticBridge(view), "impact-light");
   };
 
+  const pulseStop = () => {
+    const now = view?.performance?.now() ?? Date.now();
+    const next = acceptJumpPulse(lastStopAt, now);
+    if (next === null) return;
+    lastStopAt = next;
+    postHaptic(readHapticBridge(view), "selection");
+  };
+
   const onPointerUp = (event: PointerEvent) => {
     if (isFileDiffBlockToggle(event.target)) {
       pulseDiffToggle();
+      return;
+    }
+    if (isStopRunButton(event.target)) {
+      const stop = stopButtonFrom(event.target);
+      if (stop !== null && event.isPrimary && releasedInside(stop, event)) {
+        pulseStop();
+      }
       return;
     }
     if (event.pointerType !== "touch" || !event.isPrimary) return;
@@ -287,6 +296,10 @@ export function injectSendHaptic(document: Document): () => void {
   const onJumpClick = (event: MouseEvent) => {
     if (isFileDiffBlockToggle(event.target)) {
       pulseDiffToggle();
+      return;
+    }
+    if (isStopRunButton(event.target)) {
+      pulseStop();
       return;
     }
     if (!jumpButtonFrom(event.target)) return;
@@ -329,9 +342,6 @@ export function injectSendHaptic(document: Document): () => void {
     document.removeEventListener("submit", onSubmit, true);
     observer?.disconnect();
     if (timer !== null) view?.clearTimeout(timer);
-    for (let index = 0; index < startTimers.length; index += 1) {
-      view?.clearTimeout(startTimers[index]);
-    }
   };
 }
 
@@ -387,6 +397,14 @@ function jumpButtonFrom(target: EventTarget | null): HTMLButtonElement | null {
   if (!(button instanceof HTMLButtonElement)) return null;
   if (button.disabled || button.classList.contains("invisible")) return null;
   return button;
+}
+
+function stopButtonFrom(target: EventTarget | null): HTMLElement | null {
+  const element = asElement(target);
+  if (element === null) return null;
+  const button = element.closest("button");
+  if (button === null || !isStopRunButton(button)) return null;
+  return button as HTMLElement;
 }
 
 function sendButtonFrom(target: EventTarget | null): HTMLButtonElement | null {
