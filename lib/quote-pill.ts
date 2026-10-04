@@ -4,6 +4,8 @@ const REMOVE_ZONE_PX = 28;
 const USER_QUOTE = "[data-message-column] > .group\\/message blockquote";
 const COMPOSER_QUOTE =
   "[data-promptbox-editor-scroll] [data-promptbox-editor-content]:not([data-promptbox-compact-content]) .ProseMirror blockquote";
+const PENDING_COMPOSER_QUOTE =
+  "[data-promptbox-editor-scroll] [data-promptbox-editor-content] .ProseMirror blockquote";
 const QUOTE_MENTION_PILL =
   '.prompt-mention-pill[data-prompt-mention-resource*=\'"itemId":"quote:\']';
 const COMPOSER_QUOTE_MENTION = `[data-promptbox-editor-scroll] [data-promptbox-editor-content] ${QUOTE_MENTION_PILL}`;
@@ -90,7 +92,7 @@ export type QuotePointerAction = "ignore" | "block" | "remove";
 export function quotePillCss(): string {
   return `
 ${USER_QUOTE},
-${COMPOSER_QUOTE} {
+${PENDING_COMPOSER_QUOTE} {
   display: inline-flex !important;
   align-items: center;
   position: relative;
@@ -113,7 +115,7 @@ ${COMPOSER_QUOTE} {
   cursor: default;
 }
 ${USER_QUOTE}::before,
-${COMPOSER_QUOTE}::before {
+${PENDING_COMPOSER_QUOTE}::before {
   content: "";
   flex: 0 0 14px;
   width: 14px;
@@ -123,7 +125,7 @@ ${COMPOSER_QUOTE}::before {
   mask: ${QUOTE_MARK_MASK};
 }
 ${USER_QUOTE} > *,
-${COMPOSER_QUOTE} > * {
+${PENDING_COMPOSER_QUOTE} > * {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
@@ -135,7 +137,7 @@ ${COMPOSER_QUOTE} > * {
   border: 0 !important;
 }
 ${USER_QUOTE} br,
-${COMPOSER_QUOTE} br {
+${PENDING_COMPOSER_QUOTE} br {
   display: none !important;
 }
 ${USER_QUOTE} {
@@ -166,6 +168,48 @@ ${COMPOSER_QUOTE}::after {
 @media (hover: hover) and (pointer: fine) {
   ${COMPOSER_QUOTE}:hover::after {
     display: flex;
+  }
+}
+${PENDING_COMPOSER_QUOTE} {
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  max-width: min(240px, calc(100% - 8px)) !important;
+  margin: 4px !important;
+  font-size: 14px !important;
+  line-height: 18px !important;
+  overflow: hidden;
+}
+${PENDING_COMPOSER_QUOTE} > :not(:first-child) {
+  display: none !important;
+}
+${PENDING_COMPOSER_QUOTE} > :first-child {
+  line-height: 18px !important;
+}
+${PENDING_COMPOSER_QUOTE}::before {
+  flex-basis: 16px;
+  width: 16px;
+  height: 16px;
+}
+@media (width >= 48rem) {
+  ${PENDING_COMPOSER_QUOTE} {
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    max-width: min(140px, calc(100% - 6px)) !important;
+    gap: 4px !important;
+    margin: 3px !important;
+    padding: 4px 12px 4px 10px !important;
+    font-size: 12px !important;
+    line-height: 16px !important;
+  }
+  ${PENDING_COMPOSER_QUOTE} > :first-child {
+    line-height: 16px !important;
+  }
+  ${PENDING_COMPOSER_QUOTE}::before {
+    flex-basis: 14px;
+    width: 14px;
+    height: 14px;
   }
 }
 ${COMPOSER_QUOTE_MENTION} {
