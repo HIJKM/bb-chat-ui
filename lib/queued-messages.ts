@@ -2,27 +2,35 @@ const STYLE_ID = "bb-chat-ui-queued-messages";
 const QUEUE = 'section[aria-label="Queued messages"]';
 const LABEL_ATTR = "data-bb-chat-ui-queue-label";
 const COLLAPSE_LABEL = "Collapse queued messages";
+const AGENTATION = ".agentation-staging-shell";
 
 export const queuedMessagesCss = `
 ${QUEUE}:has([data-queued-messages-mode]) {
-  position: static !important;
+  position: relative !important;
   align-self: stretch;
   width: 100%;
   margin: 0 !important;
   padding-right: 0 !important;
   padding-left: 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  height: auto !important;
+  display: block !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
   padding-bottom: 0 !important;
-  border-color: transparent !important;
+  border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   overflow: visible !important;
 }
 ${QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll-frame] {
+  position: absolute !important;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
   display: grid !important;
+  width: var(--bb-chat-ui-queue-width, 100%);
+  max-height: min(42dvh, 16rem);
   flex: none !important;
   grid-template-rows: 1fr;
   height: auto !important;
@@ -34,11 +42,14 @@ ${QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll-frame] {
 ${QUEUE}:has([data-queued-messages-mode="collapsed"]) [data-queued-messages-scroll-frame] {
   grid-template-rows: 0fr;
   opacity: 0;
+  max-height: 0;
+  pointer-events: none;
 }
 ${QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll] {
   height: auto !important;
   min-height: 0 !important;
-  overflow: hidden !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 @media (prefers-reduced-motion: reduce) {
   ${QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll-frame] {
@@ -46,36 +57,78 @@ ${QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll] {
   }
 }
 ${QUEUE} header[data-queued-messages-mode] {
-  order: 1;
-  width: fit-content;
-  margin-left: auto;
+  position: absolute !important;
+  right: 0;
+  bottom: 0;
+  z-index: 31;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
   height: 36px !important;
-  padding: 0 11px 0 15px !important;
+  margin: 0 !important;
+  padding: 0 !important;
   border: 0 !important;
-  border-radius: 18px !important;
+  border-radius: 50% !important;
   background: var(--foreground) !important;
   opacity: 1;
-  gap: 6px;
+  gap: 0;
 }
 ${QUEUE} header[data-queued-messages-mode][data-bb-chat-ui-queue-label]::before {
   content: attr(data-bb-chat-ui-queue-label);
+  position: absolute;
+  pointer-events: none;
   color: var(--background);
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.1px;
+  line-height: 1;
 }
 ${QUEUE} header[data-queued-messages-mode] > div:first-child,
 ${QUEUE} header[data-queued-messages-mode] > button {
   display: none !important;
 }
-${QUEUE} header[data-queued-messages-mode] button {
-  width: auto !important;
+${QUEUE} header[data-queued-messages-mode="drawer"]::before,
+${QUEUE} header[data-queued-messages-mode="workspace"]::before {
+  content: none;
+}
+${QUEUE} header[data-queued-messages-mode] > div:last-child {
+  display: flex !important;
+  width: 36px;
+  min-width: 0;
+  justify-content: center;
+}
+${QUEUE} header[data-queued-messages-mode="collapsed"] button[aria-expanded] svg {
+  visibility: hidden;
+}
+${QUEUE} header[data-queued-messages-mode] > div:last-child button[aria-expanded] {
+  display: inline-flex !important;
+  width: 36px !important;
+  height: 36px !important;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
   color: var(--background) !important;
+  background: transparent !important;
   opacity: 1 !important;
 }
 ${QUEUE} header[data-queued-messages-mode] button svg {
   opacity: 1 !important;
   color: var(--background) !important;
+}
+${QUEUE} header:not([data-queued-messages-mode="collapsed"]) button[aria-expanded] svg {
+  display: none;
+}
+${QUEUE} header button[aria-expanded="true"]::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
 }
 ${QUEUE} [data-queued-message-group-divider] {
   display: none !important;
@@ -152,9 +205,31 @@ export function queuePillLabel(
   count: string,
   caret?: string | null,
 ): string {
-  if (caret === COLLAPSE_LABEL) return "접기";
-  if (caret == null && (mode === "drawer" || mode === "workspace")) return "접기";
-  return count.length > 0 ? `대기 메시지 ${count}개` : "대기 메시지";
+  if (caret === COLLAPSE_LABEL) return "";
+  if (mode === "drawer" || mode === "workspace") return "";
+  return count.length > 0 ? count : "•";
+}
+
+export type ExpandablePanel = "agentation" | "queue";
+export type ExclusiveExpansionAction =
+  | "collapse-agentation"
+  | "collapse-queue"
+  | "block-agentation"
+  | null;
+
+export function exclusiveExpansionAction(input: {
+  opening: ExpandablePanel;
+  agentationExpanded: boolean;
+  queueExpanded: boolean;
+  queueEditing: boolean;
+}): ExclusiveExpansionAction {
+  if (input.opening === "queue" && input.agentationExpanded) {
+    return "collapse-agentation";
+  }
+  if (input.opening === "agentation" && input.queueExpanded) {
+    return input.queueEditing ? "block-agentation" : "collapse-queue";
+  }
+  return null;
 }
 
 export function shouldFoldQueue(input: {
@@ -170,10 +245,13 @@ export function shouldFoldQueue(input: {
 function syncSection(
   section: HTMLElement,
   folded: WeakSet<HTMLElement>,
-): HTMLButtonElement | null {
+): HTMLElement | null {
   const header = section.querySelector("header[data-queued-messages-mode]");
   if (!(header instanceof HTMLElement)) return null;
   const mode = header.getAttribute("data-queued-messages-mode");
+  // A section that starts collapsed has already reached its initial state.
+  // Mark it now so the user's first expand is not immediately folded again.
+  if (mode === "collapsed") folded.add(section);
   const count = readQueueCount(
     header.querySelector("span.tabular-nums")?.textContent ?? null,
   );
@@ -184,23 +262,31 @@ function syncSection(
   }
   const editing =
     section.querySelector("[data-queued-message-inline-editor]") !== null;
-  const collapse = section.querySelector(
-    `button[aria-label="${COLLAPSE_LABEL}"]`,
-  );
-  const canCollapse = collapse instanceof HTMLButtonElement;
+  const canCollapse = caret instanceof HTMLButtonElement;
   if (
     !shouldFoldQueue({
       mode,
       canCollapse,
       editing,
       folded: folded.has(section),
-    }) ||
-    !(collapse instanceof HTMLButtonElement)
+    })
   ) {
     return null;
   }
   folded.add(section);
-  return collapse;
+  return section;
+}
+
+function collapseQueue(section: Element): void {
+  const collapse = section.querySelector(`button[aria-label="${COLLAPSE_LABEL}"]`);
+  if (collapse instanceof HTMLButtonElement) {
+    collapse.click();
+    return;
+  }
+  // A drawer with many messages uses its caret to open a workspace.
+  // The host's surface handle still supports Escape to collapse that drawer.
+  const handle = section.querySelector("header > button");
+  handle?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 }
 
 export function injectQueuedMessages(document: Document): () => void {
@@ -210,6 +296,66 @@ export function injectQueuedMessages(document: Document): () => void {
   document.head.append(style);
 
   const folded = new WeakSet<HTMLElement>();
+  let changingExpansion = false;
+  const onClickCapture = (event: MouseEvent) => {
+    if (changingExpansion || !(event.target instanceof Element)) return;
+    const target = event.target;
+    const expandedToggle = target.closest(QUEUE + ' header button[aria-expanded="true"]');
+    if (expandedToggle && expandedToggle.getAttribute("aria-label") !== COLLAPSE_LABEL) {
+      const section = expandedToggle.closest(QUEUE);
+      if (!section || section.querySelector("[data-queued-message-inline-editor]")) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      collapseQueue(section);
+      return;
+    }
+    const queueToggle = target.closest(
+      QUEUE + ' header button[aria-expanded="false"]',
+    );
+    const agentationToggle = target.closest(
+      AGENTATION + ' button[aria-expanded="false"]',
+    );
+    if (!queueToggle && !agentationToggle) return;
+
+    const scope = target.closest("[data-scroll-footer]") ?? document;
+    const agentationExpanded =
+      scope.querySelector(AGENTATION + ".agentation-staging-shell--expanded") !==
+      null;
+    const expandedQueueButton = scope.querySelector(
+      QUEUE + ' header button[aria-expanded="true"]',
+    );
+    const queueEditing =
+      scope.querySelector(QUEUE + " [data-queued-message-inline-editor]") !==
+      null;
+    const action = exclusiveExpansionAction({
+      opening: queueToggle ? "queue" : "agentation",
+      agentationExpanded,
+      queueExpanded: expandedQueueButton !== null,
+      queueEditing,
+    });
+
+    if (action === "block-agentation") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
+    changingExpansion = true;
+    try {
+      if (action === "collapse-queue") {
+        const section = expandedQueueButton?.closest(QUEUE);
+        if (section) collapseQueue(section);
+      } else if (action === "collapse-agentation") {
+        const collapse = scope.querySelector(
+          AGENTATION + '.agentation-staging-shell--expanded button[aria-label="Collapse staged annotations"]',
+        );
+        if (collapse instanceof HTMLButtonElement) collapse.click();
+      }
+    } finally {
+      changingExpansion = false;
+    }
+  };
+  document.addEventListener("click", onClickCapture, true);
   const sync = () => {
     const sections = document.querySelectorAll(QUEUE);
     for (let index = 0; index < sections.length; index += 1) {
@@ -217,7 +363,7 @@ export function injectQueuedMessages(document: Document): () => void {
       if (!(section instanceof HTMLElement)) continue;
       if (!section.querySelector("[data-queued-messages-mode]")) continue;
       const collapse = syncSection(section, folded);
-      collapse?.click();
+      if (collapse) collapseQueue(collapse);
     }
   };
 
@@ -226,12 +372,16 @@ export function injectQueuedMessages(document: Document): () => void {
     mutations = new MutationObserver(() => {
       sync();
     });
-    mutations.observe(document.body, { childList: true, subtree: true });
+    mutations.observe(document.body, {
+      childList: true, subtree: true, attributes: true,
+      attributeFilter: ["data-queued-messages-mode", "aria-label", "aria-expanded"],
+    });
   }
   sync();
 
   return () => {
     mutations?.disconnect();
+    document.removeEventListener("click", onClickCapture, true);
     style.remove();
     const headers = document.querySelectorAll(`header[${LABEL_ATTR}]`);
     for (let index = 0; index < headers.length; index += 1) {

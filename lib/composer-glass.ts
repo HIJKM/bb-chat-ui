@@ -3,7 +3,8 @@ const PLATE = ":scope > .relative";
 const COMPOSER = "[data-promptbox]";
 const FADE_HEIGHT = "--bb-chat-ui-fade-height";
 const PLATE_HEIGHT = "--bb-chat-ui-plate-height";
-const JUMP_TOP = "--bb-chat-ui-jump-top";
+const JUMP_BOTTOM = "--bb-chat-ui-jump-bottom";
+const CONTROLS = "data-bb-chat-ui-controls";
 const PILL = "#thread-prompt-banner-git-toggle";
 const JUMP_BUTTON = 'button[aria-label="Scroll to latest event"]';
 const STACK = "[data-promptbox-shell] > .grid";
@@ -221,32 +222,70 @@ ${FOOTER} .chat-prompt-box {
 ${FOOTER} ${JUMP_BUTTON} {
   position: absolute;
   margin-top: 0 !important;
-  top: var(${JUMP_TOP}, 0px);
+  top: auto;
+  bottom: var(${JUMP_BOTTOM}, 0px);
   right: 1rem;
   left: auto;
   transform: none;
   z-index: 21;
 }
-${FOOTER}:has(${JUMP_BUTTON}:not(.invisible)) section:has(${PILL}) {
-  padding-right: 2.5rem;
+${FOOTER} ${STACK} {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: visible !important;
 }
-${FOOTER} ${STACK} > :has(> .agentation-staging-shell) {
+${FOOTER} ${STACK} > * {
+  order: 0;
+}
+${FOOTER} ${STACK}[${CONTROLS}]::after {
+  content: "";
   order: 1;
+  height: var(--bb-chat-ui-controls-height);
 }
-${FOOTER} ${STACK} > section[aria-label="Queued messages"] {
+${FOOTER} ${STACK} > section[aria-label="To-do list"] {
   order: 2;
 }
-${FOOTER} ${STACK} > section:has(${PILL}) {
-  order: 3;
+${FOOTER} ${STACK} section:has(${PILL}) {
+  position: absolute;
+  bottom: var(--bb-chat-ui-controls-bottom, 0px);
+  left: 0;
+  max-width: var(--bb-chat-ui-agentation-width, 100%);
 }
-${FOOTER} [data-promptbox-shell] > .grid > section[aria-label="To-do list"] {
-  order: 4;
-}
-${FOOTER} ${STACK}:not(:has(> section:has(${PILL}))):has(${JUMP_BUTTON}:not(.invisible))::before {
-  content: "";
-  order: 3;
+${FOOTER} ${STACK} :has(> .agentation-staging-shell) {
+  position: absolute;
+  bottom: calc(var(--bb-chat-ui-controls-bottom, 0px) + var(--bb-chat-ui-agentation-bottom, 0px));
+  left: 0;
+  width: var(--bb-chat-ui-agentation-width, 100%);
+  min-width: 0;
   height: 32px;
+  z-index: 40;
+  overflow: visible;
 }
+${FOOTER} ${STACK} .agentation-staging-shell {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  max-width: 100%;
+}
+${FOOTER} ${STACK} .agentation-staging-shell:not(.agentation-staging-shell--expanded) {
+  height: 32px;
+  justify-content: center;
+}
+${FOOTER} ${STACK} .agentation-staging-shell:not(.agentation-staging-shell--expanded) > div:first-child {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+${FOOTER} ${STACK} .agentation-staging-shell--expanded {
+  width: 100%;
+  max-width: none;
+}
+${FOOTER} ${STACK} > section[aria-label="Queued messages"] {
+  position: absolute !important;
+  bottom: calc(var(--bb-chat-ui-controls-bottom, 0px) + var(--bb-chat-ui-queue-bottom, 0px));
+  right: 0;
+  width: 100%;
+}
+
 `;
 
 export interface PlateHeightTarget {
@@ -446,24 +485,34 @@ export function applyFadeHeight(node: PlateHeightTarget, height: number): void {
   node.style.setProperty(FADE_HEIGHT, `${Math.round(height)}px`);
 }
 
-export const JUMP_ABOVE_COMPOSER_PX = 8;
-
-export function jumpButtonTopAboveComposer(input: {
-  columnTop: number;
-  composerTop: number;
-  buttonHeight: number;
-}): number {
-  const buttonHeight = input.buttonHeight > 0 ? input.buttonHeight : 32;
-  return Math.round(
-    input.composerTop - buttonHeight - JUMP_ABOVE_COMPOSER_PX - input.columnTop,
-  );
-}
-
-export function jumpButtonTopInSlot(input: {
-  columnTop: number;
-  slotTop: number;
-}): number {
-  return Math.round(input.slotTop - input.columnTop);
+export function composerControlsLayout(input: {
+  width: number;
+  diffHeight: number;
+  agentation: boolean;
+  agentationWidth: number;
+  queue: boolean;
+  jumpHeight: number;
+  rightWidth: number;
+}): {
+  height: number;
+  agentationBottom: number;
+  queueBottom: number;
+  agentationWidth: number;
+  queueWidth: number;
+} {
+  const agentationBottom = input.diffHeight > 0 ? input.diffHeight + 8 : 0;
+  const queueBottom = input.jumpHeight > 0 ? input.jumpHeight + 8 : 0;
+  const leftHeight = input.agentation ? agentationBottom + 32 : input.diffHeight;
+  const rightHeight = input.queue ? queueBottom + 36 : input.jumpHeight;
+  const queueOverlapsAgentation = input.queue && input.agentation &&
+    agentationBottom + 32 > queueBottom + 36 + 8;
+  return {
+    height: Math.max(leftHeight, rightHeight),
+    agentationBottom,
+    queueBottom,
+    agentationWidth: Math.max(0, input.width - (input.rightWidth > 0 ? input.rightWidth + 8 : 0)),
+    queueWidth: Math.max(0, input.width - (queueOverlapsAgentation ? input.agentationWidth + 8 : 0)),
+  };
 }
 
 export function injectComposerGlass(document: Document): () => void {
@@ -714,7 +763,7 @@ export function injectComposerGlass(document: Document): () => void {
     const footer = document.querySelector(FOOTER);
     if (footer instanceof HTMLElement) {
       alignFade(footer);
-      alignJumpButton(footer);
+      alignComposerControls(footer);
     }
     if (footer === observed || typeof ResizeObserver === "undefined") {
       bindStack(footer);
@@ -740,7 +789,10 @@ export function injectComposerGlass(document: Document): () => void {
     stackMutations = new MutationObserver(() => {
       sync();
     });
-    stackMutations.observe(stack, { childList: true, subtree: true });
+    stackMutations.observe(footer ?? stack, {
+      childList: true, subtree: true, attributes: true,
+      attributeFilter: ["class", "data-queued-messages-mode"],
+    });
   };
 
   let mutations: MutationObserver | null = null;
@@ -772,10 +824,17 @@ export function injectComposerGlass(document: Document): () => void {
       const plate = plates.item(index);
       if (plate instanceof HTMLElement) plate.style.removeProperty(FADE_HEIGHT);
     }
+    for (const stack of Array.from(document.querySelectorAll(STACK))) {
+      stack.removeAttribute(CONTROLS);
+      if (!(stack instanceof HTMLElement)) continue;
+      for (const name of ["controls-height", "controls-bottom", "agentation-bottom", "queue-bottom", "agentation-width", "queue-width"]) {
+        stack.style.removeProperty(`--bb-chat-ui-${name}`);
+      }
+    }
     const columns = document.querySelectorAll(".chat-prompt-box");
     for (let index = 0; index < columns.length; index += 1) {
       const column = columns.item(index);
-      if (column instanceof HTMLElement) column.style.removeProperty(JUMP_TOP);
+      if (column instanceof HTMLElement) column.style.removeProperty(JUMP_BOTTOM);
     }
   };
 }
@@ -800,42 +859,48 @@ function alignFade(footer: HTMLElement): void {
   );
 }
 
-function alignJumpButton(footer: HTMLElement): void {
+function alignComposerControls(footer: HTMLElement): void {
   const column = footer.querySelector(".chat-prompt-box");
-  if (!(column instanceof HTMLElement)) return;
+  const stack = footer.querySelector(STACK);
+  if (!(column instanceof HTMLElement) || !(stack instanceof HTMLElement)) return;
   const button = footer.querySelector(JUMP_BUTTON);
-  if (!(button instanceof HTMLElement)) {
-    column.style.removeProperty(JUMP_TOP);
-    return;
+  const jumpVisible = button instanceof HTMLElement && !button.classList.contains("invisible");
+  const pill = stack.querySelector(PILL)?.closest("section");
+  const agentation = stack.querySelector(".agentation-staging-shell");
+  const queue = stack.querySelector('section[aria-label="Queued messages"]');
+  const width = stack.getBoundingClientRect().width;
+  const layout = composerControlsLayout({
+    width,
+    diffHeight: pill?.getBoundingClientRect().height ?? 0,
+    agentation: agentation !== null,
+    agentationWidth: agentation?.getBoundingClientRect().width ?? 0,
+    queue: queue !== null,
+    jumpHeight: jumpVisible ? button.getBoundingClientRect().height : 0,
+    rightWidth: queue ? 36 : jumpVisible ? button.getBoundingClientRect().width : 0,
+  });
+  if (layout.height > 0) stack.setAttribute(CONTROLS, "");
+  else stack.removeAttribute(CONTROLS);
+  const values = {
+    "--bb-chat-ui-controls-height": layout.height,
+    "--bb-chat-ui-agentation-bottom": layout.agentationBottom,
+    "--bb-chat-ui-queue-bottom": layout.queueBottom,
+    "--bb-chat-ui-agentation-width": layout.agentationWidth,
+    "--bb-chat-ui-queue-width": layout.queueWidth,
+  };
+  for (const [name, value] of Object.entries(values)) {
+    const next = `${Math.round(value)}px`;
+    if (stack.style.getPropertyValue(name) !== next) stack.style.setProperty(name, next);
   }
-  const columnRect = column.getBoundingClientRect();
-  const buttonRect = button.getBoundingClientRect();
-  const pill = footer.querySelector(PILL);
-  if (pill instanceof HTMLElement) {
-    const slot = pill.closest("section");
-    const slotRect = slot instanceof HTMLElement ? slot.getBoundingClientRect() : pill.getBoundingClientRect();
-    column.style.setProperty(
-      JUMP_TOP,
-      `${jumpButtonTopInSlot({
-        columnTop: columnRect.top,
-        slotTop: slotRect.top,
-      })}px`,
-    );
-    return;
+  const todo = stack.querySelector('section[aria-label="To-do list"]');
+  const anchor = todo ?? footer.querySelector("[data-follow-up-composer-anchor]");
+  if (!(anchor instanceof HTMLElement)) return;
+  const base = anchor.getBoundingClientRect().top - 8;
+  const bottom = `${Math.round(stack.getBoundingClientRect().bottom - base)}px`;
+  if (stack.style.getPropertyValue("--bb-chat-ui-controls-bottom") !== bottom) {
+    stack.style.setProperty("--bb-chat-ui-controls-bottom", bottom);
   }
-  const todo = footer.querySelector(`${STACK} > section[aria-label="To-do list"]`);
-  const anchor = todo instanceof HTMLElement ? todo : footer.querySelector(COMPOSER);
-  if (!(anchor instanceof HTMLElement)) {
-    column.style.removeProperty(JUMP_TOP);
-    return;
+  const jumpBottom = `${Math.round(column.getBoundingClientRect().bottom - base)}px`;
+  if (column.style.getPropertyValue(JUMP_BOTTOM) !== jumpBottom) {
+    column.style.setProperty(JUMP_BOTTOM, jumpBottom);
   }
-  const anchorRect = anchor.getBoundingClientRect();
-  column.style.setProperty(
-    JUMP_TOP,
-    `${jumpButtonTopAboveComposer({
-      columnTop: columnRect.top,
-      composerTop: anchorRect.top,
-      buttonHeight: buttonRect.height,
-    })}px`,
-  );
 }

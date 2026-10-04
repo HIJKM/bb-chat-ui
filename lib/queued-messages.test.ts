@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   queuePillLabel,
   queuedMessagesCss,
+  exclusiveExpansionAction,
   readQueueCount,
   shouldFoldQueue,
 } from "./queued-messages.ts";
@@ -12,17 +13,53 @@ test("names the folded queue pill after the held count", () => {
   assert.equal(readQueueCount(" 2 "), "2");
   assert.equal(readQueueCount("Queue"), "");
   assert.equal(readQueueCount(null), "");
-  assert.equal(queuePillLabel("collapsed", "2"), "대기 메시지 2개");
-  assert.equal(queuePillLabel("drawer", "2"), "접기");
-  assert.equal(queuePillLabel("workspace", "4"), "접기");
-  assert.equal(queuePillLabel("collapsed", ""), "대기 메시지");
-  assert.equal(
-    queuePillLabel("drawer", "5", "Expand queued messages"),
-    "대기 메시지 5개",
-  );
+  assert.equal(queuePillLabel("collapsed", "2"), "2");
+  assert.equal(queuePillLabel("drawer", "2"), "");
+  assert.equal(queuePillLabel("workspace", "4"), "");
+  assert.equal(queuePillLabel("collapsed", ""), "•");
+  assert.equal(queuePillLabel("drawer", "5", "Expand queued messages"), "");
   assert.equal(
     queuePillLabel("drawer", "2", "Collapse queued messages"),
-    "접기",
+    "",
+  );
+});
+
+test("allows only one of the queue and Agentation panels to expand", () => {
+  assert.equal(
+    exclusiveExpansionAction({
+      opening: "queue",
+      agentationExpanded: true,
+      queueExpanded: false,
+      queueEditing: false,
+    }),
+    "collapse-agentation",
+  );
+  assert.equal(
+    exclusiveExpansionAction({
+      opening: "agentation",
+      agentationExpanded: false,
+      queueExpanded: true,
+      queueEditing: false,
+    }),
+    "collapse-queue",
+  );
+  assert.equal(
+    exclusiveExpansionAction({
+      opening: "agentation",
+      agentationExpanded: false,
+      queueExpanded: true,
+      queueEditing: true,
+    }),
+    "block-agentation",
+  );
+  assert.equal(
+    exclusiveExpansionAction({
+      opening: "agentation",
+      agentationExpanded: false,
+      queueExpanded: false,
+      queueEditing: false,
+    }),
+    null,
   );
 });
 
@@ -88,7 +125,7 @@ test("paints queued messages as a right pill and solid bubbles", () => {
   assert.match(css, /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)/);
   assert.match(
     css,
-    /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)\s*\{[^}]*position:\s*static !important;/,
+    /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)\s*\{[^}]*position:\s*relative !important;/,
   );
   assert.match(
     css,
@@ -98,13 +135,23 @@ test("paints queued messages as a right pill and solid bubbles", () => {
     css,
     /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)\s*\{[^}]*width:\s*100%;/,
   );
-  assert.doesNotMatch(css, /position:\s*absolute/);
   assert.doesNotMatch(css, /min\(760px,\s*100%\)/);
-  assert.match(css, /height:\s*auto !important/);
   assert.match(css, /background:\s*transparent !important/);
   assert.match(
     css,
-    /\[data-queued-messages-scroll-frame\]\s*\{[^}]*grid-template-rows:\s*1fr;/,
+    /\[data-queued-messages-scroll-frame\]\s*\{[^}]*position:\s*absolute !important;[^}]*bottom:\s*calc\(100% \+ 8px\);/,
+  );
+  assert.match(
+    css,
+    /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)\s*\{[^}]*height:\s*36px !important;/,
+  );
+  assert.match(
+    css,
+    /header\[data-queued-messages-mode\]\s*\{[^}]*width:\s*36px !important;[^}]*height:\s*36px !important;[^}]*border-radius:\s*50% !important;/,
+  );
+  assert.match(
+    css,
+    /\[data-queued-messages-mode="collapsed"\]\) \[data-queued-messages-scroll-frame\]\s*\{[^}]*pointer-events:\s*none;/,
   );
   assert.match(
     css,
@@ -117,10 +164,21 @@ test("paints queued messages as a right pill and solid bubbles", () => {
   assert.match(css, /content:\s*attr\(data-bb-chat-ui-queue-label\)/);
   assert.match(
     css,
-    /header\[data-queued-messages-mode\]\s*\{[^}]*order:\s*1;/,
+    /header\[data-queued-messages-mode\]\s*\{[^}]*position:\s*absolute !important;[^}]*width:\s*36px !important;[^}]*height:\s*36px !important;[^}]*border-radius:\s*50% !important;/,
   );
-  assert.match(css, /margin-left:\s*auto/);
-  assert.match(css, /border-radius:\s*18px !important/);
+  assert.doesNotMatch(css, /margin-left:\s*auto/);
+  assert.doesNotMatch(css, /border-radius:\s*18px !important/);
+  assert.match(
+    css,
+    /header\[data-queued-messages-mode="drawer"\]::before,[\s\S]*?header\[data-queued-messages-mode="workspace"\]::before\s*\{\s*content:\s*none;/,
+  );
+  assert.match(
+    css,
+    /header\[data-queued-messages-mode="collapsed"\] button\[aria-expanded\] svg\s*\{\s*visibility:\s*hidden;/,
+  );
+  assert.doesNotMatch(css, /header\[data-queued-messages-mode="collapsed"\] > div:last-child\s*\{\s*display:\s*none/);
+  assert.match(css, /\[data-queued-messages-scroll-frame\]\s*\{[^}]*width:\s*var\(--bb-chat-ui-queue-width, 100%\);/);
+  assert.match(css, /\[data-queued-messages-scroll\]\s*\{[^}]*overflow-y:\s*auto !important;/);
   assert.match(
     css,
     /header\[data-queued-messages-mode\]\s*\{[^}]*opacity:\s*1;/,

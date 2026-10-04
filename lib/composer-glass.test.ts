@@ -9,8 +9,7 @@ import {
   composerHeightTransition,
   composerRadiusChange,
   fadeHeight,
-  jumpButtonTopInSlot,
-  jumpButtonTopAboveComposer,
+  composerControlsLayout,
   composerLift,
   desktopCollapseStick,
   nextPinnedScroll,
@@ -436,35 +435,40 @@ test("rounds buttons inside the composer like the mobile composer", () => {
   );
 });
 
-test("puts the to-do card closest to the composer", () => {
-  assert.match(
-    composerGlassCss,
-    /\[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox-shell\] > \.grid > section\[aria-label="To-do list"\]\s*\{[^}]*order:\s*4;/,
-  );
-  assert.match(composerGlassCss, /section\[aria-label="Queued messages"\]\s*\{\s*order:\s*2;/);
-  assert.match(composerGlassCss, /section:has\(#thread-prompt-banner-git-toggle\)\s*\{\s*order:\s*3;/);
-  assert.match(composerGlassCss, /:has\(> \.agentation-staging-shell\)\s*\{\s*order:\s*1;/);
-  assert.match(composerGlassCss, /::before\s*\{\s*content: "";\s*order: 3;\s*height: 32px;/);
+test("stacks each side independently above the to-do card", () => {
+  const all = { width: 358, diffHeight: 32, agentation: true,
+    agentationWidth: 160, queue: true, jumpHeight: 32, rightWidth: 36 };
+  assert.deepEqual(composerControlsLayout(all), {
+    height: 76, agentationBottom: 40, queueBottom: 40,
+    agentationWidth: 314, queueWidth: 358,
+  });
+  assert.deepEqual(composerControlsLayout({ ...all, diffHeight: 0 }), {
+    height: 76, agentationBottom: 0, queueBottom: 40,
+    agentationWidth: 314, queueWidth: 358,
+  });
+  assert.deepEqual(composerControlsLayout({ ...all, jumpHeight: 0 }), {
+    height: 72, agentationBottom: 40, queueBottom: 0,
+    agentationWidth: 314, queueWidth: 190,
+  });
+  assert.deepEqual(composerControlsLayout({ ...all, queue: false, jumpHeight: 0, rightWidth: 0 }), {
+    height: 72, agentationBottom: 40, queueBottom: 0,
+    agentationWidth: 358, queueWidth: 358,
+  });
+  assert.equal(composerControlsLayout({ ...all, agentation: false }).height, 76);
+  assert.equal(composerControlsLayout({ ...all, diffHeight: 48 }).queueBottom, 40);
+  assert.equal(composerControlsLayout({ ...all, queue: false, rightWidth: 32 }).agentationWidth, 318);
 });
 
-test("places the jump button in the diff pill slot without reading pill height", () => {
-  const css = composerGlassCss;
-  assert.match(
-    css,
-    /\[data-scroll-footer\]:has\(\.chat-prompt-box\) button\[aria-label="Scroll to latest event"\]\s*\{[^}]*position:\s*absolute;[^}]*margin-top:\s*0 !important;[^}]*top:\s*var\(--bb-chat-ui-jump-top, 0px\);[^}]*right:\s*1rem;[^}]*left:\s*auto;[^}]*transform:\s*none;/,
-  );
-  assert.match(css, /button\[aria-label="Scroll to latest event"\]:not\(\.invisible\)/);
-  assert.match(css, /padding-right:\s*2\.5rem/);
-  assert.doesNotMatch(css, /-mt-20/);
-  assert.equal(jumpButtonTopInSlot({ columnTop: 80, slotTop: 100 }), 20);
-  assert.equal(
-    jumpButtonTopAboveComposer({
-      columnTop: 80,
-      composerTop: 200,
-      buttonHeight: 32,
-    }),
-    80,
-  );
+test("anchors the actual Agentation box upward, including a contents plugin wrapper", () => {
+  assert.match(composerGlassCss, /:has\(> \.agentation-staging-shell\)\s*\{[^}]*position:\s*absolute;[^}]*height:\s*32px;/);
+  assert.match(composerGlassCss, /\.agentation-staging-shell\s*\{[^}]*position:\s*absolute;[^}]*bottom:\s*0;/);
+  assert.doesNotMatch(composerGlassCss, /repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(composerGlassCss, /section\[aria-label="To-do list"\]\s*\{[^}]*order:\s*2;/);
+});
+
+test("anchors jump-to-bottom by its bottom edge", () => {
+  assert.match(composerGlassCss, /button\[aria-label="Scroll to latest event"\]\s*\{[^}]*position:\s*absolute;[^}]*top:\s*auto;[^}]*bottom:\s*var\(--bb-chat-ui-jump-bottom, 0px\);/);
+  assert.doesNotMatch(composerGlassCss, /-mt-20/);
 });
 
 test("sets the fade height from the composer midline", () => {
