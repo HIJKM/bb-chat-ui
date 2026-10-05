@@ -54,7 +54,7 @@ test("keeps the expanded editor minimum height independent of banners", () => {
 });
 
 test("keeps the host canvas and uses each thread surface tone for the fade", () => {
-  assert.doesNotMatch(composerGlassCss, /--bb-chat-ui-canvas|oklch/);
+  assert.doesNotMatch(composerGlassCss, /--bb-chat-ui-canvas|oklch\(0\./);
   assert.doesNotMatch(composerGlassCss, /main\[data-sidebar="inset"\]/);
   assert.match(composerGlassCss, /linear-gradient\(\s*to bottom,\s*transparent,\s*var\(--background\) 50%/);
   assert.match(composerGlassCss, /\[data-thread-window\]\[data-surface-tone="sidebar"\][^{]*\{[^}]*var\(--sidebar\) 50%/);
@@ -64,12 +64,12 @@ test("paints the composer, diff pill, and jump button with the mobile glass", ()
   const css = composerGlassCss;
   assert.match(
     css,
-    /\[data-promptbox\],[\s\S]*#thread-prompt-banner-git-toggle,[\s\S]*button\[aria-label="Scroll to latest event"\]\s*\{[\s\S]*backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);[\s\S]*-webkit-backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/,
+    /\[data-promptbox\],[\s\S]*#thread-prompt-banner-git-toggle,[\s\S]*button\[aria-label="Scroll to latest event"\],[\s\S]*\.agentation-staging-shell\s*\{[\s\S]*backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);[\s\S]*-webkit-backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/,
   );
-  assert.match(css, /color-mix\(in oklab, var\(--popover\) 78%, transparent\)/);
+  assert.match(css, /oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.78\)/);
   assert.match(
     css,
-    /#thread-prompt-banner-git-toggle,\s*\[data-scroll-footer\]:has\(\.chat-prompt-box\) button\[aria-label="Scroll to latest event"\]\s*\{[^}]*border-color:\s*transparent !important;/,
+    /#thread-prompt-banner-git-toggle,\s*\[data-scroll-footer\]:has\(\.chat-prompt-box\) button\[aria-label="Scroll to latest event"\],[\s\S]*\.agentation-staging-shell\s*\{[^}]*border-color:\s*transparent !important;/,
   );
   assert.match(
     css,
@@ -79,10 +79,10 @@ test("paints the composer, diff pill, and jump button with the mobile glass", ()
     css,
     /0 6px 18px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 22%, transparent\)/,
   );
-  assert.match(css, /color-mix\(in oklab, color-mix\(in oklab, var\(--popover\) 88%, var\(--foreground\)\) 86%, transparent\)/);
+  assert.match(css, /oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.86\)/);
   assert.match(
     css,
-    /\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) #thread-prompt-banner-git-toggle,\s*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) button\[aria-label="Scroll to latest event"\]\s*\{[^}]*border-color:\s*transparent !important;/,
+    /\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) #thread-prompt-banner-git-toggle,\s*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) button\[aria-label="Scroll to latest event"\],[\s\S]*\.agentation-staging-shell\s*\{[^}]*border-color:\s*transparent !important;/,
   );
   assert.match(
     css,
@@ -465,4 +465,12 @@ test("sets the fade height from the composer midline", () => {
   assert.deepEqual(writes, ["40px"]);
   applyFadeHeight(node, 0);
   assert.deepEqual(writes, ["40px", "cleared"]);
+});
+
+
+test("raises all composer controls over their own chat tone, including annotation staging", () => {
+  assert.match(composerGlassCss, /\[data-thread-window\]\s*\{[^}]*--bb-chat-ui-glass-base:\s*var\(--background\)/);
+  assert.match(composerGlassCss, /\[data-thread-window\]\[data-surface-tone="sidebar"\]\s*\{[^}]*--bb-chat-ui-glass-base:\s*var\(--sidebar\)/);
+  assert.match(composerGlassCss, /\[data-promptbox-shell\] \.agentation-staging-shell[^{]*\{[^}]*background:/);
+  assert.match(composerGlassCss, /\.agentation-staging-shell--expanded\s*\{[^}]*0 12px 32px -14px/);
 });

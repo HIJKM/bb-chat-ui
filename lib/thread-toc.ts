@@ -1,3 +1,5 @@
+import { DARK_GLASS_FACE, LIGHT_GLASS_FACE, glassSurfaceScopeCss } from "./glass-surface.ts";
+
 const STYLE_ID = "bb-chat-ui-thread-toc";
 const RAIL_MARK = "data-bb-chat-ui-toc-rail";
 const ROOT_MARK = "data-bb-chat-ui-toc-root";
@@ -10,6 +12,7 @@ const TICK_REACH_PX = 48;
 const TICK_GAP_PX = 4;
 
 export const threadTocCss = `
+${glassSurfaceScopeCss}
 [id^="thread-toc-panel-"] > .rounded-lg > .flex.items-center {
   display: none !important;
 }
@@ -36,7 +39,7 @@ export const threadTocCss = `
 [id^="thread-toc-panel-"] > .rounded-lg {
   transform-origin: right center;
   transition: transform 140ms ease-out;
-  background: color-mix(in oklab, var(--popover) 78%, transparent) !important;
+  background: ${LIGHT_GLASS_FACE} !important;
   border-color: transparent !important;
   backdrop-filter: blur(14px) saturate(1.25);
   -webkit-backdrop-filter: blur(14px) saturate(1.25);
@@ -45,7 +48,7 @@ export const threadTocCss = `
     inset 0 1px 0 color-mix(in oklab, var(--popover) 85%, transparent);
 }
 .dark [id^="thread-toc-panel-"] > .rounded-lg {
-  background: color-mix(in oklab, color-mix(in oklab, var(--popover) 88%, var(--foreground)) 86%, transparent) !important;
+  background: ${DARK_GLASS_FACE} !important;
   border-color: transparent !important;
   box-shadow:
     0 6px 18px -12px color-mix(in oklab, black 60%, transparent),

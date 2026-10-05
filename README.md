@@ -45,7 +45,7 @@ Plugin id: `bb-chat-ui`.
 
 Registers composer customize plus content scripts in `app.tsx` (`composer-glass`, quote/mention pills, queued messages, thread TOC, user attachments, workspace diff pill). It does not own the sidebar list or ribbon.
 
-표면색은 현재 BB 테마의 `--background`, `--sidebar`, `--popover`, `--foreground`를 따른다. 고정 캔버스를 덮어쓰지 않고 glass의 투명도, blur, 그림자, 모션을 유지한다. 다른 플러그인의 색 변수나 설정에 의존하지 않는다.
+컴포저·변경 필·맨 밑으로 버튼·Agentation staging의 표면은 해당 채팅 배경의 색조를 유지하며 밝기만 조금 올린다. 순백에서는 기존 얇은 그림자로 구분한다. 일반 채팅은 `--background`, sidebar 톤은 `--sidebar`를 기준으로 한다. 고정 캔버스를 덮어쓰지 않고 glass의 투명도, blur, 그림자, 모션을 유지한다. 다른 플러그인의 색 변수나 설정에 의존하지 않는다.
 
 ## related
 

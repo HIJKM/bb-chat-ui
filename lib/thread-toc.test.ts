@@ -19,13 +19,13 @@ test("frosts the toc card with the composer glass", () => {
   assert.match(
     threadTocCss,
     new RegExp(
-      `${card}\\s*\\{[^}]*background:\\s*color-mix\\(in oklab, var\\(--popover\\) 78%, transparent\\) !important;`,
+      `${card}\\s*\\{[^}]*background:\\s*oklch\\(from var\\(--bb-chat-ui-glass-base, var\\(--background\\)\\) min\\(1, calc\\(l \\+ 0\\.075\\)\\) c h \/ 0\\.78\\) !important;`,
     ),
   );
-  assert.match(threadTocCss, /color-mix\(in oklab, color-mix\(in oklab, var\(--popover\) 88%, var\(--foreground\)\) 86%, transparent\)/);
+  assert.match(threadTocCss, /oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.86\)/);
   assert.match(
     threadTocCss,
-    /\.dark \[id\^="thread-toc-panel-"\] > \.rounded-lg\s*\{[^}]*background:\s*color-mix\(in oklab, color-mix\(in oklab, var\(--popover\) 88%, var\(--foreground\)\) 86%, transparent\) !important;/,
+    /\.dark \[id\^="thread-toc-panel-"\] > \.rounded-lg\s*\{[^}]*background:\s*oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.86\) !important;/,
   );
 });
 

@@ -1,3 +1,5 @@
+import { DARK_GLASS_FACE, LIGHT_GLASS_FACE, glassSurfaceScopeCss } from "./glass-surface.ts";
+
 const FOOTER = "[data-scroll-footer]:has(.chat-prompt-box)";
 const PLATE = ":scope > .relative";
 const COMPOSER = "[data-promptbox]";
@@ -12,7 +14,8 @@ const STACK = "[data-promptbox-shell] > .grid";
 
 const FACE = `${FOOTER} [data-promptbox],
 ${FOOTER} ${PILL},
-${FOOTER} ${JUMP_BUTTON}`;
+${FOOTER} ${JUMP_BUTTON},
+${FOOTER} [data-promptbox-shell] .agentation-staging-shell`;
 
 const INK = "var(--ink, var(--foreground))";
 const LIGHT_EDGE = "color-mix(in oklab, var(--popover) 85%, transparent)";
@@ -41,6 +44,7 @@ const SHADOW_TRANSITION = "box-shadow 320ms cubic-bezier(0.2, 0.8, 0.2, 1)";
 const COLLAPSE_TRANSITION = `height ${COMPOSER_HEIGHT_MS}ms ${COMPOSER_COLLAPSE_EASE}, border-radius ${COMPOSER_RADIUS_MS}ms ${COMPOSER_COLLAPSE_EASE}`;
 
 export const composerGlassCss = `
+${glassSurfaceScopeCss}
 @keyframes bb-chat-ui-composer-radius {
   from { border-radius: var(${COMPOSER_RADIUS_FROM}) !important; }
   to { border-radius: var(${COMPOSER_RADIUS_TO}) !important; }
@@ -65,12 +69,17 @@ ${FOOTER} [data-overflow-fade="above"] {
   background-image: linear-gradient(to bottom, transparent, var(--sidebar) 50%) !important;
 }
 ${FACE} {
-  background: color-mix(in oklab, var(--popover) 78%, transparent) !important;
+  background: ${LIGHT_GLASS_FACE} !important;
   border-color: transparent !important;
   backdrop-filter: blur(14px) saturate(1.25);
   -webkit-backdrop-filter: blur(14px) saturate(1.25);
   box-shadow:
     0 6px 18px -12px ${LIGHT_SHADOW},
+    inset 0 1px 0 ${LIGHT_EDGE};
+}
+${FOOTER} [data-promptbox-shell] .agentation-staging-shell--expanded {
+  box-shadow:
+    0 12px 32px -14px ${LIGHT_SHADOW},
     inset 0 1px 0 ${LIGHT_EDGE};
 }
 ${FOOTER} [data-follow-up-composer-anchor] [data-promptbox]:not([data-promptbox-compact]) [data-promptbox-editor-scroll] {
@@ -160,10 +169,15 @@ ${FOOTER} [data-promptbox]:focus-within {
     inset 0 1px 0 ${LIGHT_EDGE};
 }
 ${darkScope(FACE)} {
-  background: color-mix(in oklab, color-mix(in oklab, var(--popover) 88%, var(--foreground)) 86%, transparent) !important;
+  background: ${DARK_GLASS_FACE} !important;
   border-color: transparent !important;
   box-shadow:
     0 6px 18px -12px ${DARK_SHADOW},
+    inset 0 1px 0 ${DARK_EDGE};
+}
+${darkScope(`${FOOTER} [data-promptbox-shell] .agentation-staging-shell--expanded`)} {
+  box-shadow:
+    0 12px 32px -14px ${DARK_SHADOW},
     inset 0 1px 0 ${DARK_EDGE};
 }
 ${darkScope(`${FOOTER} [data-promptbox]`)} {
