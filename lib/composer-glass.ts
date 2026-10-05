@@ -18,6 +18,8 @@ ${FOOTER} ${JUMP_BUTTON},
 ${FOOTER} [data-promptbox-shell] .agentation-staging-shell`;
 
 const INK = "var(--ink, var(--foreground))";
+const LIGHT_COMPOSER_EDGE = "color-mix(in oklab, white 60%, transparent)";
+const DARK_COMPOSER_EDGE = "color-mix(in oklab, white 14%, transparent)";
 const LIGHT_EDGE = "color-mix(in oklab, var(--popover) 35%, transparent)";
 const LIGHT_SHADOW = "color-mix(in oklab, var(--ink, var(--foreground)) 22%, transparent)";
 const DARK_EDGE = "color-mix(in oklab, var(--foreground) 8%, transparent)";
@@ -104,7 +106,7 @@ ${FOOTER} [data-promptbox] {
   transition: ${SHADOW_TRANSITION};
   box-shadow:
     0 12px 32px -14px ${LIGHT_SHADOW},
-    inset 0 1px 3px ${LIGHT_EDGE};
+    inset 0 1px 3px ${LIGHT_COMPOSER_EDGE};
 }
 @media (width < 48rem) {
   ${FOOTER}:has([data-promptbox-compact]) {
@@ -176,7 +178,7 @@ ${FOOTER} [data-promptbox]:focus-within {
   border-color: transparent !important;
   box-shadow:
     0 18px 44px -16px color-mix(in oklab, ${INK} 34%, transparent),
-    inset 0 1px 3px ${LIGHT_EDGE};
+    inset 0 1px 3px ${LIGHT_COMPOSER_EDGE};
 }
 ${darkScope(FACE)} {
   background: ${DARK_GLASS_FACE} !important;
@@ -194,34 +196,34 @@ ${darkScope(`${FOOTER} [data-promptbox]`)} {
   border-color: transparent !important;
   box-shadow:
     0 12px 32px -14px ${DARK_SHADOW},
-    inset 0 1px 3px ${DARK_EDGE};
+    inset 0 1px 3px ${DARK_COMPOSER_EDGE};
 }
 ${darkScope(`${FOOTER} [data-promptbox]:focus-within`)} {
   border-color: transparent !important;
   box-shadow:
     0 18px 44px -16px color-mix(in oklab, ${INK} 34%, transparent),
-    inset 0 1px 3px ${DARK_EDGE};
+    inset 0 1px 3px ${DARK_COMPOSER_EDGE};
 }
 @media (width < 48rem) and (pointer: coarse) {
   ${FOOTER} [data-promptbox] {
     box-shadow:
       0 6px 16px -10px ${LIGHT_SHADOW},
-      inset 0 1px 3px ${LIGHT_EDGE};
+      inset 0 1px 3px ${LIGHT_COMPOSER_EDGE};
   }
   ${FOOTER} [data-promptbox]:focus-within {
     box-shadow:
       0 8px 20px -12px color-mix(in oklab, ${INK} 34%, transparent),
-      inset 0 1px 3px ${LIGHT_EDGE};
+      inset 0 1px 3px ${LIGHT_COMPOSER_EDGE};
   }
   ${darkScope(`${FOOTER} [data-promptbox]`)} {
     box-shadow:
       0 6px 16px -10px ${DARK_SHADOW},
-      inset 0 1px 3px ${DARK_EDGE};
+      inset 0 1px 3px ${DARK_COMPOSER_EDGE};
   }
   ${darkScope(`${FOOTER} [data-promptbox]:focus-within`)} {
     box-shadow:
       0 8px 20px -12px color-mix(in oklab, ${INK} 34%, transparent),
-      inset 0 1px 3px ${DARK_EDGE};
+      inset 0 1px 3px ${DARK_COMPOSER_EDGE};
   }
 }
 ${FOOTER} .chat-prompt-box {

@@ -480,3 +480,18 @@ test("raises all composer controls over their own chat tone, including annotatio
   assert.match(composerGlassCss, /\[data-promptbox-shell\] \.agentation-staging-shell[^{]*\{[^}]*background:/);
   assert.match(composerGlassCss, /\.agentation-staging-shell--expanded\s*\{[^}]*0 12px 32px -14px/);
 });
+
+
+test("strengthens only the composer specular highlight while keeping its soft edge", () => {
+  const blocks = [...composerGlassCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selector, body]) => selector.includes("[data-promptbox]") && !selector.includes(",") && body.includes("inset"));
+  assert.equal(blocks.length, 8);
+  for (const [, selector, body] of blocks) {
+    const strength = selector.includes(".dark") ? 14 : 60;
+    assert.ok(body.includes(`inset 0 1px 3px color-mix(in oklab, white ${strength}%, transparent)`), selector);
+  }
+  const otherSurfaces = [...composerGlassCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selector, body]) => (selector.includes(",") || selector.includes("agentation-staging-shell--expanded")) && body.includes("inset"));
+  assert.equal(otherSurfaces.length, 4);
+  for (const [, , body] of otherSurfaces) assert.ok(!body.includes("in oklab, white"));
+});
