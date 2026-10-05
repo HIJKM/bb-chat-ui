@@ -4,9 +4,13 @@ const STYLE_ID = "bb-chat-ui-diff-pill";
 const FILES_MARK = "data-bb-chat-ui-files";
 const CHEVRON_MARK = "data-bb-chat-ui-chevron";
 const SOLO_MARK = "data-bb-chat-ui-solo";
+const MERGE_BASE = `#${TOGGLE_ID} ~ [data-promptbox-hide-compact][data-promptbox-hide-tiny]`;
 
 const PILL_CSS = `
 #${BODY_ID} {
+  display: none !important;
+}
+${MERGE_BASE} {
   display: none !important;
 }
 #${TOGGLE_ID} [${CHEVRON_MARK}] {
@@ -119,7 +123,7 @@ function paintToggle(button: HTMLButtonElement) {
   const header = button.parentElement;
   if (!section || !header) return;
   const otherControl = Array.from(header.querySelectorAll("button")).some(
-    (control) => control !== button,
+    (control) => control !== button && !control.closest(MERGE_BASE),
   );
   if (otherControl) {
     if (section.hasAttribute(SOLO_MARK)) section.removeAttribute(SOLO_MARK);
