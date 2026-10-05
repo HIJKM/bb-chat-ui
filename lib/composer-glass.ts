@@ -891,23 +891,27 @@ function alignComposerControls(footer: HTMLElement): void {
   if (!(column instanceof HTMLElement) || !(stack instanceof HTMLElement)) return;
   const button = footer.querySelector(JUMP_BUTTON);
   const jumpVisible = button instanceof HTMLElement && !button.classList.contains("invisible");
+  const jumpHeight = button instanceof HTMLElement ? button.getBoundingClientRect().height : 0;
   const pill = stack.querySelector(PILL)?.closest("section");
   const agentation = stack.querySelector(".agentation-staging-shell");
   const queue = stack.querySelector('section[aria-label="Queued messages"]');
   const width = stack.getBoundingClientRect().width;
-  const layout = composerControlsLayout({
+  const input = {
     width,
     diffHeight: pill?.getBoundingClientRect().height ?? 0,
     agentation: agentation !== null,
     agentationWidth: agentation?.getBoundingClientRect().width ?? 0,
     queue: queue !== null,
-    jumpHeight: jumpVisible ? button.getBoundingClientRect().height : 0,
+    jumpHeight: jumpVisible ? jumpHeight : 0,
     rightWidth: queue ? 32 : jumpVisible ? button.getBoundingClientRect().width : 0,
-  });
-  if (layout.height > 0) stack.setAttribute(CONTROLS, "");
+  };
+  const layout = composerControlsLayout(input);
+  // Hiding the mounted jump button must not change the scrollable content height.
+  const height = composerControlsLayout({ ...input, jumpHeight }).height;
+  if (height > 0) stack.setAttribute(CONTROLS, "");
   else stack.removeAttribute(CONTROLS);
   const values = {
-    "--bb-chat-ui-controls-height": layout.height,
+    "--bb-chat-ui-controls-height": height,
     "--bb-chat-ui-agentation-bottom": layout.agentationBottom,
     "--bb-chat-ui-queue-bottom": layout.queueBottom,
     "--bb-chat-ui-agentation-width": layout.agentationWidth,
