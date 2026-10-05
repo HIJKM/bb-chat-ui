@@ -16,9 +16,10 @@ import {
   planComposerHeight,
 } from "./composer-glass.ts";
 
-test("keeps the fade below the glass so messages can show through the composer", () => {
+test("spreads a translucent footer fade above the composer without moving it", () => {
   const css = composerGlassCss;
-  assert.equal(fadeHeight({ plateBottom: 640, composerTop: 560, composerHeight: 80 }), 0);
+  assert.equal(fadeHeight({ plateBottom: 640, composerTop: 560, composerHeight: 80 }), 144);
+  assert.equal(fadeHeight({ plateBottom: 652, composerTop: 608, composerHeight: 32 }), 108);
   assert.doesNotMatch(css, /margin-top:\s*calc\(-1 \*/);
   assert.doesNotMatch(css, /scroll-bottom-anchor/);
   assert.match(css, /background:\s*transparent !important/);
@@ -31,7 +32,7 @@ test("keeps the fade below the glass so messages can show through the composer",
   assert.doesNotMatch(css, /100% \+ var\(--bb-chat-ui-plate-height/);
   assert.equal(
     fadeHeight({ plateBottom: 652, composerTop: 560, composerHeight: 80 }),
-    12,
+    156,
   );
   assert.equal(
     fadeHeight({ plateBottom: 100, composerTop: 90, composerHeight: 40 }),
@@ -57,8 +58,11 @@ test("keeps the expanded editor minimum height independent of banners", () => {
 test("keeps the host canvas and uses each thread surface tone for the fade", () => {
   assert.doesNotMatch(composerGlassCss, /--bb-chat-ui-canvas|oklch\(0\./);
   assert.doesNotMatch(composerGlassCss, /main\[data-sidebar="inset"\]/);
-  assert.match(composerGlassCss, /linear-gradient\(\s*to bottom,\s*transparent,\s*var\(--background\) 50%/);
-  assert.match(composerGlassCss, /\[data-thread-window\]\[data-surface-tone="sidebar"\][^{]*\{[^}]*var\(--sidebar\) 50%/);
+  assert.match(composerGlassCss, /color-mix\(in srgb, var\(--background\) 12%, transparent\) 45%/);
+  assert.match(composerGlassCss, /color-mix\(in srgb, var\(--background\) 35%, transparent\) 75%/);
+  assert.match(composerGlassCss, /color-mix\(in srgb, var\(--background\) 65%, transparent\) 90%/);
+  assert.match(composerGlassCss, /var\(--background\) 100%/);
+  assert.match(composerGlassCss, /\[data-thread-window\]\[data-surface-tone="sidebar"\][^{]*\{[^}]*var\(--sidebar\) 100%/);
 });
 
 test("uses more translucent glass and soft highlights across composer controls", () => {

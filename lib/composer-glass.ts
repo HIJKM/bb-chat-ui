@@ -62,11 +62,21 @@ ${FOOTER} [data-overflow-fade="above"] {
   background-image: linear-gradient(
     to bottom,
     transparent,
-    var(--background) 50%
+    color-mix(in srgb, var(--background) 12%, transparent) 45%,
+    color-mix(in srgb, var(--background) 35%, transparent) 75%,
+    color-mix(in srgb, var(--background) 65%, transparent) 90%,
+    var(--background) 100%
   ) !important;
 }
 [data-thread-window][data-surface-tone="sidebar"] ${FOOTER} [data-overflow-fade="above"] {
-  background-image: linear-gradient(to bottom, transparent, var(--sidebar) 50%) !important;
+  background-image: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--sidebar) 12%, transparent) 45%,
+    color-mix(in srgb, var(--sidebar) 35%, transparent) 75%,
+    color-mix(in srgb, var(--sidebar) 65%, transparent) 90%,
+    var(--sidebar) 100%
+  ) !important;
 }
 ${FACE} {
   background: ${LIGHT_GLASS_FACE} !important;
@@ -319,9 +329,10 @@ export function fadeHeight(input: {
   composerTop: number;
   composerHeight: number;
 }): number {
-  const height = input.plateBottom - (input.composerTop + input.composerHeight);
-  if (!Number.isFinite(height) || height <= 0) return 0;
-  return Math.round(height);
+  const gap = input.plateBottom - (input.composerTop + input.composerHeight);
+  if (!Number.isFinite(gap) || !Number.isFinite(input.composerHeight) || gap < 0 || input.composerHeight <= 0) return 0;
+  // A soft tail starts above the composer and settles into the canvas at the bottom.
+  return Math.round(input.composerHeight + gap + 64);
 }
 
 export function composerCornerRadius(compact: boolean, handoff: boolean): string {
