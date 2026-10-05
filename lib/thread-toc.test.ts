@@ -19,13 +19,13 @@ test("frosts the toc card with the composer glass", () => {
   assert.match(
     threadTocCss,
     new RegExp(
-      `${card}\\s*\\{[^}]*background:\\s*color-mix\\(in oklab, white 78%, transparent\\) !important;`,
+      `${card}\\s*\\{[^}]*background:\\s*color-mix\\(in oklab, var\\(--popover\\) 78%, transparent\\) !important;`,
     ),
   );
-  assert.match(threadTocCss, /oklch\(0\.27 0\.008 275 \/ 0\.86\)/);
+  assert.match(threadTocCss, /color-mix\(in oklab, color-mix\(in oklab, var\(--popover\) 88%, var\(--foreground\)\) 86%, transparent\)/);
   assert.match(
     threadTocCss,
-    /\.dark \[id\^="thread-toc-panel-"\] > \.rounded-lg\s*\{[^}]*background:\s*oklch\(0\.27 0\.008 275 \/ 0\.86\) !important;/,
+    /\.dark \[id\^="thread-toc-panel-"\] > \.rounded-lg\s*\{[^}]*background:\s*color-mix\(in oklab, color-mix\(in oklab, var\(--popover\) 88%, var\(--foreground\)\) 86%, transparent\) !important;/,
   );
 });
 

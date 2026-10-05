@@ -100,3 +100,11 @@ test("enlarges sent file chips only in compact viewports with a coarse pointer",
   assert.match(touch, new RegExp(`${chip}::before\\s*\\{[^}]*width:\\s*28px;`));
   assert.match(touch, new RegExp(`${chip}::before\\s*\\{[^}]*height:\\s*28px;`));
 });
+
+
+test("composites clipped text against the host canvas or sidebar chat tone", () => {
+  const css = userAttachmentsCss();
+  assert.doesNotMatch(css, /--bb-chat-ui-canvas/);
+  assert.match(css, /linear-gradient\(var\(--surface-recessed\), var\(--surface-recessed\)\),\s*var\(--background\)/);
+  assert.match(css, /\[data-thread-window\]\[data-surface-tone="sidebar"\][^{]*::after\s*\{[^}]*var\(--sidebar\)/);
+});

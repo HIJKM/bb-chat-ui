@@ -93,10 +93,15 @@ ${USER_BUBBLE} > .break-words[style*="mask-image"]::after {
   height: calc(2.5rem + 1.75rem);
   background:
     linear-gradient(var(--surface-recessed), var(--surface-recessed)),
-    var(--bb-chat-ui-canvas, var(--background));
+    var(--background);
   mask-image: linear-gradient(to bottom, transparent, black 2.5rem);
   -webkit-mask-image: linear-gradient(to bottom, transparent, black 2.5rem);
   pointer-events: none;
+}
+[data-thread-window][data-surface-tone="sidebar"] ${USER_BUBBLE} > .break-words[style*="mask-image"]::after {
+  background:
+    linear-gradient(var(--surface-recessed), var(--surface-recessed)),
+    var(--sidebar);
 }
 @media (max-width: 767px) and (pointer: coarse) {
 ${FILE_CHIP} {

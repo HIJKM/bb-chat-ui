@@ -15,9 +15,9 @@ ${FOOTER} ${PILL},
 ${FOOTER} ${JUMP_BUTTON}`;
 
 const INK = "var(--ink, var(--foreground))";
-const LIGHT_EDGE = "color-mix(in oklab, white 85%, transparent)";
+const LIGHT_EDGE = "color-mix(in oklab, var(--popover) 85%, transparent)";
 const LIGHT_SHADOW = "color-mix(in oklab, var(--ink, var(--foreground)) 22%, transparent)";
-const DARK_EDGE = "color-mix(in oklab, white 12%, transparent)";
+const DARK_EDGE = "color-mix(in oklab, var(--foreground) 12%, transparent)";
 const DARK_SHADOW = "color-mix(in oklab, black 60%, transparent)";
 
 function darkScope(selectors: string): string {
@@ -46,29 +46,6 @@ export const composerGlassCss = `
   to { border-radius: var(${COMPOSER_RADIUS_TO}) !important; }
 }
 
-[data-thread-window]:not([data-surface-tone="sidebar"]) {
-  --bb-chat-ui-canvas: oklch(0.97 0 0);
-  background-color: var(--bb-chat-ui-canvas) !important;
-}
-[data-thread-window]:not([data-surface-tone="sidebar"]) .thread-scrollbar {
-  background-color: var(--bb-chat-ui-canvas) !important;
-}
-.dark [data-thread-window]:not([data-surface-tone="sidebar"]) {
-  --bb-chat-ui-canvas: oklch(0.17 0 0);
-}
-main[data-sidebar="inset"]:has([data-thread-window]:not([data-surface-tone="sidebar"])) {
-  --bb-chat-ui-canvas: oklch(0.97 0 0);
-  background-color: var(--bb-chat-ui-canvas) !important;
-}
-.dark main[data-sidebar="inset"]:has([data-thread-window]:not([data-surface-tone="sidebar"])) {
-  --bb-chat-ui-canvas: oklch(0.17 0 0);
-}
-:has(> [data-thread-window]:not([data-surface-tone="sidebar"])) > header {
-  background-color: var(--bb-chat-ui-canvas) !important;
-}
-header:has(+ :has([data-thread-window]:not([data-surface-tone="sidebar"]))) {
-  background-color: var(--bb-chat-ui-canvas) !important;
-}
 ${FOOTER} > .relative {
   background: transparent !important;
 }
@@ -81,11 +58,14 @@ ${FOOTER} [data-overflow-fade="above"] {
   background-image: linear-gradient(
     to bottom,
     transparent,
-    var(--bb-chat-ui-canvas, var(--background)) 50%
+    var(--background) 50%
   ) !important;
 }
+[data-thread-window][data-surface-tone="sidebar"] ${FOOTER} [data-overflow-fade="above"] {
+  background-image: linear-gradient(to bottom, transparent, var(--sidebar) 50%) !important;
+}
 ${FACE} {
-  background: color-mix(in oklab, white 78%, transparent) !important;
+  background: color-mix(in oklab, var(--popover) 78%, transparent) !important;
   border-color: transparent !important;
   backdrop-filter: blur(14px) saturate(1.25);
   -webkit-backdrop-filter: blur(14px) saturate(1.25);
@@ -180,7 +160,7 @@ ${FOOTER} [data-promptbox]:focus-within {
     inset 0 1px 0 ${LIGHT_EDGE};
 }
 ${darkScope(FACE)} {
-  background: oklch(0.27 0.008 275 / 0.86) !important;
+  background: color-mix(in oklab, color-mix(in oklab, var(--popover) 88%, var(--foreground)) 86%, transparent) !important;
   border-color: transparent !important;
   box-shadow:
     0 6px 18px -12px ${DARK_SHADOW},
