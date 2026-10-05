@@ -75,7 +75,18 @@ export function quoteLabel(body: string): string | null {
       .filter((range): range is string => range !== null);
     return ranges.length > 0 ? `${file}:${Array.from(new Set(ranges)).join(", ")}` : file;
   }
-  const flat = line.replace(/\s+/g, " ");
+  // The host parses Markdown markers before mentions, so labels must be plain text.
+  let flat = line;
+  while (true) {
+    const plain = flat
+      .replace(/^(?:(?:#{1,6}|>+|[-*+]|\d+[.)])\s+)+/u, "")
+      .replace(/(\*\*|__|`+)(.+?)\1/gu, "$2")
+      .replace(/(^|[^\p{L}\p{N}])([_*])([^_*]+)\2(?=$|[^\p{L}\p{N}])/gu, "$1$3");
+    if (plain === flat) break;
+    flat = plain;
+  }
+  flat = flat.replace(/\s+/g, " ").trim();
+  if (!flat) return null;
   if (flat.length <= QUOTE_LABEL_MAX) return flat;
   const clipped = flat.slice(0, QUOTE_LABEL_MAX - 1).trimEnd();
   return `${clipped}…`;
