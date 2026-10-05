@@ -16,22 +16,22 @@ ${PAINTED} {
   flex-shrink: 0 !important;
   min-width: 0;
   width: auto;
-  height: 32px !important;
-  min-height: 32px !important;
-  max-height: 32px !important;
-  max-width: min(240px, calc(100% - 8px)) !important;
-  gap: 6px !important;
-  margin: 4px !important;
-  padding: 6px 14px 6px 12px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  max-width: min(140px, calc(100% - 6px)) !important;
+  gap: 4px !important;
+  margin: 3px !important;
+  padding: 4px 12px 4px 10px !important;
   border-radius: 9999px !important;
-  font-size: 14px !important;
-  line-height: 18px !important;
+  font-size: 12px !important;
+  line-height: 16px !important;
   vertical-align: middle;
   white-space: nowrap !important;
   overflow: hidden;
 }
 ${PAINTED}[${WIDE}] {
-  max-width: calc(100% - 8px) !important;
+  max-width: calc(100% - 6px) !important;
 }
 ${PAINTED} > .truncate {
   min-width: 0;
@@ -42,32 +42,32 @@ ${PAINTED} > .truncate {
 }
 ${PAINTED}:not([${WIDE}]) > .truncate {
   /* Bound the label's intrinsic width when the parent sizes to its contents. */
-  max-width: calc(240px - 12px - 14px - 2px - 6px - 16px);
+  max-width: calc(140px - 10px - 12px - 2px - 4px - 14px);
 }
 ${PAINTED} [data-icon-root],
 ${PAINTED} [data-section-mention-marker],
 ${PAINTED} [data-bb-chat-ui-quote-glyph] {
-  flex: 0 0 16px !important;
-  width: 16px !important;
-  height: 16px !important;
+  flex: 0 0 14px !important;
+  width: 14px !important;
+  height: 14px !important;
   margin: 0 !important;
   align-self: center;
 }
 ${PAINTED}:has(> [${REMOVE}]) {
-  padding-right: 34px !important;
+  padding-right: 30px !important;
 }
 ${PAINTED} > button[${REMOVE}] {
   position: absolute;
   top: 50%;
-  right: 4px;
+  right: 3px;
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  min-width: 24px;
-  min-height: 24px;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -78,8 +78,8 @@ ${PAINTED} > button[${REMOVE}] {
 }
 ${PAINTED} > button[${REMOVE}]::before {
   content: "";
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   background: currentColor;
   opacity: 0.5;
   clip-path: polygon(12% 0, 50% 38%, 88% 0, 100% 12%, 62% 50%, 100% 88%, 88% 100%, 50% 62%, 12% 100%, 0 88%, 38% 50%, 0 12%);
@@ -91,44 +91,44 @@ ${PAINTED} > button[${REMOVE}]:focus-visible {
   outline: 1px solid var(--ring);
   outline-offset: -2px;
 }
-@media (width >= 48rem) {
+@media (max-width: 767px) and (pointer: coarse) {
   ${PAINTED} {
-    height: 28px !important;
-    min-height: 28px !important;
-    max-height: 28px !important;
-    max-width: min(140px, calc(100% - 6px)) !important;
-    gap: 4px !important;
-    margin: 3px !important;
-    padding: 4px 12px 4px 10px !important;
-    font-size: 12px !important;
-    line-height: 16px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    max-height: 32px !important;
+    max-width: min(240px, calc(100% - 8px)) !important;
+    gap: 6px !important;
+    margin: 4px !important;
+    padding: 6px 14px 6px 12px !important;
+    font-size: 14px !important;
+    line-height: 18px !important;
   }
   ${PAINTED}[${WIDE}] {
-    max-width: calc(100% - 6px) !important;
+    max-width: calc(100% - 8px) !important;
   }
   ${PAINTED}:not([${WIDE}]) > .truncate {
-    max-width: calc(140px - 10px - 12px - 2px - 4px - 14px);
+    max-width: calc(240px - 12px - 14px - 2px - 6px - 16px);
   }
   ${PAINTED} [data-icon-root],
   ${PAINTED} [data-section-mention-marker],
   ${PAINTED} [data-bb-chat-ui-quote-glyph] {
-    flex-basis: 14px !important;
-    width: 14px !important;
-    height: 14px !important;
+    flex-basis: 16px !important;
+    width: 16px !important;
+    height: 16px !important;
   }
   ${PAINTED}:has(> [${REMOVE}]) {
-    padding-right: 30px !important;
+    padding-right: 34px !important;
   }
   ${PAINTED} > button[${REMOVE}] {
-    right: 3px;
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    min-height: 20px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
   }
   ${PAINTED} > button[${REMOVE}]::before {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
   }
 }
 [data-promptbox-compact-content] .ProseMirror:has(.prompt-mention-pill) {

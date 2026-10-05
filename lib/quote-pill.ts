@@ -171,45 +171,47 @@ ${COMPOSER_QUOTE}::after {
   }
 }
 ${PENDING_COMPOSER_QUOTE} {
-  height: 32px !important;
-  min-height: 32px !important;
-  max-height: 32px !important;
-  max-width: min(240px, calc(100% - 8px)) !important;
-  margin: 4px !important;
-  font-size: 14px !important;
-  line-height: 18px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  max-width: min(140px, calc(100% - 6px)) !important;
+  gap: 4px !important;
+  margin: 3px !important;
+  padding: 4px 12px 4px 10px !important;
+  font-size: 12px !important;
+  line-height: 16px !important;
   overflow: hidden;
 }
 ${PENDING_COMPOSER_QUOTE} > :not(:first-child) {
   display: none !important;
 }
 ${PENDING_COMPOSER_QUOTE} > :first-child {
-  line-height: 18px !important;
+  line-height: 16px !important;
 }
 ${PENDING_COMPOSER_QUOTE}::before {
-  flex-basis: 16px;
-  width: 16px;
-  height: 16px;
+  flex-basis: 14px;
+  width: 14px;
+  height: 14px;
 }
-@media (width >= 48rem) {
+@media (max-width: 767px) and (pointer: coarse) {
   ${PENDING_COMPOSER_QUOTE} {
-    height: 28px !important;
-    min-height: 28px !important;
-    max-height: 28px !important;
-    max-width: min(140px, calc(100% - 6px)) !important;
-    gap: 4px !important;
-    margin: 3px !important;
-    padding: 4px 12px 4px 10px !important;
-    font-size: 12px !important;
-    line-height: 16px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    max-height: 32px !important;
+    max-width: min(240px, calc(100% - 8px)) !important;
+    gap: 6px !important;
+    margin: 4px !important;
+    padding: 6px 14px 6px 12px !important;
+    font-size: 14px !important;
+    line-height: 18px !important;
   }
   ${PENDING_COMPOSER_QUOTE} > :first-child {
-    line-height: 16px !important;
+    line-height: 18px !important;
   }
   ${PENDING_COMPOSER_QUOTE}::before {
-    flex-basis: 14px;
-    width: 14px;
-    height: 14px;
+    flex-basis: 16px;
+    width: 16px;
+    height: 16px;
   }
 }
 ${COMPOSER_QUOTE_MENTION} {

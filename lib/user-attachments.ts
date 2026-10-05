@@ -26,17 +26,17 @@ ${USER_BUBBLE} > .mt-2.space-y-2 > .flex:last-child {
 ${FILE_CHIP} {
   box-sizing: border-box;
   gap: 6px;
-  min-height: 64px;
+  min-height: 40px;
   padding: 6px 14px 6px 12px;
-  border-radius: 20px;
+  border-radius: 12px;
   font-size: 0.875rem;
   line-height: 1.25;
 }
 ${FILE_CHIP}::before {
   content: "";
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
   background-color: currentColor;
   -webkit-mask: ${FILE_ICON_MASK};
   mask: ${FILE_ICON_MASK};
@@ -98,15 +98,15 @@ ${USER_BUBBLE} > .break-words[style*="mask-image"]::after {
   -webkit-mask-image: linear-gradient(to bottom, transparent, black 2.5rem);
   pointer-events: none;
 }
-@media (width >= 48rem) {
+@media (max-width: 767px) and (pointer: coarse) {
 ${FILE_CHIP} {
-  min-height: 40px;
-  border-radius: 12px;
+  min-height: 64px;
+  border-radius: 20px;
 }
 ${FILE_CHIP}::before {
-  flex: 0 0 18px;
-  width: 18px;
-  height: 18px;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
 }
 }
 `;
