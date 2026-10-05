@@ -16,8 +16,9 @@ import {
   planComposerHeight,
 } from "./composer-glass.ts";
 
-test("fades messages above the composer without pulling the footer up", () => {
+test("keeps the fade below the glass so messages can show through the composer", () => {
   const css = composerGlassCss;
+  assert.equal(fadeHeight({ plateBottom: 640, composerTop: 560, composerHeight: 80 }), 0);
   assert.doesNotMatch(css, /margin-top:\s*calc\(-1 \*/);
   assert.doesNotMatch(css, /scroll-bottom-anchor/);
   assert.match(css, /background:\s*transparent !important/);
@@ -25,12 +26,12 @@ test("fades messages above the composer without pulling the footer up", () => {
   assert.match(css, /bottom:\s*0 !important/);
   assert.match(
     css,
-    /height:\s*var\(--bb-chat-ui-fade-height, 50%\) !important/,
+    /height:\s*var\(--bb-chat-ui-fade-height, 0px\) !important/,
   );
   assert.doesNotMatch(css, /100% \+ var\(--bb-chat-ui-plate-height/);
   assert.equal(
-    fadeHeight({ plateBottom: 640, composerTop: 560, composerHeight: 80 }),
-    40,
+    fadeHeight({ plateBottom: 652, composerTop: 560, composerHeight: 80 }),
+    12,
   );
   assert.equal(
     fadeHeight({ plateBottom: 100, composerTop: 90, composerHeight: 40 }),
@@ -60,35 +61,36 @@ test("keeps the host canvas and uses each thread surface tone for the fade", () 
   assert.match(composerGlassCss, /\[data-thread-window\]\[data-surface-tone="sidebar"\][^{]*\{[^}]*var\(--sidebar\) 50%/);
 });
 
-test("paints the composer, diff pill, and jump button with the mobile glass", () => {
+test("uses more translucent glass and soft highlights across composer controls", () => {
   const css = composerGlassCss;
   assert.match(
     css,
     /\[data-promptbox\],[\s\S]*#thread-prompt-banner-git-toggle,[\s\S]*button\[aria-label="Scroll to latest event"\],[\s\S]*\.agentation-staging-shell\s*\{[\s\S]*backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);[\s\S]*-webkit-backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/,
   );
-  assert.match(css, /oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.78\)/);
+  assert.match(css, /oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.68\)/);
   assert.match(
     css,
     /#thread-prompt-banner-git-toggle,\s*\[data-scroll-footer\]:has\(\.chat-prompt-box\) button\[aria-label="Scroll to latest event"\],[\s\S]*\.agentation-staging-shell\s*\{[^}]*border-color:\s*transparent !important;/,
   );
   assert.match(
     css,
-    /0 12px 32px -14px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 22%, transparent\),\s*inset 0 1px 0 color-mix\(in oklab, var\(--popover\) 85%, transparent\)/,
+    /0 12px 32px -14px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 22%, transparent\),\s*inset 0 1px 3px color-mix\(in oklab, var\(--popover\) 35%, transparent\)/,
   );
   assert.match(
     css,
     /0 6px 18px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 22%, transparent\)/,
   );
-  assert.match(css, /oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.86\)/);
+  assert.match(css, /oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.76\)/);
   assert.match(
     css,
     /\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) #thread-prompt-banner-git-toggle,\s*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) button\[aria-label="Scroll to latest event"\],[\s\S]*\.agentation-staging-shell\s*\{[^}]*border-color:\s*transparent !important;/,
   );
   assert.match(
     css,
-    /inset 0 1px 0 color-mix\(in oklab, var\(--foreground\) 12%, transparent\)/,
+    /inset 0 1px 3px color-mix\(in oklab, var\(--foreground\) 8%, transparent\)/,
   );
   assert.match(css, /color-mix\(in oklab, black 60%, transparent\)/);
+  assert.doesNotMatch(css, /inset 0 1px 0/);
   assert.match(css, /\[data-promptbox\]\s*\{[^}]*border-color:\s*transparent !important;/);
   assert.match(
     css,
@@ -449,7 +451,7 @@ test("anchors jump-to-bottom by its bottom edge", () => {
   assert.doesNotMatch(composerGlassCss, /-mt-20/);
 });
 
-test("sets the fade height from the composer midline", () => {
+test("clears the bottom fade when there is no space below the composer", () => {
   const writes: string[] = [];
   const node = {
     style: {

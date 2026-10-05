@@ -8,5 +8,5 @@ export const glassSurfaceScopeCss = `
 }
 `;
 
-export const LIGHT_GLASS_FACE = "oklch(from var(--bb-chat-ui-glass-base, var(--background)) min(1, calc(l + 0.075)) c h / 0.78)";
-export const DARK_GLASS_FACE = "oklch(from var(--bb-chat-ui-glass-base, var(--background)) min(1, calc(l + 0.075)) c h / 0.86)";
+export const LIGHT_GLASS_FACE = "oklch(from var(--bb-chat-ui-glass-base, var(--background)) min(1, calc(l + 0.075)) c h / 0.68)";
+export const DARK_GLASS_FACE = "oklch(from var(--bb-chat-ui-glass-base, var(--background)) min(1, calc(l + 0.075)) c h / 0.76)";

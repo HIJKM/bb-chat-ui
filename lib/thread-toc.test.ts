@@ -19,13 +19,13 @@ test("frosts the toc card with the composer glass", () => {
   assert.match(
     threadTocCss,
     new RegExp(
-      `${card}\\s*\\{[^}]*background:\\s*oklch\\(from var\\(--bb-chat-ui-glass-base, var\\(--background\\)\\) min\\(1, calc\\(l \\+ 0\\.075\\)\\) c h \/ 0\\.78\\) !important;`,
+      `${card}\\s*\\{[^}]*background:\\s*oklch\\(from var\\(--bb-chat-ui-glass-base, var\\(--background\\)\\) min\\(1, calc\\(l \\+ 0\\.075\\)\\) c h \/ 0\\.68\\) !important;`,
     ),
   );
-  assert.match(threadTocCss, /oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.86\)/);
+  assert.match(threadTocCss, /oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.76\)/);
   assert.match(
     threadTocCss,
-    /\.dark \[id\^="thread-toc-panel-"\] > \.rounded-lg\s*\{[^}]*background:\s*oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.86\) !important;/,
+    /\.dark \[id\^="thread-toc-panel-"\] > \.rounded-lg\s*\{[^}]*background:\s*oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.76\) !important;/,
   );
 });
 

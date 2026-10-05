@@ -18,9 +18,9 @@ ${FOOTER} ${JUMP_BUTTON},
 ${FOOTER} [data-promptbox-shell] .agentation-staging-shell`;
 
 const INK = "var(--ink, var(--foreground))";
-const LIGHT_EDGE = "color-mix(in oklab, var(--popover) 85%, transparent)";
+const LIGHT_EDGE = "color-mix(in oklab, var(--popover) 35%, transparent)";
 const LIGHT_SHADOW = "color-mix(in oklab, var(--ink, var(--foreground)) 22%, transparent)";
-const DARK_EDGE = "color-mix(in oklab, var(--foreground) 12%, transparent)";
+const DARK_EDGE = "color-mix(in oklab, var(--foreground) 8%, transparent)";
 const DARK_SHADOW = "color-mix(in oklab, black 60%, transparent)";
 
 function darkScope(selectors: string): string {
@@ -58,7 +58,7 @@ ${FOOTER} [data-overflow-fade="above"] {
   right: 0 !important;
   bottom: 0 !important;
   left: 0 !important;
-  height: var(--bb-chat-ui-fade-height, 50%) !important;
+  height: var(--bb-chat-ui-fade-height, 0px) !important;
   background-image: linear-gradient(
     to bottom,
     transparent,
@@ -75,12 +75,12 @@ ${FACE} {
   -webkit-backdrop-filter: blur(14px) saturate(1.25);
   box-shadow:
     0 6px 18px -12px ${LIGHT_SHADOW},
-    inset 0 1px 0 ${LIGHT_EDGE};
+    inset 0 1px 3px ${LIGHT_EDGE};
 }
 ${FOOTER} [data-promptbox-shell] .agentation-staging-shell--expanded {
   box-shadow:
     0 12px 32px -14px ${LIGHT_SHADOW},
-    inset 0 1px 0 ${LIGHT_EDGE};
+    inset 0 1px 3px ${LIGHT_EDGE};
 }
 ${FOOTER} [data-follow-up-composer-anchor] [data-promptbox]:not([data-promptbox-compact]) [data-promptbox-editor-scroll] {
   min-height: 68px !important;
@@ -94,7 +94,7 @@ ${FOOTER} [data-promptbox] {
   transition: ${SHADOW_TRANSITION};
   box-shadow:
     0 12px 32px -14px ${LIGHT_SHADOW},
-    inset 0 1px 0 ${LIGHT_EDGE};
+    inset 0 1px 3px ${LIGHT_EDGE};
 }
 @media (width < 48rem) {
   ${FOOTER}:has([data-promptbox-compact]) {
@@ -166,52 +166,52 @@ ${FOOTER} [data-promptbox]:focus-within {
   border-color: transparent !important;
   box-shadow:
     0 18px 44px -16px color-mix(in oklab, ${INK} 34%, transparent),
-    inset 0 1px 0 ${LIGHT_EDGE};
+    inset 0 1px 3px ${LIGHT_EDGE};
 }
 ${darkScope(FACE)} {
   background: ${DARK_GLASS_FACE} !important;
   border-color: transparent !important;
   box-shadow:
     0 6px 18px -12px ${DARK_SHADOW},
-    inset 0 1px 0 ${DARK_EDGE};
+    inset 0 1px 3px ${DARK_EDGE};
 }
 ${darkScope(`${FOOTER} [data-promptbox-shell] .agentation-staging-shell--expanded`)} {
   box-shadow:
     0 12px 32px -14px ${DARK_SHADOW},
-    inset 0 1px 0 ${DARK_EDGE};
+    inset 0 1px 3px ${DARK_EDGE};
 }
 ${darkScope(`${FOOTER} [data-promptbox]`)} {
   border-color: transparent !important;
   box-shadow:
     0 12px 32px -14px ${DARK_SHADOW},
-    inset 0 1px 0 ${DARK_EDGE};
+    inset 0 1px 3px ${DARK_EDGE};
 }
 ${darkScope(`${FOOTER} [data-promptbox]:focus-within`)} {
   border-color: transparent !important;
   box-shadow:
     0 18px 44px -16px color-mix(in oklab, ${INK} 34%, transparent),
-    inset 0 1px 0 ${DARK_EDGE};
+    inset 0 1px 3px ${DARK_EDGE};
 }
 @media (width < 48rem) and (pointer: coarse) {
   ${FOOTER} [data-promptbox] {
     box-shadow:
       0 6px 16px -10px ${LIGHT_SHADOW},
-      inset 0 1px 0 ${LIGHT_EDGE};
+      inset 0 1px 3px ${LIGHT_EDGE};
   }
   ${FOOTER} [data-promptbox]:focus-within {
     box-shadow:
       0 8px 20px -12px color-mix(in oklab, ${INK} 34%, transparent),
-      inset 0 1px 0 ${LIGHT_EDGE};
+      inset 0 1px 3px ${LIGHT_EDGE};
   }
   ${darkScope(`${FOOTER} [data-promptbox]`)} {
     box-shadow:
       0 6px 16px -10px ${DARK_SHADOW},
-      inset 0 1px 0 ${DARK_EDGE};
+      inset 0 1px 3px ${DARK_EDGE};
   }
   ${darkScope(`${FOOTER} [data-promptbox]:focus-within`)} {
     box-shadow:
       0 8px 20px -12px color-mix(in oklab, ${INK} 34%, transparent),
-      inset 0 1px 0 ${DARK_EDGE};
+      inset 0 1px 3px ${DARK_EDGE};
   }
 }
 ${FOOTER} .chat-prompt-box {
@@ -319,7 +319,7 @@ export function fadeHeight(input: {
   composerTop: number;
   composerHeight: number;
 }): number {
-  const height = input.plateBottom - (input.composerTop + input.composerHeight / 2);
+  const height = input.plateBottom - (input.composerTop + input.composerHeight);
   if (!Number.isFinite(height) || height <= 0) return 0;
   return Math.round(height);
 }

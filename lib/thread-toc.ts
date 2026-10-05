@@ -45,14 +45,14 @@ ${glassSurfaceScopeCss}
   -webkit-backdrop-filter: blur(14px) saturate(1.25);
   box-shadow:
     0 6px 18px -12px color-mix(in oklab, var(--ink, var(--foreground)) 22%, transparent),
-    inset 0 1px 0 color-mix(in oklab, var(--popover) 85%, transparent);
+    inset 0 1px 3px color-mix(in oklab, var(--popover) 35%, transparent);
 }
 .dark [id^="thread-toc-panel-"] > .rounded-lg {
   background: ${DARK_GLASS_FACE} !important;
   border-color: transparent !important;
   box-shadow:
     0 6px 18px -12px color-mix(in oklab, black 60%, transparent),
-    inset 0 1px 0 color-mix(in oklab, var(--foreground) 12%, transparent);
+    inset 0 1px 3px color-mix(in oklab, var(--foreground) 8%, transparent);
 }
 [id^="thread-toc-panel-"]:hover > .rounded-lg {
   transform: scale(1.05);
