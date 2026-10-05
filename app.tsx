@@ -1,4 +1,5 @@
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
+import { Fragment, createElement } from "react";
 
 import { QuoteMentionBridge } from "./lib/quote-bridge";
 import { injectComposerGlass } from "./lib/composer-glass";
@@ -10,11 +11,17 @@ import { injectQueuedMessages } from "./lib/queued-messages";
 import { injectThreadToc } from "./lib/thread-toc";
 import { injectUserAttachments } from "./lib/user-attachments";
 import { injectWorkspaceDiffPill } from "./lib/workspace-diff-pill";
+import { WorkspaceDiffBridge } from "./lib/workspace-diff-bridge";
+
+function ComposerBridges() {
+  return createElement(Fragment, null,
+    createElement(QuoteMentionBridge), createElement(WorkspaceDiffBridge));
+}
 
 export default definePluginApp((app) => {
   app.composer.customize({
     id: "quote-mention",
-    banners: [{ id: "convert", chrome: "bare", component: QuoteMentionBridge }],
+    banners: [{ id: "convert", chrome: "bare", component: ComposerBridges }],
   });
   app.contentScripts.register({
     id: "workspace-diff-pill",

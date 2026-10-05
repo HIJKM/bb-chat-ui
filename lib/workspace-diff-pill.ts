@@ -4,6 +4,8 @@ const STYLE_ID = "bb-chat-ui-diff-pill";
 const FILES_MARK = "data-bb-chat-ui-files";
 const CHEVRON_MARK = "data-bb-chat-ui-chevron";
 const SOLO_MARK = "data-bb-chat-ui-solo";
+const BRANCH_MARK = "data-bb-chat-ui-branch";
+export const HEAD_DIFF_MARK = "data-bb-chat-ui-head-diff";
 const MERGE_BASE = `#${TOGGLE_ID} ~ [data-promptbox-hide-compact][data-promptbox-hide-tiny]`;
 
 const PILL_CSS = `
@@ -28,6 +30,11 @@ ${MERGE_BASE} {
   width: 16px;
   height: 16px;
 }
+#${TOGGLE_ID} [${BRANCH_MARK}] {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-purple-500, #a855f7);
+}
 section[${SOLO_MARK}] {
   justify-self: start;
   width: fit-content;
@@ -40,6 +47,21 @@ section[${SOLO_MARK}] > .flex {
   padding: 0 !important;
 }
 `;
+
+interface HeadWorkspace {
+  branch: { currentBranch: string | null; defaultBranch: string };
+  workingTree: { insertions: number; deletions: number; files: readonly unknown[] };
+}
+
+export function headDiffSummary(workspace: HeadWorkspace) {
+  const { workingTree, branch } = workspace;
+  return {
+    insertions: workingTree.insertions,
+    deletions: workingTree.deletions,
+    files: workingTree.files.length,
+    branch: branch.currentBranch !== branch.defaultBranch ? branch.currentBranch : null,
+  };
+}
 
 const SHOW_PANEL_LABEL = "Show right panel";
 const DIFF_PANEL_LABEL = "Show diff panel";
@@ -96,22 +118,30 @@ export function injectWorkspaceDiffPill(document: Document): () => void {
   document.addEventListener("click", onClick, true);
 
   const paint = () => {
-    const button = document.getElementById(TOGGLE_ID);
-    if (button instanceof HTMLButtonElement) paintToggle(button);
+    document.querySelectorAll(`#${TOGGLE_ID}`).forEach((button) => {
+      if (button instanceof HTMLButtonElement) paintToggle(button);
+    });
   };
   const observer = new MutationObserver(paint);
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: [HEAD_DIFF_MARK],
+  });
   paint();
 
   return () => {
     observer.disconnect();
     document.removeEventListener("click", onClick, true);
     style.remove();
+    document.querySelectorAll(`[${BRANCH_MARK}]`).forEach((node) => node.remove());
   };
 }
 
 function paintToggle(button: HTMLButtonElement) {
-  const icons = button.querySelectorAll("[data-icon-root]");
+  const icons = Array.from(button.querySelectorAll("[data-icon-root]"))
+    .filter((icon) => !icon.closest(`[${BRANCH_MARK}]`));
   const chevron = icons.length > 1 ? icons[icons.length - 1] : null;
   if (chevron && !chevron.hasAttribute(CHEVRON_MARK)) {
     chevron.setAttribute(CHEVRON_MARK, "");
@@ -119,6 +149,7 @@ function paintToggle(button: HTMLButtonElement) {
   for (const child of Array.from(button.children)) {
     if (child instanceof HTMLElement) rewriteLabel(child);
   }
+  paintHeadSummary(button);
   const section = button.closest("section");
   const header = button.parentElement;
   if (!section || !header) return;
@@ -132,7 +163,53 @@ function paintToggle(button: HTMLButtonElement) {
   }
 }
 
+function paintHeadSummary(button: HTMLButtonElement) {
+  const source = button.closest(".chat-prompt-box")?.querySelector(`[${HEAD_DIFF_MARK}]`);
+  const serialized = source?.getAttribute(HEAD_DIFF_MARK);
+  if (!serialized) return;
+  const summary: ReturnType<typeof headDiffSummary> = JSON.parse(serialized);
+  const files = button.querySelector(`[${FILES_MARK}]`);
+  const label = files?.parentElement;
+  if (!label) return;
+  let tally = label.querySelector<HTMLElement>(".text-diff-added")?.parentElement;
+  if (!tally) {
+    tally = button.ownerDocument.createElement("span");
+    for (const className of ["text-diff-added", "text-diff-removed"]) {
+      const number = button.ownerDocument.createElement("span");
+      number.className = className;
+      tally.append(number);
+    }
+    label.prepend(tally, button.ownerDocument.createTextNode(" · "));
+  }
+  setText(tally.querySelector(".text-diff-added"), `+${summary.insertions}`);
+  setText(tally.querySelector(".text-diff-removed"), ` -${summary.deletions}`);
+  setText(files, `${summary.files} ${summary.files === 1 ? "file" : "files"}`);
+
+  let icon = button.querySelector<HTMLElement>(`[${BRANCH_MARK}]`);
+  if (!summary.branch) {
+    icon?.remove();
+    return;
+  }
+  if (!icon) {
+    const template = source?.querySelector("[data-icon-root]");
+    if (!template) return;
+    icon = button.ownerDocument.createElement("span");
+    icon.setAttribute(BRANCH_MARK, "");
+    icon.setAttribute("role", "img");
+    icon.append(template.cloneNode(true));
+    button.append(icon);
+  }
+  if (icon.title !== summary.branch) icon.title = summary.branch;
+  const labelText = `Branch: ${summary.branch}`;
+  if (icon.getAttribute("aria-label") !== labelText) icon.setAttribute("aria-label", labelText);
+}
+
+function setText(node: Element | null | undefined, text: string) {
+  if (node && node.textContent !== text) node.textContent = text;
+}
+
 function rewriteLabel(span: HTMLElement) {
+  if (span.hasAttribute(BRANCH_MARK)) return;
   if (span.hasAttribute(FILES_MARK) || span.querySelector(`[${FILES_MARK}]`)) {
     return;
   }
