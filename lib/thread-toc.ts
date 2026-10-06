@@ -73,6 +73,7 @@ ${glassSurfaceScopeCss}
 `;
 
 const hoveredTickByRoot = new WeakMap<HTMLElement, number>();
+const pendingNavigationByRoot = new WeakMap<HTMLElement, number>();
 
 export function tickWidth(distancePx: number): number {
   const distance = Math.max(0, distancePx);
@@ -133,14 +134,28 @@ function bindRail(button: HTMLButtonElement, cleanups: Array<() => void>) {
     hoveredTickByRoot.set(root, nearestTickIndex(button, event.clientY));
     syncHoveredMessage(root);
   };
+  const onClick = (event: MouseEvent) => {
+    if (!(root instanceof HTMLElement) || tickElements(button).length === 0) return;
+    const tickIndex = event.detail === 0
+      ? hoveredTickByRoot.get(root) ?? 0
+      : nearestTickIndex(button, event.clientY);
+    hoveredTickByRoot.set(root, tickIndex);
+    pendingNavigationByRoot.set(root, tickIndex);
+    syncHoveredMessage(root);
+  };
   button.addEventListener("mouseenter", onMove);
   button.addEventListener("mousemove", onMove);
+  button.addEventListener("click", onClick);
   cleanups.push(() => {
     button.removeEventListener("mouseenter", onMove);
     button.removeEventListener("mousemove", onMove);
+    button.removeEventListener("click", onClick);
     button.removeAttribute(RAIL_MARK);
     clearTickWidths(button);
-    if (root instanceof HTMLElement) hoveredTickByRoot.delete(root);
+    if (root instanceof HTMLElement) {
+      hoveredTickByRoot.delete(root);
+      pendingNavigationByRoot.delete(root);
+    }
   });
   if (root instanceof HTMLElement) bindRootLeave(root, cleanups);
 }
@@ -167,7 +182,7 @@ function bindRootLeave(root: HTMLElement, cleanups: Array<() => void>) {
 }
 
 function syncHoveredMessage(root: HTMLElement) {
-  const tickIndex = hoveredTickByRoot.get(root);
+  const tickIndex = pendingNavigationByRoot.get(root) ?? hoveredTickByRoot.get(root);
   if (tickIndex !== undefined) markSelectedTick(root, tickIndex);
   const panel = root.querySelector('[id^="thread-toc-panel-"]');
   if (!(panel instanceof HTMLElement)) return;
@@ -185,6 +200,13 @@ function syncHoveredMessage(root: HTMLElement) {
   if (scroller instanceof HTMLElement) scroller.scrollTop = 0;
   const tick = ticks[tickIndex];
   if (tick) placePanelBesideTick(panel, tick);
+  if (pendingNavigationByRoot.has(root)) {
+    const target = items[listIndex]?.querySelector("button");
+    if (target instanceof HTMLButtonElement) {
+      pendingNavigationByRoot.delete(root);
+      target.click();
+    }
+  }
 }
 
 function releaseTocFocus(root: HTMLElement) {

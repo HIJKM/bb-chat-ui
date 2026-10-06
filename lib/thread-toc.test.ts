@@ -58,7 +58,7 @@ test("maps sampled ticks across a longer message list", () => {
   assert.equal(listIndexForTick(2, 3, 7), 6);
 });
 
-test("clears the live rail when the pointer leaves after the button is replaced", () => {
+test("keeps rail clicks and leave working after the button is replaced", () => {
   const previous = {
     HTMLElement: globalThis.HTMLElement,
     HTMLButtonElement: globalThis.HTMLButtonElement,
@@ -90,6 +90,8 @@ test("clears the live rail when the pointer leaves after the button is replaced"
     textContent = "";
     id = "";
     styleWidth = "";
+    top = 0;
+    clicks = 0;
     tag: string;
     constructor(tag: string, className = "") {
       super();
@@ -162,6 +164,12 @@ test("clears the live rail when the pointer leaves after the button is replaced"
     querySelectorAll(selector: string): DomElement[] {
       return queryAll(this, selector);
     }
+    getBoundingClientRect() {
+      return { top: this.top, height: 3 };
+    }
+    click() {
+      this.clicks += 1;
+    }
     remove() {
       const parent = this.parent;
       if (!(parent instanceof DomElement)) return;
@@ -220,6 +228,40 @@ test("clears the live rail when the pointer leaves after the button is replaced"
     root.append(liveButton);
     repaint?.();
 
+    const middleTick = new DomElement("span", "rounded-full");
+    middleTick.top = 10;
+    const lastTick = new DomElement("span", "rounded-full");
+    lastTick.top = 20;
+    liveButton.append(middleTick);
+    liveButton.append(lastTick);
+
+    // A first click opens the host panel; navigate once its rows arrive.
+    clickRail(liveButton, 11);
+    const panel = new DomElement("div");
+    panel.id = "thread-toc-panel-test";
+    const list = new DomElement("ul");
+    const targets = Array.from({ length: 7 }, () => new DomButton("button"));
+    for (const target of targets) {
+      const item = new DomElement("li");
+      item.append(target);
+      list.append(item);
+    }
+    panel.append(list);
+    root.append(panel);
+    repaint?.();
+    assert.equal(targets[3].clicks, 1);
+    repaint?.();
+    assert.equal(targets[3].clicks, 1);
+
+    clickRail(liveButton, 21);
+    assert.equal(targets[6].clicks, 1);
+
+    // Keyboard activation keeps the currently previewed target.
+    clickRail(liveButton, 0, 0);
+    assert.equal(targets[6].clicks, 2);
+    clickRail(liveButton, 1);
+    assert.equal(targets[0].clicks, 1);
+
     leave(root, new DomElement("div"));
     assert.equal(liveTick.style.width, "");
 
@@ -227,6 +269,8 @@ test("clears the live rail when the pointer leaves after the button is replaced"
     leave(root, card);
     assert.equal(liveTick.style.width, "32px");
     cleanup();
+    clickRail(liveButton, 21);
+    assert.equal(targets[6].clicks, 2);
   } finally {
     globalThis.HTMLElement = previous.HTMLElement;
     globalThis.HTMLButtonElement = previous.HTMLButtonElement;
@@ -240,7 +284,18 @@ test("clears the live rail when the pointer leaves after the button is replaced"
       if (listener.type === "mouseleave") listener.fn(event);
     }
   }
+  function clickRail(button: DomElement, clientY: number, detail = 1) {
+    const event = { clientY, detail } as unknown as Event;
+    for (const listener of button.listeners) {
+      if (listener.type === "click") listener.fn(event);
+    }
+  }
   function queryAll(scope: DomElement, selector: string): DomElement[] {
+    if (selector === "ul > li") {
+      return queryAll(scope, "ul").flatMap((list) =>
+        list.children.filter((child) => child.tag === "li"),
+      );
+    }
     const parts = selector.trim().split(/\s+/);
     const [first, ...rest] = parts;
     const found: DomElement[] = [];
@@ -270,6 +325,6 @@ test("clears the live rail when the pointer leaves after the button is replaced"
     if (classed) {
       return el.tag === classed[1] && el.classList.includes(classed[2]);
     }
-    return false;
+    return el.tag === selector;
   }
 });
