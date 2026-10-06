@@ -65,7 +65,7 @@ ${glassSurfaceScopeCss}
 [data-thread-toc] button.no-scrollbar span.rounded-full {
   width: ${TICK_MIN_PX}px;
   background-color: color-mix(in oklab, var(--foreground) 20%, transparent) !important;
-  transition: width 90ms ease-out, background-color 150ms;
+  transition: none;
 }
 [data-thread-toc] button.no-scrollbar span.rounded-full[${SELECTED_MARK}] {
   background-color: color-mix(in oklab, var(--foreground) 72%, transparent) !important;
