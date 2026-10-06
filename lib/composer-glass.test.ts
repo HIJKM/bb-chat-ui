@@ -107,19 +107,19 @@ test("uses more translucent glass and soft highlights across composer controls",
   );
   assert.match(
     css,
-    /@media \(width < 48rem\) and \(pointer: coarse\)\s*\{[\s\S]*\[data-promptbox\]\s*\{[^}]*box-shadow:\s*0 6px 16px -10px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 22%, transparent\),/,
+    /html:has\(\[data-bb-chat-ui-device="phone"\]\[data-bb-chat-ui-viewport="narrow"\]\)[\s\S]*\[data-promptbox\]\s*\{[^}]*box-shadow:\s*0 6px 16px -10px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 22%, transparent\),/,
   );
   assert.match(
     css,
-    /@media \(width < 48rem\) and \(pointer: coarse\)\s*\{[\s\S]*\[data-promptbox\]:focus-within\s*\{[^}]*box-shadow:\s*0 8px 20px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 34%, transparent\),/,
+    /html:has\(\[data-bb-chat-ui-device="phone"\]\[data-bb-chat-ui-viewport="narrow"\]\)[\s\S]*\[data-promptbox\]:focus-within\s*\{[^}]*box-shadow:\s*0 8px 20px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 34%, transparent\),/,
   );
   assert.match(
     css,
-    /@media \(width < 48rem\) and \(pointer: coarse\)\s*\{[\s\S]*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\]\s*\{[^}]*box-shadow:\s*0 6px 16px -10px color-mix\(in oklab, black 60%, transparent\),/,
+    /html:has\(\[data-bb-chat-ui-device="phone"\]\[data-bb-chat-ui-viewport="narrow"\]\)[\s\S]*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\]\s*\{[^}]*box-shadow:\s*0 6px 16px -10px color-mix\(in oklab, black 60%, transparent\),/,
   );
   assert.match(
     css,
-    /@media \(width < 48rem\) and \(pointer: coarse\)\s*\{[\s\S]*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\]:focus-within\s*\{[^}]*box-shadow:\s*0 8px 20px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 34%, transparent\),/,
+    /html:has\(\[data-bb-chat-ui-device="phone"\]\[data-bb-chat-ui-viewport="narrow"\]\)[\s\S]*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\]:focus-within\s*\{[^}]*box-shadow:\s*0 8px 20px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 34%, transparent\),/,
   );
   assert.match(
     css,
@@ -152,15 +152,16 @@ test("keeps the collapsing composer on the bottom edge", () => {
   );
   assert.match(
     css,
-    /@media \(width < 48rem\)\s*\{[\s\S]*:has\(\[data-promptbox-compact\]\)[\s\S]*max-height:\s*100dvh;[\s\S]*\[data-promptbox-shell\] > \.grid\s*\{[^}]*overflow-y:\s*auto;/,
+    /html:has\(\[data-bb-chat-ui-viewport="narrow"\]\)[\s\S]*:has\(\[data-promptbox-compact\]\)[\s\S]*max-height:\s*100dvh;[\s\S]*\[data-promptbox-shell\] > \.grid\s*\{[^}]*overflow-y:\s*auto;/,
   );
-  const desktop = css.match(
-    /@media \(width >= 48rem\)\s*\{[\s\S]*\n\}(?=\n@media \(pointer: fine\))/,
+  const desktop = css.slice(
+    css.indexOf('html:has([data-bb-chat-ui-viewport="medium"], [data-bb-chat-ui-viewport="wide"])'),
+    css.indexOf('html:has([data-bb-chat-ui-hit-target="small"])'),
   );
   assert.ok(desktop);
-  assert.match(desktop[0], /:has\(\[data-promptbox-compact\]\)/);
-  assert.match(desktop[0], /justify-content:\s*flex-end;/);
-  assert.doesNotMatch(desktop[0], /100dvh|overflow-y:\s*auto/);
+  assert.match(desktop, /:has\(\[data-promptbox-compact\]\)/);
+  assert.match(desktop, /justify-content:\s*flex-end;/);
+  assert.doesNotMatch(desktop, /100dvh|overflow-y:\s*auto/);
   assert.equal(
     desktopCollapseStick({
       desktop: false,
@@ -199,23 +200,23 @@ test("keeps the collapsing composer on the bottom edge", () => {
   }), null);
 });
 
-test("eases composer height and corner on a fine pointer", () => {
+test("eases composer height and corner with small hit targets", () => {
   const css = composerGlassCss;
   assert.match(css, /@keyframes bb-chat-ui-composer-radius/);
   assert.match(
     css,
-    /@media \(pointer: fine\)\s*\{[\s\S]*?\[data-promptbox\]\s*\{[^}]*height 360ms cubic-bezier\(0\.22, 1, 0\.36, 1\),\s*border-radius 480ms cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
+    /html:has\(\[data-bb-chat-ui-hit-target="small"\]\)[\s\S]*?\[data-promptbox\]\s*\{[^}]*height 360ms cubic-bezier\(0\.22, 1, 0\.36, 1\),\s*border-radius 480ms cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
   );
   assert.match(
     css,
-    /@media \(pointer: fine\) and \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?transition:\s*box-shadow 320ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\);/,
+    /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?transition:\s*box-shadow 320ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\);/,
   );
   assert.deepEqual(
     composerRadiusChange({
       previousCompact: false,
       nextCompact: true,
       handoff: false,
-      finePointer: true,
+      smallHitTarget: true,
       reducedMotion: false,
     }),
     { from: "1.375rem", to: "999px" },
@@ -225,7 +226,7 @@ test("eases composer height and corner on a fine pointer", () => {
       previousCompact: true,
       nextCompact: false,
       handoff: false,
-      finePointer: true,
+      smallHitTarget: true,
       reducedMotion: false,
     }),
     { from: "999px", to: "1.375rem" },
@@ -235,7 +236,7 @@ test("eases composer height and corner on a fine pointer", () => {
       previousCompact: false,
       nextCompact: true,
       handoff: true,
-      finePointer: true,
+      smallHitTarget: true,
       reducedMotion: false,
     }),
     null,
@@ -245,7 +246,7 @@ test("eases composer height and corner on a fine pointer", () => {
       previousCompact: false,
       nextCompact: true,
       handoff: false,
-      finePointer: false,
+      smallHitTarget: false,
       reducedMotion: false,
     }),
     null,
@@ -255,7 +256,7 @@ test("eases composer height and corner on a fine pointer", () => {
       previousCompact: false,
       nextCompact: true,
       handoff: false,
-      finePointer: true,
+      smallHitTarget: true,
       reducedMotion: true,
     }),
     null,

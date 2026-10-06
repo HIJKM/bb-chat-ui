@@ -1,3 +1,5 @@
+import { PHONE_NARROW } from "./device-chrome.ts";
+
 const STYLE_ID = "bb-chat-ui-user-attachments";
 const USER_BUBBLE =
   '[data-message-column] > .group\\/message.ml-auto > .flex > .rounded-xl:has(> .mt-2.space-y-2)';
@@ -103,17 +105,16 @@ ${USER_BUBBLE} > .break-words[style*="mask-image"]::after {
     linear-gradient(var(--surface-recessed), var(--surface-recessed)),
     var(--sidebar);
 }
-@media (max-width: 767px) and (pointer: coarse) {
-${FILE_CHIP} {
+${PHONE_NARROW} ${FILE_CHIP} {
   min-height: 64px;
   border-radius: 20px;
 }
-${FILE_CHIP}::before {
+${PHONE_NARROW} ${FILE_CHIP}::before {
   flex: 0 0 28px;
   width: 28px;
   height: 28px;
 }
-}
+
 `;
 }
 

@@ -1,6 +1,7 @@
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { Fragment, createElement } from "react";
 
+import { DeviceChromeBridge } from "./lib/device-chrome";
 import { QuoteMentionBridge } from "./lib/quote-bridge";
 import { injectComposerGlass } from "./lib/composer-glass";
 import { injectQuoteMentions } from "./lib/quote-mention";
@@ -15,7 +16,7 @@ import { WorkspaceDiffBridge } from "./lib/workspace-diff-bridge";
 
 function ComposerBridges() {
   return createElement(Fragment, null,
-    createElement(QuoteMentionBridge), createElement(WorkspaceDiffBridge));
+    createElement(DeviceChromeBridge), createElement(QuoteMentionBridge), createElement(WorkspaceDiffBridge));
 }
 
 export default definePluginApp((app) => {

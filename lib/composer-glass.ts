@@ -1,3 +1,4 @@
+import { PHONE_NARROW, NARROW_VIEWPORT, ROOMY_VIEWPORT, SMALL_HIT_TARGET, isDesktopChrome, hasSmallHitTarget } from "./device-chrome.ts";
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE, glassSurfaceScopeCss } from "./glass-surface.ts";
 
 const FOOTER = "[data-scroll-footer]:has(.chat-prompt-box)";
@@ -108,56 +109,53 @@ ${FOOTER} [data-promptbox] {
     0 12px 32px -14px ${LIGHT_SHADOW},
     inset 0 1px 3px ${LIGHT_COMPOSER_EDGE};
 }
-@media (width < 48rem) {
-  ${FOOTER}:has([data-promptbox-compact]) {
+  ${NARROW_VIEWPORT} ${FOOTER}:has([data-promptbox-compact]) {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
     max-height: 100dvh;
   }
-  ${FOOTER}:has([data-promptbox-compact]) > .relative,
-  ${FOOTER}:has([data-promptbox-compact]) .chat-prompt-box,
-  ${FOOTER}:has([data-promptbox-compact]) [data-promptbox-shell] {
+  ${NARROW_VIEWPORT} ${FOOTER}:has([data-promptbox-compact]) > .relative,
+  ${NARROW_VIEWPORT} ${FOOTER}:has([data-promptbox-compact]) .chat-prompt-box,
+  ${NARROW_VIEWPORT} ${FOOTER}:has([data-promptbox-compact]) [data-promptbox-shell] {
     display: flex;
     min-height: 0;
     max-height: 100%;
     flex-direction: column;
     justify-content: flex-end;
   }
-  ${FOOTER}:has([data-promptbox-compact]) [data-promptbox-shell] > .grid {
+  ${NARROW_VIEWPORT} ${FOOTER}:has([data-promptbox-compact]) [data-promptbox-shell] > .grid {
     min-height: 0;
     overflow-y: auto;
   }
-  ${FOOTER}:has([data-promptbox-compact]) [data-follow-up-composer-anchor] {
+  ${NARROW_VIEWPORT} ${FOOTER}:has([data-promptbox-compact]) [data-follow-up-composer-anchor] {
     flex-shrink: 0;
   }
-}
-@media (width >= 48rem) {
-  ${FOOTER}:has([data-promptbox-compact]) {
+
+  ${ROOMY_VIEWPORT} ${FOOTER}:has([data-promptbox-compact]) {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
   }
-  ${FOOTER}:has([data-promptbox-compact]) > .relative,
-  ${FOOTER}:has([data-promptbox-compact]) .chat-prompt-box,
-  ${FOOTER}:has([data-promptbox-compact]) [data-promptbox-shell] {
+  ${ROOMY_VIEWPORT} ${FOOTER}:has([data-promptbox-compact]) > .relative,
+  ${ROOMY_VIEWPORT} ${FOOTER}:has([data-promptbox-compact]) .chat-prompt-box,
+  ${ROOMY_VIEWPORT} ${FOOTER}:has([data-promptbox-compact]) [data-promptbox-shell] {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
   }
-  ${FOOTER}:has([data-promptbox-compact]) [data-follow-up-composer-anchor] {
+  ${ROOMY_VIEWPORT} ${FOOTER}:has([data-promptbox-compact]) [data-follow-up-composer-anchor] {
     flex-shrink: 0;
   }
-}
-@media (pointer: fine) {
-  ${FOOTER} [data-promptbox] {
+
+  ${SMALL_HIT_TARGET} ${FOOTER} [data-promptbox] {
     transition:
       ${SHADOW_TRANSITION},
       ${COLLAPSE_TRANSITION};
   }
-}
-@media (pointer: fine) and (prefers-reduced-motion: reduce) {
-  ${FOOTER} [data-promptbox] {
+
+@media (prefers-reduced-motion: reduce) {
+  ${SMALL_HIT_TARGET} ${FOOTER} [data-promptbox] {
     transition: ${SHADOW_TRANSITION};
   }
 }
@@ -204,28 +202,26 @@ ${darkScope(`${FOOTER} [data-promptbox]:focus-within`)} {
     0 18px 44px -16px color-mix(in oklab, ${INK} 34%, transparent),
     inset 0 1px 3px ${DARK_COMPOSER_EDGE};
 }
-@media (width < 48rem) and (pointer: coarse) {
-  ${FOOTER} [data-promptbox] {
+  ${PHONE_NARROW} ${FOOTER} [data-promptbox] {
     box-shadow:
       0 6px 16px -10px ${LIGHT_SHADOW},
       inset 0 1px 3px ${LIGHT_COMPOSER_EDGE};
   }
-  ${FOOTER} [data-promptbox]:focus-within {
+  ${PHONE_NARROW} ${FOOTER} [data-promptbox]:focus-within {
     box-shadow:
       0 8px 20px -12px color-mix(in oklab, ${INK} 34%, transparent),
       inset 0 1px 3px ${LIGHT_COMPOSER_EDGE};
   }
-  ${darkScope(`${FOOTER} [data-promptbox]`)} {
+  ${PHONE_NARROW}.dark ${FOOTER} [data-promptbox] {
     box-shadow:
       0 6px 16px -10px ${DARK_SHADOW},
       inset 0 1px 3px ${DARK_COMPOSER_EDGE};
   }
-  ${darkScope(`${FOOTER} [data-promptbox]:focus-within`)} {
+  ${PHONE_NARROW}.dark ${FOOTER} [data-promptbox]:focus-within {
     box-shadow:
       0 8px 20px -12px color-mix(in oklab, ${INK} 34%, transparent),
       inset 0 1px 3px ${DARK_COMPOSER_EDGE};
   }
-}
 ${FOOTER} .chat-prompt-box {
   position: relative;
 }
@@ -345,11 +341,11 @@ export function composerRadiusChange(input: {
   previousCompact: boolean;
   nextCompact: boolean;
   handoff: boolean;
-  finePointer: boolean;
+  smallHitTarget: boolean;
   reducedMotion: boolean;
 }): { from: string; to: string } | null {
   if (input.previousCompact === input.nextCompact) return null;
-  if (!input.finePointer || input.reducedMotion) return null;
+  if (!input.smallHitTarget || input.reducedMotion) return null;
   const from = composerCornerRadius(input.previousCompact, input.handoff);
   const to = composerCornerRadius(input.nextCompact, input.handoff);
   if (from === to) return null;
@@ -448,7 +444,6 @@ export function planComposerHeight(input: {
   };
 }
 
-const DESKTOP_LAYOUT_QUERY = "(width >= 48rem)";
 const VISUAL_BOTTOM_PX = 8;
 
 export function desktopCollapseStick(input: {
@@ -616,7 +611,7 @@ export function injectComposerGlass(document: Document): () => void {
       const scroller = scrollerOf();
       stopPin();
       if (!view || !scroller) return;
-      const desktop = view.matchMedia(DESKTOP_LAYOUT_QUERY).matches;
+      const desktop = isDesktopChrome(document);
       const footer = composer.closest("[data-scroll-footer]");
       const footerEl = footer instanceof HTMLElement ? footer : null;
       const scrollerBottom = scroller.getBoundingClientRect().bottom;
@@ -698,7 +693,7 @@ export function injectComposerGlass(document: Document): () => void {
         previousCompact: compact,
         nextCompact,
         handoff: composer.querySelector('[aria-label="Exit handoff"]') != null,
-        finePointer: view?.matchMedia("(pointer: fine)").matches ?? false,
+        smallHitTarget: hasSmallHitTarget(document),
         reducedMotion:
           view?.matchMedia("(prefers-reduced-motion: reduce)").matches ?? false,
       });

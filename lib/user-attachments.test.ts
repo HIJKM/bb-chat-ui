@@ -86,10 +86,13 @@ test("thickens user file chips and paints a file icon", () => {
   assert.match(css, new RegExp(`${chip}::before\\s*\\{[^}]*mask:`));
 });
 
-test("enlarges sent file chips only in compact viewports with a coarse pointer", () => {
+test("enlarges sent file chips only for phones with a narrow helper viewport", () => {
   const css = userAttachmentsCss();
   const chip = `${USER_BUBBLE} > \\.mt-2\\.space-y-2 > \\.flex:not\\(:has\\(img\\)\\) > :is\\(a, button, span\\)`;
-  const [base, touch] = css.split("@media (max-width: 767px) and (pointer: coarse)");
+  const marker = 'html:has([data-bb-chat-ui-device="phone"][data-bb-chat-ui-viewport="narrow"])';
+  const start = css.indexOf(marker);
+  const base = css.slice(0, start);
+  const touch = start < 0 ? "" : css.slice(start);
   assert.ok(touch);
   assert.match(base, new RegExp(`${chip}\\s*\\{[^}]*min-height:\\s*40px;`));
   assert.match(base, new RegExp(`${chip}\\s*\\{[^}]*border-radius:\\s*12px;`));

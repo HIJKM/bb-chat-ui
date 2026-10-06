@@ -1,3 +1,5 @@
+import { PHONE_NARROW, SMALL_HIT_TARGET } from "./device-chrome.ts";
+
 const STYLE_ID = "bb-chat-ui-quote-pill";
 const REMOVE_ZONE_PX = 28;
 
@@ -165,11 +167,10 @@ ${COMPOSER_QUOTE}::after {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
-@media (hover: hover) and (pointer: fine) {
-  ${COMPOSER_QUOTE}:hover::after {
+  ${SMALL_HIT_TARGET} ${COMPOSER_QUOTE}:hover::after {
     display: flex;
   }
-}
+
 ${PENDING_COMPOSER_QUOTE} {
   height: 28px !important;
   min-height: 28px !important;
@@ -193,8 +194,7 @@ ${PENDING_COMPOSER_QUOTE}::before {
   width: 14px;
   height: 14px;
 }
-@media (max-width: 767px) and (pointer: coarse) {
-  ${PENDING_COMPOSER_QUOTE} {
+  ${PHONE_NARROW} ${PENDING_COMPOSER_QUOTE} {
     height: 32px !important;
     min-height: 32px !important;
     max-height: 32px !important;
@@ -205,15 +205,15 @@ ${PENDING_COMPOSER_QUOTE}::before {
     font-size: 14px !important;
     line-height: 18px !important;
   }
-  ${PENDING_COMPOSER_QUOTE} > :first-child {
+  ${PHONE_NARROW} ${PENDING_COMPOSER_QUOTE} > :first-child {
     line-height: 18px !important;
   }
-  ${PENDING_COMPOSER_QUOTE}::before {
+  ${PHONE_NARROW} ${PENDING_COMPOSER_QUOTE}::before {
     flex-basis: 16px;
     width: 16px;
     height: 16px;
   }
-}
+
 ${COMPOSER_QUOTE_MENTION} {
   align-items: center !important;
   flex-shrink: 0 !important;

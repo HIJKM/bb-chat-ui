@@ -183,7 +183,7 @@ test("paints the pill without watching or rewriting the quote node", () => {
     css,
     /\[data-promptbox-compact-content\] \.ProseMirror:has\(\.prompt-mention-pill\[data-prompt-mention-resource\*='"itemId":"quote:'\]\) > \*\s*\{[^}]*display:\s*flex !important;[^}]*align-items:\s*center !important;[^}]*height:\s*100%;/,
   );
-  assert.match(css, /@media \(hover: hover\) and \(pointer: fine\)/);
+  assert.match(css, /html:has\(\[data-bb-chat-ui-hit-target="small"\]\)/);
   assert.doesNotMatch(css, /max-height:\s*20px/);
   assert.doesNotMatch(css, /contenteditable/i);
   const sentMention = css.match(

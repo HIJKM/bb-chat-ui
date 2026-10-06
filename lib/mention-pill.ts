@@ -1,3 +1,5 @@
+import { PHONE_NARROW } from "./device-chrome.ts";
+
 const STYLE_ID = "bb-chat-ui-mention-pill";
 const MARK = "data-bb-chat-ui-mention-pill";
 const WIDE = "data-bb-chat-ui-mention-wide";
@@ -91,8 +93,7 @@ ${PAINTED} > button[${REMOVE}]:focus-visible {
   outline: 1px solid var(--ring);
   outline-offset: -2px;
 }
-@media (max-width: 767px) and (pointer: coarse) {
-  ${PAINTED} {
+  ${PHONE_NARROW} ${PAINTED} {
     height: 32px !important;
     min-height: 32px !important;
     max-height: 32px !important;
@@ -103,34 +104,34 @@ ${PAINTED} > button[${REMOVE}]:focus-visible {
     font-size: 14px !important;
     line-height: 18px !important;
   }
-  ${PAINTED}[${WIDE}] {
+  ${PHONE_NARROW} ${PAINTED}[${WIDE}] {
     max-width: calc(100% - 8px) !important;
   }
-  ${PAINTED}:not([${WIDE}]) > .truncate {
+  ${PHONE_NARROW} ${PAINTED}:not([${WIDE}]) > .truncate {
     max-width: calc(240px - 12px - 14px - 2px - 6px - 16px);
   }
-  ${PAINTED} [data-icon-root],
-  ${PAINTED} [data-section-mention-marker],
-  ${PAINTED} [data-bb-chat-ui-quote-glyph] {
+  ${PHONE_NARROW} ${PAINTED} [data-icon-root],
+  ${PHONE_NARROW} ${PAINTED} [data-section-mention-marker],
+  ${PHONE_NARROW} ${PAINTED} [data-bb-chat-ui-quote-glyph] {
     flex-basis: 16px !important;
     width: 16px !important;
     height: 16px !important;
   }
-  ${PAINTED}:has(> [${REMOVE}]) {
+  ${PHONE_NARROW} ${PAINTED}:has(> [${REMOVE}]) {
     padding-right: 34px !important;
   }
-  ${PAINTED} > button[${REMOVE}] {
+  ${PHONE_NARROW} ${PAINTED} > button[${REMOVE}] {
     right: 4px;
     width: 24px;
     height: 24px;
     min-width: 24px;
     min-height: 24px;
   }
-  ${PAINTED} > button[${REMOVE}]::before {
+  ${PHONE_NARROW} ${PAINTED} > button[${REMOVE}]::before {
     width: 12px;
     height: 12px;
   }
-}
+
 [data-promptbox-compact-content] .ProseMirror:has(.prompt-mention-pill) {
   display: flex !important;
   align-items: center !important;
