@@ -48,18 +48,49 @@ section[${SOLO_MARK}] > .flex {
 }
 `;
 
-interface HeadWorkspace {
-  branch: { currentBranch: string | null; defaultBranch: string };
-  workingTree: { insertions: number; deletions: number; files: readonly unknown[] };
+interface DiffStats {
+  insertions: number;
+  deletions: number;
+  files: readonly unknown[];
 }
 
-export function headDiffSummary(workspace: HeadWorkspace) {
+interface HeadWorkspace {
+  branch: { currentBranch: string | null; defaultBranch: string };
+  workingTree: DiffStats;
+  mergeBase?: DiffStats | null;
+}
+
+export interface HeadDiffOptions {
+  isWorktree?: boolean;
+}
+
+function shortBranch(name: string): string {
+  if (name.startsWith("refs/heads/")) return name.slice("refs/heads/".length);
+  if (name.startsWith("refs/remotes/")) {
+    const rest = name.slice("refs/remotes/".length);
+    const slash = rest.indexOf("/");
+    return slash === -1 ? rest : rest.slice(slash + 1);
+  }
+  if (name.startsWith("origin/")) return name.slice("origin/".length);
+  return name;
+}
+
+function hasDiff(stats: DiffStats | null | undefined): stats is DiffStats {
+  return !!stats && (stats.files.length > 0 || stats.insertions > 0 || stats.deletions > 0);
+}
+
+export function headDiffSummary(workspace: HeadWorkspace, options: HeadDiffOptions = {}) {
   const { workingTree, branch } = workspace;
+  const current = branch.currentBranch;
+  const onDefault = current !== null && shortBranch(current) === shortBranch(branch.defaultBranch);
+  const counts = hasDiff(workingTree) || !options.isWorktree || !hasDiff(workspace.mergeBase)
+    ? workingTree
+    : workspace.mergeBase;
   return {
-    insertions: workingTree.insertions,
-    deletions: workingTree.deletions,
-    files: workingTree.files.length,
-    branch: branch.currentBranch !== branch.defaultBranch ? branch.currentBranch : null,
+    insertions: counts.insertions,
+    deletions: counts.deletions,
+    files: counts.files.length,
+    branch: current !== null && !onDefault ? current : null,
   };
 }
 

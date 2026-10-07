@@ -16,12 +16,43 @@ test("counts only changes against HEAD, excluding committed branch changes", () 
 });
 
 test("omits the branch icon on the repository's default branch", () => {
-  for (const branch of ["main", "master"]) {
+  const pairs = [
+    ["main", "main"],
+    ["master", "master"],
+    ["main", "origin/main"],
+    ["master", "refs/heads/master"],
+    ["develop", "refs/remotes/origin/develop"],
+  ];
+  for (const [currentBranch, defaultBranch] of pairs) {
     assert.equal(headDiffSummary({
-      branch: { currentBranch: branch, defaultBranch: branch },
+      branch: { currentBranch, defaultBranch },
       workingTree: { insertions: 0, deletions: 0, files: [] },
     }).branch, null);
   }
+});
+
+test("shows a clean worktree's committed diff and leaves a normal branch at zero", () => {
+  const workspace = {
+    branch: { currentBranch: "bb/chat-1", defaultBranch: "main" },
+    workingTree: { insertions: 0, deletions: 0, files: [] },
+    mergeBase: { insertions: 23, deletions: 27, files: [{}, {}, {}, {}, {}] },
+  };
+  assert.deepEqual(headDiffSummary(workspace, { isWorktree: true }), {
+    insertions: 23, deletions: 27, files: 5, branch: "bb/chat-1",
+  });
+  assert.deepEqual(headDiffSummary(workspace), {
+    insertions: 0, deletions: 0, files: 0, branch: "bb/chat-1",
+  });
+});
+
+test("does not add committed worktree changes on top of uncommitted ones", () => {
+  assert.deepEqual(headDiffSummary({
+    branch: { currentBranch: "bb/chat-1", defaultBranch: "origin/main" },
+    workingTree: { insertions: 4, deletions: 1, files: [{}] },
+    mergeBase: { insertions: 23, deletions: 27, files: [{}, {}] },
+  }, { isWorktree: true }), {
+    insertions: 4, deletions: 1, files: 1, branch: "bb/chat-1",
+  });
 });
 
 test("keeps zero HEAD changes on a clean feature branch and no icon for detached HEAD", () => {

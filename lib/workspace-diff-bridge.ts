@@ -15,34 +15,61 @@ export function WorkspaceDiffBridge() {
     const controller = new AbortController();
     const { signal } = controller;
     let environmentId: string | null = null;
+    let isWorktree = false;
+    let mergeBaseBranch: string | undefined;
     let fetching = false;
+    let pending = false;
     const refresh = async () => {
-      if (fetching || signal.aborted) return;
+      if (signal.aborted) return;
+      if (fetching) {
+        pending = true;
+        return;
+      }
       fetching = true;
       try {
         if (!environmentId) {
           const thread = await sdk.threads.get({ threadId, signal });
-          environmentId = thread.environmentId;
+          const id = thread.environmentId;
+          if (!id) return;
+          const environment = await sdk.environments.get({ environmentId: id, signal });
+          environmentId = id;
+          isWorktree = environment.isWorktree;
+          const base = environment.mergeBaseBranch ?? environment.defaultBranch;
+          mergeBaseBranch = base && base.length > 0 ? base : undefined;
         }
-        if (!environmentId) return;
-        const result = await sdk.environments.status({ environmentId, signal });
+        const result = await sdk.environments.status({
+          environmentId,
+          signal,
+          ...mergeBaseBranch ? { mergeBaseBranch } : {},
+        });
         if (signal.aborted) return;
         setSummary(result.outcome === "available"
-          ? JSON.stringify(headDiffSummary(result.workspace)) : "");
+          ? JSON.stringify(headDiffSummary(result.workspace, { isWorktree })) : "");
       } catch {
         // Keep the last summary during a temporary disconnect.
       } finally {
         fetching = false;
+        if (pending && !signal.aborted) {
+          pending = false;
+          void refresh();
+        }
       }
     };
     const stopThread = sdk.subscribe({
       event: "thread:changed", threadId,
-      callback: () => { environmentId = null; void refresh(); },
+      callback: () => {
+        environmentId = null;
+        isWorktree = false;
+        mergeBaseBranch = undefined;
+        void refresh();
+      },
     });
     const stopEnvironment = sdk.subscribe({
       event: "environment:changed",
       callback: (event) => {
-        if (!event.id || event.id === environmentId) void refresh();
+        if (environmentId && event.id && event.id !== environmentId) return;
+        environmentId = null;
+        void refresh();
       },
     });
     const onFocus = () => { void refresh(); };
