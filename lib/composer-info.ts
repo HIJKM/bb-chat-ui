@@ -145,10 +145,10 @@ ${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:10px; right:12px; co
 [${MARK}-diff-content] h4 { font-size:10px; font-weight:400; color:var(--subtle-foreground); margin:9px 0 3px; }
 [${MARK}-diff-meta] { display:flex; flex-wrap:wrap; align-items:center; gap:4px; font-size:11px !important; color:var(--subtle-foreground); }
 [${MARK}-diff-meta] code { font:inherit; overflow-wrap:anywhere; }
-${DETAIL}[aria-label="Queued messages"] { --bb-chat-ui-queue-height:min(36dvh,16rem); display:flex !important; flex-direction:column; max-height:var(--bb-chat-ui-queue-height) !important; overflow:hidden !important; padding:8px !important; gap:0 !important; }
+${DETAIL}[aria-label="Queued messages"] { --bb-chat-ui-queue-height:min(36dvh,16rem); display:flex !important; flex-direction:column; max-height:var(--bb-chat-ui-queue-height) !important; overflow:hidden !important; padding:12px !important; gap:0 !important; }
 ${DETAIL}[aria-label="Queued messages"] > * { min-height:0; }
 ${DETAIL} [data-queued-messages-scroll-frame] { position:static !important; display:grid !important; grid-template-rows:minmax(0,1fr); flex:0 1 auto !important; width:100% !important; height:auto !important; min-height:0 !important; max-height:var(--bb-chat-ui-queue-height); overflow:hidden !important; }
-${DETAIL} [data-queued-messages-scroll] { height:auto !important; min-height:0 !important; max-height:var(--bb-chat-ui-queue-height); padding:4px; overflow-y:auto !important; overflow-x:hidden !important; overscroll-behavior:contain; }
+${DETAIL} [data-queued-messages-scroll] { height:auto !important; min-height:0 !important; max-height:var(--bb-chat-ui-queue-height); padding:8px; overflow-y:auto !important; overflow-x:hidden !important; overscroll-behavior:contain; }
 ${DETAIL} header[data-queued-messages-mode] { display:none !important; }
 ${DETAIL}[aria-label="Queued messages"] > div:has(> button[aria-label="Collapse queued messages"]) { display:none !important; }
 ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] { display:none !important; }
