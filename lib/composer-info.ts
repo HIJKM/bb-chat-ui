@@ -62,7 +62,7 @@ export const composerInfoCss = `
 [${MARK}-diff-branch] svg, [${MARK}-diff-branch] [data-icon-root] { width:16px; height:16px; flex-shrink:0; }
 [${MARK}-trigger="diff"] { min-width:0; }
 [${MARK}-trigger="diff"][${MARK}-resizing] { overflow:hidden; }
-[${MARK}-diff-loading] { display:inline-flex; justify-content:center; width:20px; gap:2px; }
+[${MARK}-diff-loading] { display:inline-flex; justify-content:center; width:20px; gap:2px; transform:translateY(-2px); }
 [${MARK}-diff-loading] span { animation:bb-info-loading 900ms ease-in-out infinite; }
 [${MARK}-diff-loading] span:nth-child(2) { animation-delay:120ms; }
 [${MARK}-diff-loading] span:nth-child(3) { animation-delay:240ms; }
