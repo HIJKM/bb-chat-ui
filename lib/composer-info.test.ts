@@ -110,6 +110,42 @@ test("native close survives header replacement and keeps genuine actions on thei
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("Parent popovers have a named header separate from native inline and icon-only rows", async () => {
+  for (const inline of [true, false]) {
+    const f = fixture();
+    const node = f.document.querySelector<HTMLElement>('section[aria-label="Thread context before sending"]')!;
+    node.innerHTML = inline
+      ? '<div class="native-inlay"><div><svg /><span>Parent <a href="/threads/parent">Parent title</a></span></div></div>'
+      : '<div class="native-inlay"><button id="thread-prompt-banner-parent-thread-toggle" aria-label="Parent thread: Parent title" aria-expanded="false" aria-controls="parent-detail"><svg /></button></div><div id="parent-detail" hidden>This thread is a child of <a href="/threads/parent">Parent title</a>.</div>';
+    const original = node.innerHTML;
+    const link = node.querySelector('a')!;
+    const linkParent = link.parentElement;
+    const toggle = node.querySelector<HTMLButtonElement>('button');
+    toggle?.addEventListener('click', () => {
+      const expanded = toggle.getAttribute('aria-expanded') !== 'true';
+      toggle.setAttribute('aria-expanded', String(expanded));
+      node.querySelector<HTMLElement>('#parent-detail')!.hidden = !expanded;
+    });
+    const stop = injectComposerInfo(f.document);
+    try {
+      f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
+      const heading = node.querySelector<HTMLElement>('[data-bb-chat-ui-info-close-heading]')!;
+      assert.equal(heading.tagName, 'H3', 'the icon-only native row is not the popover title');
+      assert.equal(heading.textContent, 'Parent');
+      const style = f.dom.window.getComputedStyle(heading);
+      assert.equal(style.display, 'flex');
+      assert.equal(style.alignItems, 'center');
+      assert.equal(link.parentElement, linkParent, 'native parent navigation keeps its original structure');
+      assert.equal(link.getAttribute('href'), '/threads/parent');
+      if (toggle) assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+      f.click('[data-bb-chat-ui-info-native-dismiss]');
+      assert.equal(node.querySelector('[data-bb-chat-ui-info-close-heading]'), null);
+      if (toggle) assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+      assert.equal(node.innerHTML, original, 'closing restores the native card');
+    } finally { stop(); f.dom.window.close(); }
+  }
+});
+
 test("the Workflow stack collapse is hidden without becoming another information entry", () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
@@ -279,6 +315,35 @@ test("distinct family icons replace native duplicates in pills and the catalog, 
     }
     f.click('[data-bb-chat-ui-info-all]');
     for (const key of ['plan','status','machine','other']) assert.ok(f.document.querySelector(`[data-bb-chat-ui-info-choice="${key}"] [data-family="${key}"]`));
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("custom Status icon wrappers use the same centered size as builtin icons", async () => {
+  const f = fixture();
+  f.document.head.insertAdjacentHTML('beforeend', '<style>.size-6 { width:24px; height:24px; }</style>');
+  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  source.setAttribute('data-bb-chat-ui-info-settings', '{"showEmptyIcons":true}');
+  source.insertAdjacentHTML('beforeend', '<span data-bb-chat-ui-info-icon="status"><span class="inline-flex size-6 shrink-0" data-icon-root data-icon="bb-chat-ui-status"><svg class="size-full" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg></span></span>');
+  const stop = injectComposerInfo(f.document);
+  try {
+    for (const available of [false, true]) {
+      if (available) {
+        f.document.querySelector('[data-promptbox-shell] > .grid')!.insertAdjacentHTML('beforeend', '<section aria-label="Thread history">Status details</section>');
+        await f.tick();
+      }
+      f.click('[data-bb-chat-ui-info-all]');
+      for (const selector of ['[data-bb-chat-ui-info-trigger="status"]', '[data-bb-chat-ui-info-choice="status"]']) {
+        const icon = f.document.querySelector(`${selector} > [data-icon-root]`)!;
+        assert.ok(icon, selector);
+        const style = f.dom.window.getComputedStyle(icon);
+        assert.equal(style.width, '16px');
+        assert.equal(style.height, '16px');
+        assert.equal(style.alignItems, 'center');
+        assert.equal(style.justifyContent, 'center');
+        assert.equal(style.flexShrink, '0');
+      }
+      f.click('[data-bb-chat-ui-info-close]');
+    }
   } finally { stop(); f.dom.window.close(); }
 });
 
