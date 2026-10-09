@@ -120,20 +120,20 @@ test("folds a drawer once, and leaves an open editor alone", () => {
   );
 });
 
-test("paints queued messages as a right pill and solid bubbles", () => {
+test("keeps the standalone legacy queue layout outside managed information popovers", () => {
   const css = queuedMessagesCss;
-  assert.match(css, /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)/);
+  assert.match(css, /section\[aria-label="Queued messages"\]:not\(\[data-bb-chat-ui-info-unit\]\):has\(\[data-queued-messages-mode\]\)/);
   assert.match(
     css,
-    /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)\s*\{[^}]*position:\s*relative !important;/,
+    /section\[aria-label="Queued messages"\]:not\(\[data-bb-chat-ui-info-unit\]\):has\(\[data-queued-messages-mode\]\)\s*\{[^}]*position:\s*relative !important;/,
   );
   assert.match(
     css,
-    /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)\s*\{[^}]*align-self:\s*stretch;/,
+    /section\[aria-label="Queued messages"\]:not\(\[data-bb-chat-ui-info-unit\]\):has\(\[data-queued-messages-mode\]\)\s*\{[^}]*align-self:\s*stretch;/,
   );
   assert.match(
     css,
-    /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)\s*\{[^}]*width:\s*100%;/,
+    /section\[aria-label="Queued messages"\]:not\(\[data-bb-chat-ui-info-unit\]\):has\(\[data-queued-messages-mode\]\)\s*\{[^}]*width:\s*100%;/,
   );
   assert.doesNotMatch(css, /min\(760px,\s*100%\)/);
   assert.match(css, /background:\s*transparent !important/);
@@ -143,7 +143,7 @@ test("paints queued messages as a right pill and solid bubbles", () => {
   );
   assert.match(
     css,
-    /section\[aria-label="Queued messages"\]:has\(\[data-queued-messages-mode\]\)\s*\{[^}]*height:\s*32px !important;/,
+    /section\[aria-label="Queued messages"\]:not\(\[data-bb-chat-ui-info-unit\]\):has\(\[data-queued-messages-mode\]\)\s*\{[^}]*height:\s*32px !important;/,
   );
   assert.match(
     css,

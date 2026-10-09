@@ -1,11 +1,12 @@
 const STYLE_ID = "bb-chat-ui-queued-messages";
 const QUEUE = 'section[aria-label="Queued messages"]';
+const LEGACY_QUEUE = `${QUEUE}:not([data-bb-chat-ui-info-unit])`;
 const LABEL_ATTR = "data-bb-chat-ui-queue-label";
 const COLLAPSE_LABEL = "Collapse queued messages";
 const AGENTATION = ".agentation-staging-shell";
 
 export const queuedMessagesCss = `
-${QUEUE}:has([data-queued-messages-mode]) {
+${LEGACY_QUEUE}:has([data-queued-messages-mode]) {
   position: relative !important;
   align-self: stretch;
   width: 100%;
@@ -23,7 +24,7 @@ ${QUEUE}:has([data-queued-messages-mode]) {
   box-shadow: none !important;
   overflow: visible !important;
 }
-${QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll-frame] {
+${LEGACY_QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll-frame] {
   position: absolute !important;
   right: 0;
   bottom: calc(100% + 8px);
@@ -39,13 +40,13 @@ ${QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll-frame] {
   opacity: 1;
   transition: grid-template-rows 260ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease;
 }
-${QUEUE}:has([data-queued-messages-mode="collapsed"]) [data-queued-messages-scroll-frame] {
+${LEGACY_QUEUE}:has([data-queued-messages-mode="collapsed"]) [data-queued-messages-scroll-frame] {
   grid-template-rows: 0fr;
   opacity: 0;
   max-height: 0;
   pointer-events: none;
 }
-${QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll] {
+${LEGACY_QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll] {
   height: auto !important;
   min-height: 0 !important;
   padding: 4px;
@@ -53,11 +54,11 @@ ${QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll] {
   overflow-x: hidden !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  ${QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll-frame] {
+  ${LEGACY_QUEUE}:has([data-queued-messages-mode]) [data-queued-messages-scroll-frame] {
     transition: none;
   }
 }
-${QUEUE} header[data-queued-messages-mode] {
+${LEGACY_QUEUE} header[data-queued-messages-mode] {
   position: absolute !important;
   right: 0;
   bottom: 0;
@@ -77,7 +78,7 @@ ${QUEUE} header[data-queued-messages-mode] {
   opacity: 1;
   gap: 0;
 }
-${QUEUE} header[data-queued-messages-mode][data-bb-chat-ui-queue-label]::before {
+${LEGACY_QUEUE} header[data-queued-messages-mode][data-bb-chat-ui-queue-label]::before {
   content: attr(data-bb-chat-ui-queue-label);
   position: absolute;
   pointer-events: none;
@@ -86,24 +87,24 @@ ${QUEUE} header[data-queued-messages-mode][data-bb-chat-ui-queue-label]::before 
   font-weight: 600;
   line-height: 1;
 }
-${QUEUE} header[data-queued-messages-mode] > div:first-child,
-${QUEUE} header[data-queued-messages-mode] > button {
+${LEGACY_QUEUE} header[data-queued-messages-mode] > div:first-child,
+${LEGACY_QUEUE} header[data-queued-messages-mode] > button {
   display: none !important;
 }
-${QUEUE} header[data-queued-messages-mode="drawer"]::before,
-${QUEUE} header[data-queued-messages-mode="workspace"]::before {
+${LEGACY_QUEUE} header[data-queued-messages-mode="drawer"]::before,
+${LEGACY_QUEUE} header[data-queued-messages-mode="workspace"]::before {
   content: none;
 }
-${QUEUE} header[data-queued-messages-mode] > div:last-child {
+${LEGACY_QUEUE} header[data-queued-messages-mode] > div:last-child {
   display: flex !important;
   width: 32px;
   min-width: 0;
   justify-content: center;
 }
-${QUEUE} header[data-queued-messages-mode="collapsed"] button[aria-expanded] svg {
+${LEGACY_QUEUE} header[data-queued-messages-mode="collapsed"] button[aria-expanded] svg {
   visibility: hidden;
 }
-${QUEUE} header[data-queued-messages-mode] > div:last-child button[aria-expanded] {
+${LEGACY_QUEUE} header[data-queued-messages-mode] > div:last-child button[aria-expanded] {
   display: inline-flex !important;
   width: 32px !important;
   height: 32px !important;
@@ -116,14 +117,14 @@ ${QUEUE} header[data-queued-messages-mode] > div:last-child button[aria-expanded
   background: transparent !important;
   opacity: 1 !important;
 }
-${QUEUE} header[data-queued-messages-mode] button svg {
+${LEGACY_QUEUE} header[data-queued-messages-mode] button svg {
   opacity: 1 !important;
   color: var(--background) !important;
 }
-${QUEUE} header:not([data-queued-messages-mode="collapsed"]) button[aria-expanded] svg {
+${LEGACY_QUEUE} header:not([data-queued-messages-mode="collapsed"]) button[aria-expanded] svg {
   display: none;
 }
-${QUEUE} header button[aria-expanded="true"]::after {
+${LEGACY_QUEUE} header button[aria-expanded="true"]::after {
   content: "";
   width: 7px;
   height: 7px;
@@ -255,6 +256,7 @@ function syncSection(
   section: HTMLElement,
   folded: WeakSet<HTMLElement>,
 ): HTMLElement | null {
+  if (section.hasAttribute("data-bb-chat-ui-info-unit")) return null;
   const header = section.querySelector("header[data-queued-messages-mode]");
   if (!(header instanceof HTMLElement)) return null;
   const mode = header.getAttribute("data-queued-messages-mode");
@@ -309,6 +311,7 @@ export function injectQueuedMessages(document: Document): () => void {
   const onClickCapture = (event: MouseEvent) => {
     if (changingExpansion || !(event.target instanceof Element)) return;
     const target = event.target;
+    if (target.closest("[data-bb-chat-ui-info-stack]")) return;
     const expandedToggle = target.closest(QUEUE + ' header button[aria-expanded="true"]');
     if (expandedToggle && expandedToggle.getAttribute("aria-label") !== COLLAPSE_LABEL) {
       const section = expandedToggle.closest(QUEUE);

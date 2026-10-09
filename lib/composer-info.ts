@@ -95,10 +95,8 @@ export const composerInfoCss = `
 [${MARK}-diff-content] h4 { font-size:10px; font-weight:400; color:var(--subtle-foreground); margin:9px 0 3px; }
 [${MARK}-action="diff"] { border:0; border-radius:10px; padding:9px 12px; background:var(--bb-chat-ui-info-face); font-size:12px !important; }
 ${DETAIL} [data-queued-messages-scroll-frame] { position:static !important; width:100% !important; height:auto !important; max-height:22rem; }
-${DETAIL} header[data-queued-messages-mode] { position:relative !important; width:100% !important; max-width:none !important; height:32px !important; padding:0 12px !important; justify-content:space-between; background:transparent !important; }
-${DETAIL} header[data-queued-messages-mode]::before { content:none; }
-${DETAIL} header[data-queued-messages-mode] button[aria-expanded], ${DETAIL} header[data-queued-messages-mode] button svg { color:var(--foreground) !important; }
-${DETAIL} header[data-queued-messages-mode] > div:first-child, ${DETAIL} header[data-queued-messages-mode] > button { display:flex !important; }
+${DETAIL} [data-queued-messages-scroll] { height:auto !important; max-height:22rem; overflow-y:auto !important; }
+${DETAIL} header[data-queued-messages-mode] { display:none !important; }
 ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] { display:none !important; }
 [data-promptbox-shell]:has(> [${MARK}-request]) [data-follow-up-composer-anchor] { display:none !important; }
 [data-scroll-footer]:has([${MARK}-request]) button[aria-label="Scroll to latest event"] { display:none !important; }
