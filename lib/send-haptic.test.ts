@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { JSDOM } from "jsdom";
 
 import {
   IDLE_SEND_HAPTIC,
@@ -281,6 +282,57 @@ test("reads the native bridge from the page", () => {
   assert.equal(readHapticBridge({ bb: { native } }), native);
   assert.equal(readHapticBridge({}), null);
   assert.equal(readHapticBridge({ bb: { native: {} } }), null);
+});
+
+test("all composer information controls buzz once per user activation, including rapid changes", t => {
+  const dom = new JSDOM(`<div data-bb-chat-ui-info-bar>
+    <button data-bb-chat-ui-info-trigger="diff"><span>Diff</span></button>
+    <button data-bb-chat-ui-info-trigger="children">Children</button>
+    <button data-bb-chat-ui-info-trigger="annotations">Annotations</button>
+    <button data-bb-chat-ui-info-trigger="goal">Goal</button>
+    <button data-bb-chat-ui-info-all>All</button>
+    <section data-bb-chat-ui-info-menu><button data-bb-chat-ui-info-choice="queue">Queue</button><button aria-label="Close">×</button></section>
+    <button disabled>Disabled</button><button aria-disabled="true">Unavailable</button>
+  </div><div data-bb-chat-ui-info-unit data-bb-chat-ui-info-open>
+    <button aria-label="Collapse staged annotations" aria-expanded="true">×</button><button>Send all</button>
+  </div><button>Unrelated</button>`);
+  const originalElement = globalThis.Element;
+  const originalButton = globalThis.HTMLButtonElement;
+  globalThis.Element = dom.window.Element;
+  globalThis.HTMLButtonElement = dom.window.HTMLButtonElement;
+  t.after(() => { globalThis.Element = originalElement; globalThis.HTMLButtonElement = originalButton; dom.window.close(); });
+  const messages: unknown[] = [];
+  Object.assign(dom.window, { bb:{ native:{ capabilities:["haptic"], post:(message:unknown) => messages.push(message) } } });
+  const listeners = new Map<string, (event:Event) => void>();
+  const document = {
+    body:null, defaultView:dom.window,
+    addEventListener:(type:string, listener:(event:Event) => void) => listeners.set(type, listener),
+    removeEventListener:(type:string) => listeners.delete(type),
+  } as unknown as Document;
+  const stop = injectSendHaptic(document);
+  t.after(stop);
+  const controls = dom.window.document.querySelectorAll('button:not([disabled]):not([aria-disabled])');
+  const active = [...controls].filter(button => button.closest('[data-bb-chat-ui-info-bar], [data-bb-chat-ui-info-unit]'));
+  for (const button of active) {
+    const target = button.firstElementChild ?? button;
+    listeners.get('pointerup')!({ target, isPrimary:true, pointerType:'touch' } as unknown as Event);
+    listeners.get('click')!({ target, isTrusted:true } as unknown as Event);
+    assert.equal(messages.length, active.indexOf(button) + 1);
+    // Composer disclosures forward a synthetic click to their original host button.
+    listeners.get('click')!({ target, isTrusted:false } as unknown as Event);
+    assert.equal(messages.length, active.indexOf(button) + 1);
+  }
+  for (const button of dom.window.document.querySelectorAll('button[disabled], button[aria-disabled], body > button')) {
+    listeners.get('click')!({ target:button, isTrusted:true } as unknown as Event);
+  }
+  assert.deepEqual(messages, active.map(() => ({ type:'haptic', kind:'impact-light' })));
+  listeners.get('click')!({ target:active[0], isTrusted:true, detail:0 } as unknown as Event);
+  assert.equal(messages.length, active.length + 1, 'keyboard activation also pulses');
+  Object.assign(dom.window, { bb:{ native:{ capabilities:[], post:(message:unknown) => messages.push(message) } } });
+  listeners.get('click')!({ target:active[0], isTrusted:true } as unknown as Event);
+  assert.equal(messages.length, active.length + 1, 'unsupported shells stay quiet');
+  stop();
+  assert.equal(listeners.size, 0);
 });
 
 test("removes the send listeners when the script stops", () => {

@@ -44,4 +44,6 @@ Child Thread는 배경 없는 30px 색상 아바타 스택이다. 마지막 세 
 
 Agentation은 `ChatFeedback` 아이콘과 실제 staged 개수만 필에 표시한다. 상세는 피드백 본문과 위치·대상 정보를 두 줄로 나누고, 각 행 앞에 같은 아이콘을 둔다. 전체 전송·삭제 버튼은 목록 아래에 둔다. 원래 Agentation DOM과 개별 멘션·전송·삭제, 확인 dialog, 오류 재시도 동작을 유지하며, 상단 X는 원래 접기 동작으로 상세를 닫는다.
 
+정보 줄의 모든 필·아바타 스택·전체 정보 원 버튼과 펼친 목록의 버튼은 사용자 클릭당 `impact-light` 햅틱을 한 번 낸다. 터치·마우스·키보드 활성화를 같은 click 경로에서 처리한다. 호스트 disclosure에 전달하는 합성 클릭과 pointerup은 추가 진동을 만들지 않는다. 빠르게 다른 정보를 선택해도 각 클릭을 처리하며, disabled 버튼과 `haptic` capability가 없는 셸에서는 울리지 않는다.
+
 기존 boolean 설정을 쓴 설치를 업그레이드할 때는 빌드·reload 전에 `bb plugin config bb-chat-ui --json`의 값을 보관하고, reload 후 같은 키에 `true → 상단 표시`, `false → 목록에만 표시`로 저장해 선택을 유지한다.

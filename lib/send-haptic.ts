@@ -271,6 +271,8 @@ export function injectSendHaptic(document: Document): () => void {
   };
 
   const onPointerUp = (event: PointerEvent) => {
+    // Information controls use click for touch, mouse and keyboard alike.
+    if (composerInfoButtonFrom(event.target)) return;
     if (isFileDiffBlockToggle(event.target)) {
       pulseDiffToggle();
       return;
@@ -294,6 +296,14 @@ export function injectSendHaptic(document: Document): () => void {
   };
 
   const onJumpClick = (event: MouseEvent) => {
+    const info = composerInfoButtonFrom(event.target);
+    if (info) {
+      // Disclosures also forward synthetic clicks to the original host controls.
+      if (event.isTrusted && !info.hasAttribute("disabled") && info.getAttribute("aria-disabled") !== "true") {
+        postHaptic(readHapticBridge(view), "impact-light");
+      }
+      return;
+    }
     if (isFileDiffBlockToggle(event.target)) {
       pulseDiffToggle();
       return;
@@ -389,6 +399,11 @@ function asElement(target: EventTarget | null): Element | null {
   if (target === null || typeof target !== "object" || !("closest" in target)) return null;
   if (typeof target.closest !== "function") return null;
   return target as Element;
+}
+
+function composerInfoButtonFrom(target: EventTarget | null): Element | null {
+  const button = asElement(target)?.closest("button");
+  return button?.closest("[data-bb-chat-ui-info-bar], [data-bb-chat-ui-info-unit]") ? button : null;
 }
 
 function jumpButtonFrom(target: EventTarget | null): HTMLButtonElement | null {
