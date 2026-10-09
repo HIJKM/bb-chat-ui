@@ -42,6 +42,10 @@ export const composerInfoCss = `
 [${MARK}-trigger], [${MARK}-all] { display:inline-flex; flex:none; align-items:center; justify-content:center; gap:6px; height:32px; max-width:100%; padding:4px 11px; border:0; border-radius:999px; font-size:12px !important; line-height:18px; white-space:nowrap; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px color-mix(in oklab,var(--foreground) 22%,transparent),inset 0 1px 3px color-mix(in oklab,var(--popover) 35%,transparent); transition:transform 260ms cubic-bezier(.2,.9,.22,1.25); }
 [${MARK}-trigger], [${MARK}-all], [${MARK}-choice], [${MARK}-menu] button, ${DETAIL} button { background:var(--bb-chat-ui-info-face) !important; border:0 !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); }
 [${MARK}-menu] header button { width:24px; height:24px; padding:0; border-radius:50%; }
+[${MARK}-panel-source] { display:none !important; }
+[${MARK}-panel-heading] { display:flex; align-items:center; gap:6px; }
+[${MARK}-panel-action], [${MARK}-action="diff"] { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; padding:0 !important; border-radius:50% !important; color:var(--subtle-foreground); }
+[${MARK}-panel-action] svg, [${MARK}-action="diff"] svg { width:14px; height:14px; }
 [${MARK}-trigger]:hover, [${MARK}-all]:hover { transform:translateY(-1px); }
 [${MARK}-trigger]:active, [${MARK}-all]:active { transform:scale(.95); }
 [${MARK}-trigger][aria-expanded=true], [${MARK}-all][aria-expanded=true] { box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge),inset 0 0 0 1px var(--border); }
@@ -84,7 +88,8 @@ export const composerInfoCss = `
 [${MARK}-menu], ${DETAIL} { position:absolute !important; display:block !important; left:0 !important; right:0 !important; top:auto !important; bottom:40px !important; transform:none !important; width:100% !important; max-width:none !important; min-height:0 !important; height:auto !important; max-height:min(50dvh,26rem) !important; overflow:auto !important; margin:0 !important; order:0 !important; border:0 !important; border-radius:18px !important; background:var(--bb-chat-ui-info-face) !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); color:var(--foreground); box-shadow:0 12px 32px -14px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; z-index:52; animation:bb-info-enter 320ms cubic-bezier(.22,1,.36,1); }
 [${MARK}-menu] { padding:12px; }
 [${MARK}-menu], ${DETAIL} { overscroll-behavior:contain !important; }
-[${MARK}-menu] header { display:flex; align-items:center; justify-content:space-between; font-size:12px; padding-bottom:8px; }
+[${MARK}-menu] header { display:flex; align-items:center; gap:6px; font-size:12px; padding-bottom:8px; }
+[${MARK}-menu] header button:last-child { margin-left:auto; }
 [${MARK}-menu] p { font-size:11px; color:var(--subtle-foreground); margin:0 0 8px; }
 [${MARK}-menu] > div { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr)); gap:6px; }
 [${MARK}-choice] { display:flex; min-width:0; align-items:center; gap:8px; border:0; border-radius:10px; background:var(--bb-chat-ui-info-face); padding:9px 10px; text-align:left; font-size:12px !important; }
@@ -110,7 +115,6 @@ export const composerInfoCss = `
 [${MARK}-diff-file] code, [${MARK}-diff-commit] code { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:11px/1.6 var(--font-mono,monospace); }
 [${MARK}-diff-file] > span { flex-shrink:0; font-size:11px; }
 [${MARK}-diff-content] h4 { font-size:10px; font-weight:400; color:var(--subtle-foreground); margin:9px 0 3px; }
-[${MARK}-action="diff"] { border:0; border-radius:10px; padding:9px 12px; background:var(--bb-chat-ui-info-face); font-size:12px !important; }
 ${DETAIL}[aria-label="Queued messages"] { --bb-chat-ui-queue-height:min(36dvh,16rem); display:flex !important; flex-direction:column; max-height:var(--bb-chat-ui-queue-height) !important; overflow:hidden !important; padding:8px !important; gap:0 !important; }
 ${DETAIL}[aria-label="Queued messages"] > * { min-height:0; }
 ${DETAIL} [data-queued-messages-scroll-frame] { position:static !important; display:grid !important; grid-template-rows:minmax(0,1fr); flex:0 1 auto !important; width:100% !important; height:auto !important; min-height:0 !important; max-height:var(--bb-chat-ui-queue-height); overflow:hidden !important; }
@@ -245,6 +249,63 @@ export function injectComposerInfo(document: Document): () => void {
     let signature = "";
     let childStates = new Map<string, ChildState>();
     let diffSupplement: HTMLElement | null = null;
+    const panelActions = new Map<HTMLElement, HTMLButtonElement>();
+    const panelHeadings = new Set<HTMLElement>();
+    const generatedHeadings = new Set<HTMLElement>();
+    const panelAction = (label:string, run:() => void) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute(`${MARK}-panel-action`, "");
+      button.setAttribute("aria-label", label); button.title = label;
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("viewBox", "0 0 24 24"); icon.setAttribute("fill", "none");
+      icon.setAttribute("stroke", "currentColor"); icon.setAttribute("stroke-width", "1.5");
+      icon.setAttribute("stroke-linecap", "round"); icon.setAttribute("stroke-linejoin", "round");
+      icon.setAttribute("aria-hidden", "true");
+      const path = document.createElementNS(icon.namespaceURI, "path");
+      path.setAttribute("d", "M15 3h6v6m0-6L10 14M11 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h10a4 4 0 0 0 4-4v-4");
+      icon.append(path); button.append(icon);
+      button.addEventListener("click", run);
+      return button;
+    };
+    const syncPanelActions = () => {
+      const current = new Set<HTMLElement>();
+      for (const item of items) {
+        if (item.key === "diff") continue;
+        for (const source of Array.from(item.node.querySelectorAll<HTMLElement>(`button:not([${MARK}-panel-action]), a[href]`))) {
+          const label = [source.getAttribute("aria-label"), source.getAttribute("title"), source.textContent]
+            .map(text => text?.trim().replace(/\s+/g, " ") ?? "")
+            .find(text => /^(?:(?:사이드|사이드바|측면|옆)\s*패널(?:에서)?\s*열기|플러그인\s*페이지(?:에서)?\s*열기|open (?:in )?(?:the )?(?:side ?panel|sidebar|plugin page))$/i.test(text));
+          if (!label) continue;
+          current.add(source);
+          let heading = item.node.querySelector<HTMLElement>("h3, h4, header");
+          if (!heading || heading.closest("button, a")) {
+            heading = document.createElement("h3"); heading.textContent = item.label;
+            item.node.prepend(heading); generatedHeadings.add(heading);
+          }
+          if (!heading.hasAttribute(`${MARK}-panel-heading`)) {
+            heading.setAttribute(`${MARK}-panel-heading`, ""); panelHeadings.add(heading);
+          }
+          let action = panelActions.get(source);
+          if (!action) {
+            action = panelAction(label, () => { if (close()) source.click(); });
+            panelActions.set(source, action); source.setAttribute(`${MARK}-panel-source`, "");
+          }
+          if (action.parentElement !== heading) heading.insertBefore(action, heading.querySelector(`[${MARK}-dismiss]`));
+          if (action.title !== label) action.title = label;
+          if (action.getAttribute("aria-label") !== label) action.setAttribute("aria-label", label);
+          const disabled = source.hasAttribute("disabled") || source.getAttribute("aria-disabled") === "true";
+          if (action.disabled !== disabled) action.disabled = disabled;
+        }
+      }
+      for (const [source, action] of panelActions) if (!current.has(source)) {
+        action.remove(); source.removeAttribute(`${MARK}-panel-source`); panelActions.delete(source);
+      }
+      for (const heading of panelHeadings) if (!heading.querySelector(`[${MARK}-panel-action]`)) {
+        heading.removeAttribute(`${MARK}-panel-heading`); panelHeadings.delete(heading);
+        if (generatedHeadings.delete(heading)) heading.remove();
+      }
+    };
     const scrollHints = (["top", "bottom"] as const).map(edge => {
       const hint = document.createElement("span");
       hint.setAttribute(`${MARK}-scroll-hint`, edge);
@@ -595,7 +656,8 @@ export function injectComposerInfo(document: Document): () => void {
         menu.setAttribute(item ? `${MARK}-diff` : `${MARK}-empty`, key);
         menu.setAttribute("aria-label", labelOf(key));
         const header = document.createElement("header");
-        header.textContent = labelOf(key);
+        const title = document.createElement("span"); title.textContent = labelOf(key);
+        header.append(title);
         const dismiss = document.createElement("button");
         dismiss.type = "button"; dismiss.textContent = "×";
         dismiss.setAttribute("aria-label", `${labelOf(key)} 닫기`);
@@ -606,17 +668,14 @@ export function injectComposerInfo(document: Document): () => void {
         else caption.textContent = "현재 정보 없음";
         menu.append(header, caption);
         if (item) {
-          const action = document.createElement("button");
-          action.type = "button";
-          action.setAttribute(`${MARK}-action`, "diff");
-          action.textContent = "Diff 패널 열기";
-          action.addEventListener("click", () => {
+          const action = panelAction("Diff 패널 열기", () => {
             const current = items.find(item => item.key === "diff");
             close();
             if (current?.trigger?.id === "thread-prompt-banner-git-toggle") current.trigger.click();
             else openChangesPanel(document, stack);
           });
-          menu.append(action);
+          action.setAttribute(`${MARK}-action`, "diff");
+          header.insertBefore(action, dismiss);
         }
         buttons.get(key)?.setAttribute("aria-expanded", "true");
         bar.append(menu);
@@ -696,6 +755,7 @@ export function injectComposerInfo(document: Document): () => void {
       const hasChildRows = found.some(item => item.key === "children" && item.node.hasAttribute(`${MARK}-kind`));
       const native = found.filter(item => !item.node.hasAttribute(`${MARK}-kind`) && !(hasChildRows && item.key === "children"));
       items = [...native, ...found.filter(item => item.node.hasAttribute(`${MARK}-kind`) && !native.some(other => other.key === item.key))];
+      syncPanelActions();
       if (!items.some(item => item.key === "diff")) {
         try {
           const summary = JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "null");
@@ -792,6 +852,9 @@ export function injectComposerInfo(document: Document): () => void {
       stack.removeAttribute(`${MARK}-stack`);
       stack.removeAttribute(`${MARK}-request`);
       stack.style.removeProperty("--bb-chat-ui-feedback-icon");
+      for (const [source, action] of panelActions) { action.remove(); source.removeAttribute(`${MARK}-panel-source`); }
+      for (const heading of panelHeadings) heading.removeAttribute(`${MARK}-panel-heading`);
+      for (const heading of generatedHeadings) heading.remove();
       for (const node of owned) { node.removeAttribute(UNIT); node.removeAttribute(OPEN); }
       for (const node of wrappers) node.removeAttribute(WRAP);
     } };
@@ -809,7 +872,7 @@ export function injectComposerInfo(document: Document): () => void {
   }
   const schedule = () => { if (!frame && !disposed) frame = view.requestAnimationFrame(sync); };
   const observer = new view.MutationObserver(schedule);
-  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${MARK}-children`, "aria-label", "aria-expanded", "data-testid"] });
+  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${MARK}-children`, "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     for (const [stack, state] of states) if (stack.contains(event.target as Node) || event.target === document) state.close(true);

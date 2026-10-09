@@ -474,6 +474,84 @@ test("all information stays reachable; host controls and parents survive a singl
   f.dom.window.close();
 });
 
+test("Diff opens from an icon beside its popover title, preserving the panel action", () => {
+  const f = fixture();
+  let opened = 0;
+  f.document.querySelector('#thread-prompt-banner-git-toggle')!.addEventListener('click', () => opened++);
+  const stop = injectComposerInfo(f.document);
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  const action = f.document.querySelector('[data-bb-chat-ui-info-action="diff"]')!;
+  assert.equal(action.parentElement?.tagName, 'HEADER');
+  assert.equal(action.previousElementSibling?.textContent, 'Code Diff');
+  assert.equal(action.textContent, '');
+  assert.ok(action.querySelector('svg'));
+  assert.equal(action.getAttribute('aria-label'), 'Diff 패널 열기');
+  assert.equal(action.getAttribute('title'), 'Diff 패널 열기');
+  (action as HTMLElement).click();
+  assert.equal(opened, 1);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff]'), null);
+  stop(); f.dom.window.close();
+});
+
+test("native panel and plugin-page actions become title icons without moving original controls", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  stack.insertAdjacentHTML('beforeend', '<section data-bb-chat-ui-info-kind="workflow" aria-label="Workflow"><h3>UI review</h3><div><button>사이드 패널에서 열기</button><a href="/plugins/workflows">플러그인 페이지에서 열기</a><button>Stop workflow</button></div></section>');
+  const node = stack.querySelector('[data-bb-chat-ui-info-kind="workflow"]')!;
+  const panel = node.querySelector('button')!;
+  const page = node.querySelector('a')!;
+  const parent = panel.parentElement;
+  let opened = 0;
+  panel.addEventListener('click', () => opened++);
+  page.addEventListener('click', event => { event.preventDefault(); opened += 10; });
+  const stop = injectComposerInfo(f.document);
+  f.click('[data-bb-chat-ui-info-all]'); f.click('[data-bb-chat-ui-info-choice="workflow"]');
+  const icons = node.querySelectorAll<HTMLElement>('h3 [data-bb-chat-ui-info-panel-action]');
+  assert.equal(icons.length, 2);
+  for (const icon of icons) { assert.equal(icon.textContent, ''); assert.ok(icon.querySelector('svg')); }
+  assert.equal(icons[0].getAttribute('title'), '사이드 패널에서 열기');
+  assert.equal(icons[1].getAttribute('aria-label'), '플러그인 페이지에서 열기');
+  assert.equal(panel.parentElement, parent); assert.equal(page.parentElement, parent);
+  assert.equal(f.dom.window.getComputedStyle(panel).display, 'none');
+  assert.equal(f.dom.window.getComputedStyle(page).display, 'none');
+  assert.equal(node.querySelectorAll('[data-bb-chat-ui-info-panel-source]').length, 2);
+  assert.equal(parent?.querySelector('button:last-child')?.textContent, 'Stop workflow');
+  assert.equal(parent?.querySelector('button:last-child')?.hasAttribute('data-bb-chat-ui-info-panel-source'), false);
+  icons[0].click(); icons[1].click(); assert.equal(opened, 11);
+  panel.disabled = true; await f.tick();
+  assert.equal((icons[0] as HTMLButtonElement).disabled, true);
+  icons[0].click(); assert.equal(opened, 11);
+  page.remove(); await f.tick();
+  assert.equal(node.querySelectorAll('[data-bb-chat-ui-info-panel-action]').length, 1);
+  stop();
+  assert.equal(node.querySelector('[data-bb-chat-ui-info-panel-action]'), null);
+  assert.equal(panel.hasAttribute('data-bb-chat-ui-info-panel-source'), false);
+  assert.equal(panel.parentElement, parent);
+  f.dom.window.close();
+});
+
+test("panel icons follow native rerenders and never appear when no destination exists", async () => {
+  const f = fixture();
+  const node = f.document.querySelector('[aria-label="Goal"]')!;
+  const stop = injectComposerInfo(f.document);
+  assert.equal(node.querySelector('[data-bb-chat-ui-info-panel-action]'), null);
+  const source = f.document.createElement('button'); source.textContent = 'Open in side panel'; node.append(source);
+  await f.tick();
+  assert.equal(node.querySelector('h3')?.textContent, 'Goal');
+  assert.equal(node.querySelectorAll('[data-bb-chat-ui-info-panel-action]').length, 1);
+  node.innerHTML = '<h3>Updated Goal</h3><button title="Open plugin page">Open</button><button>Clear</button>';
+  await f.tick();
+  assert.equal(node.querySelectorAll('h3').length, 1);
+  assert.equal(node.querySelectorAll('[data-bb-chat-ui-info-panel-action]').length, 1);
+  const page = node.querySelector('button[title]:not([data-bb-chat-ui-info-panel-action])')!;
+  page.setAttribute('title', 'Open ordinary details'); await f.tick();
+  assert.equal(node.querySelector('[data-bb-chat-ui-info-panel-action]'), null);
+  assert.equal(page.hasAttribute('data-bb-chat-ui-info-panel-source'), false);
+  stop();
+  assert.equal(node.querySelector('h3')?.textContent, 'Updated Goal');
+  f.dom.window.close();
+});
+
 test("settings change exposed summaries without removing menu entries or losing Diff action", async () => {
   const f = fixture();
   let diffOpened = 0;
@@ -513,7 +591,7 @@ test("Diff first opens one dismissible popover from either the pill or the catal
   f.click('[data-bb-chat-ui-info-choice="diff"]');
   assert.equal(diffOpened, 0);
   assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-menu]').length, 1);
-  assert.equal(f.document.activeElement?.getAttribute('aria-label'), 'Code Diff 닫기');
+  assert.equal(f.document.activeElement?.getAttribute('aria-label'), 'Diff 패널 열기');
   native.textContent = '+20 −5 · 4 files';
   await f.tick();
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-diff]')?.textContent?.includes('+20 −5 · 4 files'));
