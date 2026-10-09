@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import { injectComposerInfo, fitComposerInfo } from "./composer-info.ts";
+import { infoKinds } from "./composer-info-settings.ts";
 
 function fixture() {
   const dom = new JSDOM(`<html><head></head><body><div data-scroll-footer><div class="chat-prompt-box"><div data-promptbox-shell><div class="grid">
@@ -41,6 +42,49 @@ test("overflow reserves the all-information button and prefers Diff and children
   assert.deepEqual(fitComposerInfo(items, 390), ["diff", "children", "goal"]);
   assert.deepEqual(fitComposerInfo(items, 120), ["children"]);
   assert.deepEqual(fitComposerInfo(items, 30), []);
+});
+
+test("an empty composer lists every information family without inventing summary data", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  for (const node of Array.from(stack.children).slice(1)) node.remove();
+  const stop = injectComposerInfo(f.document);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger]'), null);
+  f.click('[aria-label^="전체 정보"]');
+  assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-choice]').length, infoKinds.length);
+  for (const kind of infoKinds) {
+    const choice = f.document.querySelector(`[data-bb-chat-ui-info-choice="${kind.key}"]`)!;
+    assert.ok(choice.textContent?.includes(kind.label));
+    assert.ok(choice.textContent?.includes('현재 없음'));
+  }
+  f.click('[data-bb-chat-ui-info-choice="diff"]');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-empty="diff"]')?.textContent?.includes('현재 정보 없음'));
+  assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-menu]').length, 1);
+  assert.equal(f.document.activeElement?.getAttribute('aria-label'), 'Code Diff 닫기');
+  f.document.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-menu]'), null);
+  assert.ok(f.document.activeElement?.hasAttribute('data-bb-chat-ui-info-all'));
+  stop();
+  f.dom.window.close();
+});
+
+test("an empty disclosure switches to real information when it arrives", async () => {
+  const f = fixture();
+  const goal = f.document.querySelector('section[aria-label="Goal"]')!;
+  const parent = goal.parentElement!;
+  goal.remove();
+  const stop = injectComposerInfo(f.document);
+  f.click('[aria-label^="전체 정보"]');
+  f.click('[data-bb-chat-ui-info-choice="goal"]');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-empty="goal"]'));
+  parent.append(goal);
+  await f.tick();
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-empty]'), null);
+  assert.ok(goal.hasAttribute('data-bb-chat-ui-info-open'));
+  assert.equal(goal.querySelector('[aria-expanded]')!.getAttribute('aria-expanded'), 'true');
+  assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-open]').length, 1);
+  stop();
+  f.dom.window.close();
 });
 
 test("all information stays reachable; host controls and parents survive a single detail disclosure", async () => {

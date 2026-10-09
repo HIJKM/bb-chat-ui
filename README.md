@@ -49,6 +49,8 @@ Registers composer customize plus content scripts in `app.tsx` (`composer-glass`
 
 ## 컴포저 위 정보 설정
 
+전체 정보 목록에는 현재 데이터가 없는 계열도 `현재 없음`으로 남긴다. 선택하면 `현재 정보 없음`을 표시하며, 정보가 생기면 실제 상세로 바뀐다. 데이터가 없는 상단 필이나 가상의 Diff 수치는 만들지 않는다.
+
 `Settings → Chat UI`에서 `상단 표시` 항목을 선택한다. 기본값은 Code Diff와 Child Thread다. 공간이 부족하면 일부가 자동으로 전체 정보 버튼 안에 접힌다. 선택하지 않은 정보도 이 버튼에서 모두 열 수 있다. 상세는 한 번에 하나만 펼친다.
 
 입력 요청 중에는 요청만 표시하고 입력창도 숨긴다. 요청이 끝나면 초안을 그대로 복원한다. 큐 편집 중에는 다른 상세로 전환하지 않는다. Archived 화면의 정보도 숨겨서 보관하며, 호스트 복구 버튼은 유지한다. 새 Child Thread는 bubble 모션으로 나타나며 reduced motion 설정을 따른다.

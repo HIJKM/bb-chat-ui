@@ -63,6 +63,8 @@ export const composerInfoCss = `
 [${MARK}-choice] { display:flex; min-width:0; align-items:center; gap:8px; border:0; border-radius:10px; background:var(--surface-recessed); padding:9px 10px; text-align:left; font-size:12px !important; }
 [${MARK}-choice] span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 [${MARK}-choice] svg { width:16px; height:16px; flex-shrink:0; }
+[${MARK}-choice][${MARK}-unavailable] { color:var(--subtle-foreground); }
+[${MARK}-choice] small { margin-left:auto; flex-shrink:0; font-size:10px; color:var(--subtle-foreground); }
 ${DETAIL} [data-queued-messages-scroll-frame] { position:static !important; width:100% !important; height:auto !important; max-height:22rem; }
 ${DETAIL} header[data-queued-messages-mode] { position:relative !important; width:100% !important; max-width:none !important; height:32px !important; padding:0 12px !important; justify-content:space-between; background:transparent !important; }
 ${DETAIL} header[data-queued-messages-mode]::before { content:none; }
@@ -170,6 +172,10 @@ export function injectComposerInfo(document: Document): () => void {
       if (!node.hasAttribute(attr)) node.setAttribute(attr, "");
     };
     const labelOf = (key: InfoKind) => infoKinds.find(kind => kind.key === key)!.label;
+    const catalog = () => infoKinds.flatMap<InfoItem | { key:InfoKind; label:string }>(kind => {
+      const available = items.filter(item => item.key === kind.key);
+      return available.length ? available : [{ key:kind.key, label:kind.label }];
+    });
     const describe = (item: InfoItem) => {
       const text = item.key === "diff" ? item.trigger?.textContent : item.trigger?.getAttribute("aria-label") ?? item.trigger?.textContent;
       return text?.trim().replace(/\s+/g, " ").slice(0, 200) || item.node.getAttribute("aria-label") || item.label;
@@ -262,13 +268,23 @@ export function injectComposerInfo(document: Document): () => void {
         const caption = document.createElement("p");
         caption.textContent = "하나를 선택해 펼치기 · 상단 표시는 Chat UI 설정에서 선택";
         const grid = document.createElement("div");
-        for (const item of items) {
+        for (const item of catalog()) {
           const choice = document.createElement("button");
           choice.type = "button";
           choice.setAttribute(`${MARK}-choice`, item.key);
-          decorate(choice, item, false);
-          if (items.filter(other => other.key === item.key).length > 1) choice.querySelector("span")!.textContent = `${item.label} · ${describe(item)}`;
-          choice.addEventListener("click", () => { open(item.key, orb, item); activeNode?.querySelector<HTMLElement>('button, a, input, [tabindex="0"]')?.focus(); });
+          if ("node" in item) {
+            decorate(choice, item, false);
+            if (items.filter(other => other.key === item.key).length > 1) choice.querySelector("span")!.textContent = `${item.label} · ${describe(item)}`;
+          } else {
+            choice.setAttribute(`${MARK}-unavailable`, "");
+            const label = document.createElement("span"); label.textContent = item.label;
+            const state = document.createElement("small"); state.textContent = "현재 없음";
+            choice.append(label, state);
+          }
+          choice.addEventListener("click", () => {
+            open(item.key, orb, "node" in item ? item : undefined);
+            (activeNode ?? menu)?.querySelector<HTMLElement>('button, a, input, [tabindex="0"]')?.focus();
+          });
           grid.append(choice);
         }
         menu.append(header, caption, grid);
@@ -278,7 +294,27 @@ export function injectComposerInfo(document: Document): () => void {
         return;
       }
       const item = selected ?? items.find(item => item.key === key);
-      if (!item) return;
+      if (!item) {
+        active = key;
+        menu = document.createElement("section");
+        menu.id = `bb-composer-info-empty-${++serial}`;
+        menu.setAttribute(`${MARK}-menu`, "");
+        menu.setAttribute(`${MARK}-empty`, key);
+        menu.setAttribute("aria-label", labelOf(key));
+        const header = document.createElement("header");
+        header.textContent = labelOf(key);
+        const dismiss = document.createElement("button");
+        dismiss.type = "button"; dismiss.textContent = "×";
+        dismiss.setAttribute("aria-label", `${labelOf(key)} 닫기`);
+        dismiss.addEventListener("click", () => close(true));
+        header.append(dismiss);
+        const caption = document.createElement("p"); caption.textContent = "현재 정보 없음";
+        menu.append(header, caption);
+        bar.append(menu);
+        orb.setAttribute("aria-controls", menu.id);
+        orb.setAttribute("aria-expanded", "true");
+        return;
+      }
       if (key === "diff") {
         if (item.trigger?.id === "thread-prompt-banner-git-toggle") item.trigger.click();
         else openChangesPanel(document, stack);
@@ -379,9 +415,15 @@ export function injectComposerInfo(document: Document): () => void {
           pills.append(button);
         }
         if (active === "all") { close(); open("all", orb); }
-        badge.textContent = String(items.length);
-        orb.setAttribute("aria-label", `전체 정보 ${items.length}개`);
-        orb.title = `전체 정보 · ${items.length}개`;
+        else if (active && !activeNode && items.some(item => item.key === active)) {
+          const key = active;
+          close(); open(key, orb);
+          stack.querySelector<HTMLElement>(`[${OPEN}]`)?.querySelector<HTMLElement>('button, a, input, [tabindex="0"]')?.focus();
+        }
+        const count = catalog().length;
+        badge.textContent = String(count);
+        orb.setAttribute("aria-label", `전체 정보 ${count}개`);
+        orb.title = `전체 정보 · ${count}개`;
       }
       fit();
     };
