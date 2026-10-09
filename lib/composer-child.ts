@@ -1,5 +1,5 @@
 export type ChildState = "run" | "wait" | "done" | "error";
-export interface ChildSummary { id:string; title:string; state?:ChildState; running?:boolean; }
+export interface ChildSummary { id:string; title:string; providerId?:string; state?:ChildState; running?:boolean; }
 
 export function childInitial(title: string): string {
   const words = title.trim().split(/\s+/).filter(Boolean);

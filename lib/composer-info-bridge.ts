@@ -1,7 +1,7 @@
 import { createElement, Fragment, useEffect, useMemo, useState } from "react";
-import { experimental_Icon, UrlLink, useBbNavigate, useComposer, useSdk, useSettings } from "@get-bb/plugin-sdk/app";
+import { experimental_Icon, experimental_ProviderIcon, experimental_useProviders, UrlLink, useBbNavigate, useComposer, useSdk, useSettings } from "@get-bb/plugin-sdk/app";
 import { infoKinds } from "./composer-info-settings.ts";
-import { childInitial, childState } from "./composer-child.ts";
+import { childState } from "./composer-child.ts";
 import { createThreadRestorer, type RestoreState } from "./composer-restore.ts";
 
 type Sdk = ReturnType<typeof useSdk>;
@@ -17,6 +17,7 @@ export function ComposerInfoBridge() {
   const navigate = useBbNavigate();
   const { scope } = useComposer();
   const { values } = useSettings();
+  const { providers } = experimental_useProviders();
   const threadId = scope.kind === "thread" ? scope.threadId : null;
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState(false);
@@ -93,6 +94,10 @@ export function ComposerInfoBridge() {
   const restoring = restoreStates[threadId];
   const timeline = data?.timeline;
   const children = data?.children ?? [];
+  const providerIcon = (providerId:string) => createElement(experimental_ProviderIcon, {
+    providerKind:"agent", provider:providers.find(provider => provider.id === providerId) ?? { id:providerId },
+    fallback:"UserRound", className:"size-4", "aria-hidden":true,
+  });
   const pullRequest = data?.pullRequest?.outcome === "available" ? data.pullRequest.pullRequest : null;
   const section = (kind: string, title: string, icon: "FileText" | "ListTodo" | "Target" | "UserRound" | "CircleAlert", content: ReturnType<typeof createElement>) => createElement("section", {
     key:kind, [`${mark}-kind`]:kind, "aria-label":title,
@@ -104,9 +109,11 @@ export function ComposerInfoBridge() {
       [`${mark}-thread`]:threadId,
       [`${mark}-settings`]:JSON.stringify(values ?? {}),
       [`${mark}-read-only-label`]:data?.readOnly.label ?? undefined,
-      [`${mark}-children`]:JSON.stringify(children.map(child => ({ id:child.id, title:child.title ?? child.titleFallback ?? "Child Thread", state:childState(child.runtime.displayStatus, child.hasPendingInteraction) }))),
+      [`${mark}-children`]:JSON.stringify(children.map(child => ({ id:child.id, title:child.title ?? child.titleFallback ?? "Child Thread", providerId:child.providerId, state:childState(child.runtime.displayStatus, child.hasPendingInteraction) }))),
+      [`${mark}-child-providers`]:JSON.stringify(providers.map(provider => [provider.id, provider.logoUrl, provider.icon, provider.strings?.iconTint])),
     }, ...infoKinds.map(kind => createElement("span", { key:kind.key, [`${mark}-icon`]:kind.key },
       createElement(experimental_Icon, { name:kind.icon, "aria-hidden":true }))),
+      ...children.map(child => createElement("span", { key:child.id, [`${mark}-child-icon`]:child.id }, providerIcon(child.providerId))),
       createElement("button", { type:"button", [`${mark}-restore-source`]:"unarchive", disabled:restoring?.pending === true,
         [`${mark}-restore-error`]:restoring?.error ?? undefined, onClick:() => void restore(threadId, "unarchive") }, restoring?.pending ? "Unarchiving..." : "Unarchive"),
       createElement("button", { type:"button", [`${mark}-restore-source`]:"environment", disabled:restoring?.pending === true || !data?.readOnly.canRestore,
@@ -121,7 +128,8 @@ export function ComposerInfoBridge() {
         const title = child.title ?? child.titleFallback ?? "Child Thread";
         const state = childState(child.runtime.displayStatus, child.hasPendingInteraction);
         return createElement("button", { key:child.id, type:"button", [`${mark}-child-row`]:"", onClick:() => navigate.toThread(child.id) },
-          createElement("span", { [`${mark}-avatar`]:"", "data-state":state, "aria-hidden":true }, childInitial(title),
+          createElement("span", { [`${mark}-avatar`]:"", "data-state":state, "aria-hidden":true },
+            createElement("span", { [`${mark}-provider-icon`]:"" }, providerIcon(child.providerId)),
             createElement("span", { [`${mark}-avatar-dot`]:"" }, state === "done" ? createElement(experimental_Icon, { name:"Check" }) : null)),
           createElement("span", { [`${mark}-child-main`]:"" },
             createElement("span", { [`${mark}-child-title`]:"" }, title),

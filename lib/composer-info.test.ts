@@ -632,6 +632,38 @@ test("child counts use up to three overlapping avatars followed by a separate ov
   stop(); f.dom.window.close();
 });
 
+test("child avatars use host provider artwork, including late and updated logos, while retaining state dots", async () => {
+  const f=fixture();
+  const source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  source.setAttribute('data-bb-chat-ui-info-children',JSON.stringify([
+    {id:'codex-child',title:'Code review',providerId:'codex',state:'run'},
+    {id:'claude-child',title:'UI review',providerId:'claude-code',state:'done'},
+  ]));
+  const stop=injectComposerInfo(f.document);
+  const avatars=()=>[...f.document.querySelectorAll('[data-bb-chat-ui-info-trigger="children"] [data-bb-chat-ui-info-avatar]')];
+  try {
+    assert.ok(avatars()[0].textContent?.includes('CR'),'older sources retain title initials until artwork arrives');
+    source.insertAdjacentHTML('beforeend','<span data-bb-chat-ui-info-child-icon="codex-child"><span data-provider="codex" style="mask-image:url(/codex.svg)"></span></span><span data-bb-chat-ui-info-child-icon="claude-child"><svg data-provider="claude-code" viewBox="0 0 24 24"><path d="M1 1h1" /></svg></span>');
+    await f.tick();
+    for(const [index,id] of ['codex','claude-code'].entries()) {
+      const avatar=avatars()[index];
+      const artwork=avatar.querySelector(`[data-provider="${id}"]`)!;
+      assert.ok(artwork,'registered provider artwork replaces initials');
+      assert.equal(f.dom.window.getComputedStyle(artwork).width,'16px');
+      assert.equal(f.dom.window.getComputedStyle(artwork).height,'16px');
+      assert.ok(avatar.querySelector('[data-bb-chat-ui-info-avatar-dot]'));
+      assert.ok(avatar.getAttribute('title')?.includes(id));
+    }
+    assert.ok(avatars()[0].querySelector('[data-provider]')?.getAttribute('style')?.includes('/codex.svg'));
+    assert.ok(avatars()[1].querySelector('[data-bb-chat-ui-info-avatar-dot] svg'),'completion check stays separate from the provider mark');
+    source.querySelector('[data-bb-chat-ui-info-child-icon="codex-child"] span')!.setAttribute('style','mask-image:url(/codex-updated.svg)');
+    source.setAttribute('data-bb-chat-ui-info-child-providers','updated'); await f.tick();
+    assert.ok(avatars()[0].querySelector('[data-provider]')?.getAttribute('style')?.includes('/codex-updated.svg'),'provider metadata refresh updates a same-id avatar');
+    assert.equal(avatars()[0].hasAttribute('data-new'),false,'artwork arrival does not replay the new-child droplet');
+    assert.equal(source.querySelectorAll('[data-bb-chat-ui-info-child-icon]').length,2,'the SDK artwork remains on its original parent');
+  } finally {stop();f.dom.window.close();}
+});
+
 test("Agentation uses the browser picker icon and count while retaining native controls", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;

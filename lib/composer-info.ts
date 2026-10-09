@@ -108,6 +108,7 @@ ${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:18px; right:16px; co
 [${MARK}-avatar][data-state="error"] [${MARK}-avatar-dot] { background:var(--destructive-text,#d99090); }
 [${MARK}-avatar][data-state="done"] [${MARK}-avatar-dot] { display:flex; align-items:center; justify-content:center; width:11px; height:11px; right:-2px; bottom:-2px; }
 [${MARK}-avatar-dot] svg { width:8px; height:8px; color:var(--bb-chat-ui-glass-base,var(--background)); }
+[${MARK}-avatar] [${MARK}-provider-icon], [${MARK}-avatar] [${MARK}-provider-icon] > :is(svg, span, img) { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; flex-shrink:0; }
 [${MARK}-avatar][data-new] { animation:bb-info-droplet 460ms cubic-bezier(.36,0,.18,1) backwards; }
 [${MARK}-menu], ${DETAIL} { position:absolute !important; display:block !important; left:0 !important; right:0 !important; top:auto !important; bottom:40px !important; transform:none !important; box-sizing:border-box; width:100% !important; max-width:none !important; min-height:0 !important; height:auto !important; max-height:min(50dvh,26rem) !important; overflow:auto !important; margin:0 !important; padding:16px !important; order:0 !important; border:0 !important; border-radius:18px !important; background:var(--bb-chat-ui-info-face) !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); color:var(--foreground); box-shadow:0 12px 32px -14px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; z-index:52; transform-origin:center bottom; animation:bb-info-enter 260ms cubic-bezier(.22,1,.36,1); }
 [${MARK}-menu], ${DETAIL} { overscroll-behavior:contain !important; }
@@ -553,6 +554,8 @@ export function injectComposerInfo(document: Document): () => void {
     };
     const labelOf = (key: InfoKind) => infoKinds.find(kind => kind.key === key)!.label;
     const emptyIcon = (key: InfoKind) => stack.querySelector(`[${MARK}-icon="${key}"] svg, [${MARK}-icon="${key}"] [data-icon-root]`);
+    const childIcon = (id:string) => Array.from(stack.querySelectorAll(`[${MARK}-child-icon]`))
+      .find(node => node.getAttribute(`${MARK}-child-icon`) === id)?.firstElementChild;
     const readDiff = ():Partial<WorkspaceDiffSnapshot> | null => {
       try { return JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "null"); }
       catch { return null; }
@@ -798,8 +801,12 @@ export function injectComposerInfo(document: Document): () => void {
         for (const [index, child] of children.slice(-3).entries()) {
           const avatar = document.createElement("span");
           avatar.setAttribute(`${MARK}-avatar`, "");
-          avatar.title = child.title;
-          avatar.textContent = childInitial(child.title);
+          avatar.title = child.providerId ? `${child.title} · ${child.providerId}` : child.title;
+          const artwork = childIcon(child.id)?.cloneNode(true) as Element | undefined;
+          if (artwork) {
+            artwork.removeAttribute("id"); artwork.setAttribute(`${MARK}-provider-icon`, ""); artwork.setAttribute("aria-hidden", "true");
+            avatar.append(artwork);
+          } else avatar.textContent = childInitial(child.title);
           avatar.setAttribute("data-child", child.id);
           avatar.setAttribute("data-state", stateOf(child));
           avatar.style.zIndex = String(index + 1);
@@ -1228,7 +1235,8 @@ export function injectComposerInfo(document: Document): () => void {
       if (request || reduced() || bar.hidden) cancelExit();
       const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
-      const next = JSON.stringify([settings, readOnlyLabel, infoKinds.map(kind => emptyIcon(kind.key)?.outerHTML), items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
+      const childIcons = Array.from(source.querySelectorAll(`[${MARK}-child-icon]`)).map(node => node.outerHTML);
+      const next = JSON.stringify([settings, readOnlyLabel, infoKinds.map(kind => emptyIcon(kind.key)?.outerHTML), childIcons, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
       let widthChange: { button:HTMLButtonElement; from:number } | null = null;
       if (signature !== next) {
         if (signature) pulse();
@@ -1259,6 +1267,7 @@ export function injectComposerInfo(document: Document): () => void {
             key === "status" ? readOnlyLabel : null,
             emptyIcon(key)?.outerHTML ?? item?.trigger?.querySelector("svg, [data-icon-root]")?.outerHTML ?? item?.node.querySelector("svg, [data-icon-root]")?.outerHTML,
             key === "children" ? stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`) : null,
+            key === "children" ? childIcons : null,
             key === "diff" ? [diff?.presentation, diff?.detail?.commitCount] : null]);
           if (buttonContent.get(button) !== content) {
             buttonContent.set(button, content);
@@ -1394,7 +1403,7 @@ export function injectComposerInfo(document: Document): () => void {
   }
   const schedule = () => { if (!frame && !disposed) frame = view.requestAnimationFrame(sync); };
   const observer = new view.MutationObserver(schedule);
-  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-children`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
+  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-children`, `${MARK}-child-providers`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     for (const [stack, state] of states) if (stack.contains(event.target as Node) || event.target === document) state.close(true);
