@@ -64,6 +64,58 @@ test("queue and list cards share the same horizontal content gutter as their hea
   } finally {stop(); f.dom.window.close();}
 });
 
+test("native card layout padding does not add another indent inside managed popovers", () => {
+  const f=fixture();
+  const style=f.document.createElement('style');
+  style.textContent='.p-1 { padding:4px; } .px-2 { padding-left:8px; padding-right:8px; } .px-3 { padding-left:12px; padding-right:12px; } .px-2\\.5 { padding-left:10px; padding-right:10px; } .py-1 { padding-top:4px; padding-bottom:4px; } .ml-4 { margin-left:16px; }';
+  f.document.head.append(style);
+  const stack=f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const context=f.document.querySelector('section[aria-label="Thread context before sending"]')!;
+  context.innerHTML='<div class="flex items-center p-1"><div class="flex min-h-6 px-2 py-1"><svg data-layout-start></svg><span>Parent <a href="/threads/parent">Parent title</a></span></div></div>';
+  for (const [kind,label] of [['plan','Prompt mode'],['goal','Goal'],['todos','To-do list'],['workflow','Workflow'],['background','Background commands'],['machine','Machine status'],['status','Thread history'],['fallback','Model fallback']]) {
+    stack.querySelector(`section[aria-label="${label}"]`)?.remove();
+    const card=f.document.createElement('section'); card.setAttribute('aria-label',label);
+    const body=kind==='todos'
+      ? '<ul class="px-2.5"><li class="px-2 py-1"><svg data-layout-start></svg><span>Item</span></li></ul>'
+      : '<div class="px-3 py-1"><span data-layout-start>Details</span><div class="ml-4">Nested phase</div><button class="px-3">Action</button></div>';
+    const inlay=kind==='machine'||kind==='status';
+    card.innerHTML=`<div class="${inlay?'p-1':''}"><button ${kind==='machine'?'id="machine-status-toggle"':''} class="${inlay?'px-2':'px-3'}" aria-expanded="false" aria-controls="layout-${kind}">${label}</button></div><div id="layout-${kind}" hidden><div>${body}</div></div>`;
+    const toggle=card.querySelector('button')!;
+    toggle.addEventListener('click',()=>{ const expanded=toggle.getAttribute('aria-expanded')!=='true'; toggle.setAttribute('aria-expanded',String(expanded)); card.querySelector<HTMLElement>(`#layout-${kind}`)!.hidden=!expanded; });
+    stack.append(card);
+  }
+  const stop=injectComposerInfo(f.document);
+  const getStyle=(node:Element)=>f.dom.window.getComputedStyle(node);
+  try {
+    for (const kind of ['parent','plan','goal','todos','workflow','background','machine','status','fallback']) {
+      f.click('[data-bb-chat-ui-info-all]'); f.click(`[data-bb-chat-ui-info-choice="${kind}"]`);
+      const card=f.document.querySelector('[data-bb-chat-ui-info-open]')!;
+      let left=0,right=0;
+      for (let node=card.querySelector('[data-layout-start]')!.parentElement!; node!==card; node=node.parentElement!) {
+        const css=getStyle(node);
+        left+=(parseFloat(css.paddingLeft)||0)+(parseFloat(css.marginLeft)||0);
+        right+=(parseFloat(css.paddingRight)||0)+(parseFloat(css.marginRight)||0);
+      }
+      assert.equal(left,0,`${kind}: body begins at the common card gutter`);
+      assert.equal(right,0,`${kind}: no extra right inset`);
+      const toggle=card.querySelector('button[aria-controls]');
+      if(toggle) {
+        assert.equal(getStyle(toggle).paddingLeft,'0px',`${kind}: header begins at the common card gutter`);
+        if(toggle.parentElement!==card) assert.equal(parseFloat(getStyle(toggle.parentElement!).paddingLeft)||0,0,'header wrapper does not reintroduce an inset');
+      }
+      const heading=card.querySelector('[data-bb-chat-ui-info-close-heading]');
+      if(heading) assert.equal(getStyle(heading).paddingRight,'34px','the close button retains its reserved header space');
+      const nested=card.querySelector('.ml-4');
+      if(nested) assert.equal(getStyle(nested).marginLeft,'16px','nested phase indentation remains');
+      const action=card.querySelector('button.px-3:not([aria-controls])');
+      if(action) assert.equal(getStyle(action).paddingLeft,'12px','actual action button padding remains');
+    }
+    stop();
+    assert.equal(getStyle(context.querySelector('.p-1')!).paddingLeft,'4px','unload restores the native context inset');
+    assert.equal(getStyle(context.querySelector('.px-2')!).paddingLeft,'8px','unload restores the native segment inset');
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("desktop hover previews wait for intent, bridge the popover gap, and pin on click", async () => {
   const f=fixture();
   f.document.body.insertAdjacentHTML('beforeend','<span hidden data-bb-chat-ui-device="desktop" data-bb-chat-ui-viewport="narrow"></span>');

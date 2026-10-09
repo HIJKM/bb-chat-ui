@@ -18,6 +18,7 @@ const WORKFLOW_COLLAPSE = 'button[aria-label^="Collapse "][aria-label$=" workflo
 const ARCHIVED = '[aria-label="Thread archived"], [aria-label="Thread is archived"], [aria-label="Archived thread"]';
 const UNAVAILABLE = ["Environment unavailable", "Machine removed", "Machine removal in progress", "Machine cleanup failed", "Workspace removed"].map(label => `[aria-label="${label}"]`).join(", ");
 const DETAIL = `${STACK}[${MARK}-stack] [${UNIT}][${OPEN}]:not([hidden])`;
+const NATIVE_DETAIL = `${DETAIL}:is(${["Thread context before sending", "Child threads", "Prompt mode", "Goal", "To-do list", "Workflow", "Background commands", "Machine status", "Thread history", "Model fallback"].map(label => `section[aria-label="${label}"]`).join(",")})`;
 
 // The orb is always reachable. Fit measured pills into one row, with essentials first.
 export function fitComposerInfo(items: readonly { key: string; width: number }[], width: number): string[] {
@@ -54,8 +55,14 @@ export const composerInfoCss = `
 [${MARK}-panel-source] { display:none !important; }
 [${MARK}-panel-heading] { display:flex; align-items:center; gap:6px; }
 [${MARK}-stack] [${MARK}-collapse] { display:none !important; }
-${DETAIL} [${MARK}-close-heading] { box-sizing:border-box; padding-right:34px !important; }
 ${DETAIL} > h3[${MARK}-close-heading] { display:flex; align-items:center; min-height:28px; margin:0 0 8px; font-size:12px; font-weight:600; }
+/* Native cards already have a gutter on layout wrappers; the popover supplies it once. */
+${NATIVE_DETAIL} :is(div[class~="px-3"],p[class~="px-3"],ul[class~="px-3"],ul[class~="px-2.5"]) { padding-left:0 !important; padding-right:0 !important; }
+${NATIVE_DETAIL} > button[aria-expanded][aria-controls][class~="px-3"] { padding-left:0 !important; padding-right:0 !important; }
+${NATIVE_DETAIL} > div > button[aria-expanded][aria-controls]:is([class~="px-3"],[class~="px-2"]) { padding-left:0 !important; padding-right:0 !important; }
+${NATIVE_DETAIL} > div[class~="p-1"], ${NATIVE_DETAIL} > div[class~="p-1"] > div[class~="px-2"] { padding-left:0 !important; padding-right:0 !important; }
+${DETAIL}[aria-label="To-do list"] ul[class~="px-2.5"] > li[class~="px-2"] { margin-left:-8px; margin-right:-8px; width:calc(100% + 16px); box-sizing:border-box; }
+${DETAIL} [${MARK}-close-heading] { box-sizing:border-box; padding-right:34px !important; }
 ${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:18px; right:24px; color:var(--subtle-foreground); cursor:pointer; }
 [${MARK}-panel-action], [${MARK}-action="diff"] { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; padding:0 !important; border-radius:50% !important; color:var(--subtle-foreground); }
 [${MARK}-panel-action] svg, [${MARK}-action="diff"] svg { width:14px; height:14px; }
