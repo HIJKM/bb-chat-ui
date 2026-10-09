@@ -110,7 +110,7 @@ export const composerInfoCss = `
 [${MARK}-diff-content] { display:block !important; }
 [${MARK}-diff-file], [${MARK}-diff-commit] { display:flex; align-items:center; gap:8px; padding:7px 0; font-size:12px; min-width:0; }
 [${MARK}-diff-file][hidden], [${MARK}-diff-commit][hidden] { display:none !important; }
-[${MARK}-diff-toggle] { display:flex; align-items:center; gap:6px; width:100%; min-height:28px; margin:3px 0; padding:4px 8px; border-radius:8px; font-size:11px; color:var(--subtle-foreground); cursor:pointer; text-align:left; }
+[${MARK}-diff-toggle] { display:flex; align-items:center; gap:6px; width:100%; min-height:28px; margin:3px 0; padding:4px 8px; border-radius:8px; font-size:11px !important; line-height:16px; color:var(--subtle-foreground); cursor:pointer; text-align:left; }
 [${MARK}-diff-toggle]:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
 [${MARK}-diff-toggle] svg { width:12px; height:12px; flex-shrink:0; }
 [${MARK}-diff-toggle][aria-expanded=true] svg { transform:rotate(180deg); }
