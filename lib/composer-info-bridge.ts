@@ -93,7 +93,7 @@ export function ComposerInfoBridge() {
       hidden:true,
       [`${mark}-settings`]:JSON.stringify(values ?? {}),
       [`${mark}-children`]:JSON.stringify(children.map(child => ({ id:child.id, title:child.title ?? child.titleFallback ?? "Child Thread", state:childState(child.runtime.displayStatus, child.hasPendingInteraction) }))),
-    }),
+    }, createElement("span", { [`${mark}-icon`]:"annotations" }, createElement(experimental_Icon, { name:"ChatFeedback", "aria-hidden":true }))),
     createElement("div", { [`${mark}-supplements`]:"" },
       timeline?.activePromptMode ? section("plan", "Plan", "ListTodo", createElement("p", null, timeline.activePromptMode.prompt)) : null,
       timeline?.goal ? section("goal", "Goal", "Target", createElement("div", null,

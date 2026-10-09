@@ -105,6 +105,30 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-child-main] button { padding:0; border:0; border-radius:0; background:transparent; max-width:100%; text-align:left; font-size:12px; }
 [${MARK}-child-meta], [${MARK}-child-status] { font-size:10px; color:var(--subtle-foreground); }
 [${MARK}-child-status] { white-space:nowrap; }
+${DETAIL}.agentation-staging-shell { display:grid !important; grid-template-areas:"heading" "body" "actions"; padding:12px 14px 14px !important; border:0 !important; border-radius:18px !important; gap:0; }
+${DETAIL}.agentation-staging-shell > div:first-child { display:contents !important; }
+${DETAIL}.agentation-staging-shell > div:first-child > div:first-child { grid-area:heading; display:flex; align-items:center; gap:7px; width:100%; min-height:28px; padding-bottom:8px; }
+${DETAIL}.agentation-staging-shell > div:first-child > div:first-child p { flex:1; margin:0; font-size:12px; font-weight:600; }
+${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"] { width:24px; height:24px; margin-left:auto; background:transparent; border-radius:50%; }
+${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"] svg,
+${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"] [data-icon-root] { display:none; }
+${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"]::after { content:"×"; font-size:16px; color:var(--subtle-foreground); }
+${DETAIL}.agentation-staging-shell > div:first-child > div:last-child { grid-area:actions; display:flex; flex-wrap:wrap; justify-content:flex-start; gap:6px; margin-top:8px; }
+${DETAIL}.agentation-staging-shell > div:first-child > div:last-child > button { font-size:11px; min-height:28px; border:1px solid var(--border); border-radius:7px; padding:5px 9px; background:var(--surface-recessed); color:var(--foreground); }
+${DETAIL}.agentation-staging-shell > div:first-child > div:last-child > button:first-child { order:2; }
+${DETAIL}.agentation-staging-shell > div:first-child > div:last-child > button:last-child { order:1; }
+${DETAIL}.agentation-staging-shell > .grid { grid-area:body; width:100%; }
+${DETAIL}.agentation-staging-shell > .grid > div > div { padding:0 !important; }
+${DETAIL}.agentation-staging-shell ul { max-height:none !important; margin:0 !important; padding:0 !important; border:0 !important; overflow:visible !important; }
+${DETAIL}.agentation-staging-shell li { display:flex !important; align-items:center; gap:8px; min-width:0; padding:7px 0; margin:0 !important; }
+${DETAIL}.agentation-staging-shell li + li { border-top:1px solid var(--border-hairline,var(--border)); }
+${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] { display:grid !important; grid-template-areas:"comment comment" "location target"; grid-template-columns:auto minmax(0,1fr); gap:0 6px; flex:1; min-width:0; }
+${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span { max-width:none !important; font:inherit; }
+${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span:nth-child(1) { grid-area:location; font-size:10px; color:var(--subtle-foreground); }
+${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span:nth-child(2) { grid-area:target; font-size:10px; color:var(--subtle-foreground); }
+${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span:nth-child(3) { display:none; }
+${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span:nth-child(4) { grid-area:comment; font-size:12px; font-weight:400; white-space:normal; overflow-wrap:anywhere; }
+${DETAIL}.agentation-staging-shell li::before { content:""; flex-shrink:0; width:14px; height:14px; background:var(--subtle-foreground); mask:var(--bb-chat-ui-feedback-icon) center/contain no-repeat; }
 @keyframes bb-info-enter { from { opacity:0; transform:translateY(8px) scale(.98); } to { opacity:1; transform:none; } }
 @keyframes bb-info-bubble { 0% { transform:translateY(12px) scale(.25); } 45% { transform:translateY(-4px) scale(1.18); } 65% { transform:scale(.94); } 82% { transform:scale(1.03); } 100% { transform:none; } }
 @keyframes bb-info-breathe { 50% { opacity:.4; } }
@@ -200,11 +224,16 @@ export function injectComposerInfo(document: Document): () => void {
       if (!node.hasAttribute(attr)) node.setAttribute(attr, "");
     };
     const labelOf = (key: InfoKind) => infoKinds.find(kind => kind.key === key)!.label;
+    const annotationCount = (item: InfoItem) => {
+      const list = item.node.querySelector("ul");
+      return list ? String(list.children.length) : item.node.querySelector(".tabular-nums")?.textContent?.trim() ?? "!";
+    };
     const catalog = () => infoKinds.filter(kind => listed.includes(kind.key)).flatMap<InfoItem | { key:InfoKind; label:string }>(kind => {
       const available = items.filter(item => item.key === kind.key);
       return available.length ? available : [{ key:kind.key, label:kind.label }];
     });
     const describe = (item: InfoItem) => {
+      if (item.key === "annotations") return `${annotationCount(item)} staged`;
       const text = item.key === "diff" ? item.trigger?.textContent : item.trigger?.getAttribute("aria-label") ?? item.trigger?.textContent;
       return text?.trim().replace(/\s+/g, " ").slice(0, 200) || item.node.getAttribute("aria-label") || item.label;
     };
@@ -218,7 +247,9 @@ export function injectComposerInfo(document: Document): () => void {
       text.textContent = summary && item.key === "diff" ? describe(item) : item.label;
       if (summary && item.key === "todos") text.textContent = item.trigger?.textContent?.trim().replace(/\s+/g, " ").slice(0, 30) || item.label;
       if (summary && item.key === "queue") text.textContent = item.node.querySelector('span.tabular-nums')?.textContent?.trim() || item.label;
-      const icon = item.trigger?.querySelector("svg, [data-icon-root]") ?? item.node.querySelector("svg, [data-icon-root]");
+      if (summary && item.key === "annotations") text.textContent = annotationCount(item);
+      const icon = (item.key === "annotations" ? stack.querySelector(`[${MARK}-icon="annotations"] svg, [${MARK}-icon="annotations"] [data-icon-root]`) : null)
+        ?? item.trigger?.querySelector("svg, [data-icon-root]") ?? item.node.querySelector("svg, [data-icon-root]");
       button.replaceChildren();
       if (summary && item.key === "children") {
         const avatars = document.createElement("span");
@@ -239,8 +270,8 @@ export function injectComposerInfo(document: Document): () => void {
           const dot = document.createElement("span"); dot.setAttribute(`${MARK}-avatar-dot`, "");
           if (stateOf(child) === "done") {
             const check = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-            check.setAttribute("viewBox", "0 0 24 24"); check.setAttribute("fill", "none"); check.setAttribute("stroke", "currentColor"); check.setAttribute("stroke-width", "3");
-            const path = document.createElementNS(check.namespaceURI, "path"); path.setAttribute("d", "m5 12 4 4L19 6"); check.append(path); dot.append(check);
+            check.setAttribute("viewBox", "0 0 24 24"); check.setAttribute("fill", "none"); check.setAttribute("stroke", "currentColor"); check.setAttribute("stroke-width", "1.5"); check.setAttribute("stroke-linecap", "round"); check.setAttribute("stroke-linejoin", "round");
+            const path = document.createElementNS(check.namespaceURI, "path"); path.setAttribute("d", "M5 14L8.5 17.5L19 6.5"); check.append(path); dot.append(check);
           }
           avatar.append(dot);
           if (!childStates.has(child.id)) avatar.setAttribute("data-new", "");
@@ -396,6 +427,11 @@ export function injectComposerInfo(document: Document): () => void {
     const sync = () => {
       const source = stack.querySelector(`[${SOURCE}]`);
       if (!source) return;
+      const feedback = source.querySelector(`[${MARK}-icon="annotations"] svg`);
+      if (feedback) {
+        const mask = `url("data:image/svg+xml,${encodeURIComponent(new view!.XMLSerializer().serializeToString(feedback))}")`;
+        if (stack.style.getPropertyValue("--bb-chat-ui-feedback-icon") !== mask) stack.style.setProperty("--bb-chat-ui-feedback-icon", mask);
+      }
       bar.toggleAttribute(`${MARK}-jump`, stack.closest('[data-scroll-footer]')?.querySelector('button[aria-label="Scroll to latest event"]') !== null && !!stack.closest('[data-scroll-footer]'));
       const found: InfoItem[] = [];
       const currentOwned = new Set<HTMLElement>();
@@ -452,6 +488,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (!listed.length) close();
       bar.hidden = request || !listed.length && !editing();
       const exposed = exposedInfo(settings);
+      if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
       const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`)]);
       if (signature !== next) {
         if (signature) pulse();
@@ -496,6 +533,7 @@ export function injectComposerInfo(document: Document): () => void {
       bar.remove();
       stack.removeAttribute(`${MARK}-stack`);
       stack.removeAttribute(`${MARK}-request`);
+      stack.style.removeProperty("--bb-chat-ui-feedback-icon");
       for (const node of owned) { node.removeAttribute(UNIT); node.removeAttribute(OPEN); }
       for (const node of wrappers) node.removeAttribute(WRAP);
     } };

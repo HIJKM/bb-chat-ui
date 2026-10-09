@@ -75,6 +75,48 @@ test("children use a bare latest-three avatar stack and prefer the designed SDK 
   stop(); f.dom.window.close();
 });
 
+test("Agentation shows icon and count, retains native actions, and closes with the native dismissal", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showAnnotations:'상단 표시' }));
+  source.insertAdjacentHTML('beforeend', '<span data-bb-chat-ui-info-icon="annotations"><svg data-feedback-icon><path d="M9 10h6" /></svg></span>');
+  const shell = f.document.createElement('div');
+  shell.className = 'agentation-staging-shell';
+  stack.append(shell);
+  let sent = 0;
+  const render = (collapsed: boolean) => {
+    shell.classList.toggle('agentation-staging-shell--expanded', !collapsed);
+    shell.innerHTML = `<div>${collapsed ? '<button aria-expanded="false" aria-label="Expand 3 staged annotations">Annotations <span class="tabular-nums">3</span></button>' : '<div><p>Annotations</p><button aria-expanded="true" aria-label="Collapse staged annotations">↑</button></div><div><button data-discard-all>Discard all</button><button data-send-all>Send all</button></div>'}</div>
+      <div class="grid"><div><div><ul>${[1,2,3].map(id => `<li><span class="sr-only">Description ${id}</span><span aria-hidden="true"><span>Composer</span><span>button</span><span>→</span><span>Feedback ${id}</span></span><button aria-label="Mention annotation">Mention</button><button aria-label="Send annotation to this thread">Send</button><button aria-label="Discard annotation">Discard</button></li>`).join('')}</ul></div></div></div>`;
+    shell.querySelector('button[aria-expanded]')!.addEventListener('click', () => render(!collapsed));
+    shell.querySelector('[data-send-all]')?.addEventListener('click', () => sent++);
+  };
+  render(true);
+  const parent = shell.parentElement;
+  const stop = injectComposerInfo(f.document);
+  const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="annotations"]')!;
+  assert.equal(pill.textContent, '3');
+  assert.ok(pill.querySelector('[data-feedback-icon]'));
+  f.click('[data-bb-chat-ui-info-trigger="annotations"]');
+  await f.tick();
+  assert.ok(shell.hasAttribute('data-bb-chat-ui-info-open'));
+  assert.equal(shell.parentElement, parent);
+  assert.equal(f.dom.window.getComputedStyle(shell).display, 'grid');
+  const send = shell.querySelector('[data-send-all]')!;
+  const sendParent = send.parentElement;
+  f.click('[data-send-all]');
+  assert.equal(sent, 1);
+  assert.equal(send.parentElement, sendParent);
+  shell.querySelector('li')!.remove();
+  await f.tick();
+  assert.equal(pill.textContent, '2');
+  f.click('[aria-label="Collapse staged annotations"]');
+  await f.tick();
+  assert.equal(shell.hasAttribute('data-bb-chat-ui-info-open'), false);
+  stop(); f.dom.window.close();
+});
+
 test("an empty composer lists every information family without inventing summary data", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
