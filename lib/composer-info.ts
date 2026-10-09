@@ -145,6 +145,8 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 ${DETAIL}.agentation-staging-shell { display:grid !important; grid-template-areas:"heading" "body" "actions"; padding:12px 14px 14px !important; border:0 !important; border-radius:18px !important; gap:0; }
 ${DETAIL}.agentation-staging-shell > div:first-child { display:contents !important; }
 ${DETAIL}.agentation-staging-shell > div:first-child > div:first-child { grid-area:heading; display:flex; align-items:center; gap:7px; width:100%; min-height:28px; padding-bottom:8px; }
+${DETAIL}.agentation-staging-shell > div:first-child > div:first-child > [data-icon="ChatFeedback"] { display:none !important; }
+${DETAIL}.agentation-staging-shell > div:first-child > div:first-child::before { content:""; flex-shrink:0; width:14px; height:14px; background:currentColor; mask:var(--bb-chat-ui-feedback-icon) center/contain no-repeat; }
 ${DETAIL}.agentation-staging-shell > div:first-child > div:first-child p { flex:1; margin:0; font-size:12px; font-weight:600; }
 ${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"] { width:24px; height:24px; margin-left:auto; background:transparent; border-radius:50%; }
 ${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"] svg,
@@ -534,7 +536,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (summary && item.key === "annotations") text.textContent = annotationCount(item);
       const presentation = item.key === "diff" ? readDiff()?.presentation : null;
       const icon = (summary && presentation && presentation.mode !== "working" ? emptyIcon("diff") : null)
-        ?? (item.key === "annotations" ? item.node.querySelector('[data-icon="ChatFeedback"]') : null)
+        ?? (item.key === "annotations" ? emptyIcon("annotations") : null)
         ?? (item.key === "queue" ? emptyIcon("queue") : null)
         ?? (!summary ? emptyIcon(item.key) : null)
         ?? item.trigger?.querySelector("svg, [data-icon-root]") ?? item.node.querySelector("svg, [data-icon-root]") ?? emptyIcon(item.key);
@@ -771,7 +773,7 @@ export function injectComposerInfo(document: Document): () => void {
     const sync = () => {
       const source = stack.querySelector(`[${SOURCE}]`);
       if (!source) return;
-      const feedback = stack.querySelector('.agentation-staging-shell [data-icon="ChatFeedback"]');
+      const feedback = emptyIcon("annotations");
       if (feedback) {
         const mask = `url("data:image/svg+xml,${encodeURIComponent(new view!.XMLSerializer().serializeToString(feedback))}")`;
         if (stack.style.getPropertyValue("--bb-chat-ui-feedback-icon") !== mask) stack.style.setProperty("--bb-chat-ui-feedback-icon", mask);
@@ -837,7 +839,7 @@ export function injectComposerInfo(document: Document): () => void {
       const exposed = exposedInfo(settings).filter(key => key !== "diff" || !awaitingDiff && diff?.presentation?.visible !== false);
       const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
-      const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK)]);
+      const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
       if (signature !== next) {
         if (signature) pulse();
         signature = next;

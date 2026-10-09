@@ -7,7 +7,7 @@ export const infoKinds = [
   { key: "workflow", icon: "Workflow", setting: "showWorkflow", label: "Workflow", default: false },
   { key: "background", icon: "Terminal", setting: "showBackground", label: "백그라운드 작업", default: false },
   { key: "queue", icon: "Clock", setting: "showQueue", label: "대기 메시지", default: false },
-  { key: "annotations", icon: "ChatFeedback", setting: "showAnnotations", label: "Agentation", default: false },
+  { key: "annotations", icon: "MessageSquarePlus", setting: "showAnnotations", label: "Agentation", default: false },
   { key: "pullRequest", icon: "GitPullRequest", setting: "showPullRequest", label: "Pull request", default: false },
   { key: "parent", icon: "MessageSquare", setting: "showParent", label: "상위 스레드", default: false },
   { key: "machine", icon: "Terminal", setting: "showMachine", label: "실행 환경", default: false },

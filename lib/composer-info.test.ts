@@ -325,12 +325,12 @@ test("child counts use up to three overlapping avatars followed by a separate ov
   stop(); f.dom.window.close();
 });
 
-test("Agentation shows icon and count, retains native actions, and closes with the native dismissal", async () => {
+test("Agentation uses the browser picker icon and count while retaining native controls", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
   source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showAnnotations:'상단 표시' }));
-  source.insertAdjacentHTML('beforeend', '<span data-bb-chat-ui-info-icon="annotations"><svg data-sdk-fallback><path d="M1 1h1" /></svg></span>');
+  source.insertAdjacentHTML('beforeend', '<span data-bb-chat-ui-info-icon="annotations"><svg data-icon="MessageSquarePlus" data-picker-icon><path d="M1 1h1" /></svg></span>');
   const shell = f.document.createElement('div');
   shell.className = 'agentation-staging-shell';
   stack.append(shell);
@@ -348,13 +348,19 @@ test("Agentation shows icon and count, retains native actions, and closes with t
   const stop = injectComposerInfo(f.document);
   const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="annotations"]')!;
   assert.equal(pill.textContent, '3');
-  assert.ok(pill.querySelector('[data-feedback-icon]'));
+  assert.equal(infoKinds.find(kind => kind.key === 'annotations')!.icon, 'MessageSquarePlus');
+  assert.ok(pill.querySelector('[data-picker-icon]'));
+  assert.equal(pill.querySelector('[data-feedback-icon]'), null);
+  f.click('[data-bb-chat-ui-info-all]');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="annotations"] [data-picker-icon]'));
   f.click('[data-bb-chat-ui-info-trigger="annotations"]');
   await f.tick();
   assert.ok(shell.hasAttribute('data-bb-chat-ui-info-open'));
   assert.equal(shell.parentElement, parent);
   assert.equal(f.dom.window.getComputedStyle(shell).display, 'grid');
-  assert.ok(pill.querySelector('[data-feedback-icon]'), 'expanded native header retains the original feedback glyph');
+  assert.ok(pill.querySelector('[data-picker-icon]'), 'expanding the native card keeps the picker glyph');
+  assert.ok(decodeURIComponent(stack.style.getPropertyValue('--bb-chat-ui-feedback-icon')).includes('data-picker-icon'), 'popup header and row masks use the picker glyph');
+  assert.equal(f.dom.window.getComputedStyle(shell.querySelector('[data-feedback-icon]')!).display, 'none', 'the old header icon is hidden without removing its native DOM');
   assert.equal(pill.querySelector('[data-chevron]'), null);
   const send = shell.querySelector('[data-send-all]')!;
   const sendParent = send.parentElement;
@@ -368,6 +374,23 @@ test("Agentation shows icon and count, retains native actions, and closes with t
   await f.tick();
   assert.equal(shell.hasAttribute('data-bb-chat-ui-info-open'), false);
   stop(); f.dom.window.close();
+});
+
+test("Agentation replaces its native glyph when the SDK picker icon finishes loading", async () => {
+  const f = fixture();
+  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  source.setAttribute('data-bb-chat-ui-info-settings', '{"showAnnotations":"상단 표시"}');
+  source.insertAdjacentHTML('beforeend', '<span data-bb-chat-ui-info-icon="annotations"></span>');
+  f.document.querySelector('[data-promptbox-shell] > .grid')!.insertAdjacentHTML('beforeend', '<div class="agentation-staging-shell"><button aria-expanded="false"><svg data-icon="ChatFeedback" /><span class="tabular-nums">2</span></button></div>');
+  const stop = injectComposerInfo(f.document);
+  try {
+    source.querySelector('[data-bb-chat-ui-info-icon="annotations"]')!.innerHTML = '<svg data-icon="MessageSquarePlus"><path d="M1 1h1" /></svg>';
+    await f.tick();
+    const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="annotations"]')!;
+    assert.ok(pill.querySelector('[data-icon="MessageSquarePlus"]'), 'icon readiness refreshes the pill even when the annotation count is unchanged');
+    assert.equal(pill.querySelector('[data-icon="ChatFeedback"]'), null);
+    assert.equal(pill.textContent, '2');
+  } finally { stop(); f.dom.window.close(); }
 });
 
 test("empty top icons can be enabled and disabled without exposing catalog-only or disabled families", async () => {
