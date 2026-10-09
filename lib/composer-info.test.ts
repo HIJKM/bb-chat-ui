@@ -1433,6 +1433,10 @@ test("composer question cards have rounded corners and a gentle entrance without
     const outside=f.document.createElement('section'); outside.setAttribute('data-testid',id); outside.style.borderRadius='4px'; f.document.body.append(outside);
     const question=f.document.createElement('section'); question.setAttribute('data-testid',id);
     question.innerHTML='<p>Which option?</p><button type="button">Option A</button><textarea>Custom answer</textarea><button type="button">Submit</button>';
+    if (id === 'plugin-request-banner') {
+      const nativeCss=f.document.createElement('style'); nativeCss.textContent='.rounded-lg { border-radius:4px; } .mb-2 { margin-bottom:8px; }'; f.document.head.append(nativeCss);
+      question.innerHTML=`<section data-testid="plugin-interaction-shell" class="rounded-lg mb-2">${question.innerHTML}</section>`;
+    }
     stack.prepend(question);
     const answer=question.querySelector('button')!; const parent=answer.parentElement;
     let selected=0; answer.addEventListener('click',()=>selected++);
@@ -1443,11 +1447,14 @@ test("composer question cards have rounded corners and a gentle entrance without
       assert.equal(css.borderRadius,'18px',id);
       assert.ok(css.animation.includes('bb-info-enter 260ms'),id);
       assert.equal(css.overflow,'hidden','the card surface clips to its rounded edge');
+      const nested=question.querySelector('[data-testid="plugin-interaction-shell"]');
+      if (nested) assert.equal(f.dom.window.getComputedStyle(nested).borderRadius,'18px','the visible nested card also rounds its bottom edge above its native margin');
       answer.click(); assert.equal(selected,1); assert.equal(answer.parentElement,parent);
       assert.equal(question.querySelector('textarea')!.value,'Custom answer');
       assert.equal(f.dom.window.getComputedStyle(outside).borderRadius,'4px','past questions outside the composer are unchanged');
       stop();
       assert.equal(f.dom.window.getComputedStyle(question).borderRadius,'','unloading restores native styling');
+      if (nested) assert.equal(f.dom.window.getComputedStyle(nested).borderRadius,'4px','unloading restores the nested native surface');
     } finally {stop();f.dom.window.close();}
   }
 });
