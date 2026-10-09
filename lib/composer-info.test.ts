@@ -733,6 +733,36 @@ test("Code Diff pill shows one commit meaning and keeps unpushed counts inside i
   stop(); f.dom.window.close();
 });
 
+test("first entry waits for SDK Diff data instead of flashing the host Diff before the branch or hidden main", async () => {
+  for (const showEmptyIcons of [false,true]) {
+    const f = fixture();
+    f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings',JSON.stringify({ showEmptyIcons }));
+    const source = f.document.createElement('span');
+    source.setAttribute('data-bb-chat-ui-head-diff','');
+    f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+    const stop = injectComposerInfo(f.document);
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null,'no provisional host line counts or empty icons during initial loading');
+    f.click('[data-bb-chat-ui-info-all]');
+    assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="diff"]'),'catalog remains available');
+    f.click('[data-bb-chat-ui-info-all]');
+    source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({ insertions:0,deletions:0,files:0,branch:'feature/chat',
+      presentation:{ mode:'branch',visible:true,branch:'feature/chat',branchLabel:'feature/c…',label:'feature/c… · 8 commits' },
+      detail:{ branch:'feature/chat',basis:'HEAD 대비 미커밋 변경',baseRef:'origin/main',files:[],commits:[],commitKind:'pr',commitCount:8 },
+    }));
+    await f.tick();
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent,'feature/c… · 8');
+    // A new thread's source is empty until its own first result arrives.
+    source.setAttribute('data-bb-chat-ui-head-diff',''); await f.tick();
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null);
+    source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({ insertions:0,deletions:0,files:0,branch:null,
+      presentation:{ mode:'unpushed',visible:false,branch:'main',branchLabel:'main',label:'main' },
+    }));
+    await f.tick();
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null,'clean main stays hidden from entry through first result');
+    stop(); f.dom.window.close();
+  }
+});
+
 test("clean main hides the pill even with empty icons enabled but remains in the catalog", async () => {
   const f = fixture();
   f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings', '{"showEmptyIcons":true}');

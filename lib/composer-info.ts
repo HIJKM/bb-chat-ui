@@ -702,7 +702,9 @@ export function injectComposerInfo(document: Document): () => void {
       if (active && active !== "all" && !listed.includes(active)) close();
       if (!listed.length) close();
       bar.hidden = request || !listed.length && !editing();
-      const exposed = exposedInfo(settings).filter(key => key !== "diff" || readDiff()?.presentation?.visible !== false);
+      const diff = readDiff();
+      const awaitingDiff = !!stack.querySelector(`[${HEAD_DIFF_MARK}]`) && !diff;
+      const exposed = exposedInfo(settings).filter(key => key !== "diff" || !awaitingDiff && diff?.presentation?.visible !== false);
       const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
       const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK)]);
