@@ -164,7 +164,7 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-kind="children"] h3 { display:flex; align-items:center; gap:7px; min-height:28px; margin:0 0 8px; }
 [${MARK}-kind="children"] h3 [data-icon-root] { width:14px; height:14px; }
 [${MARK}-kind="children"] [${MARK}-dismiss] { margin-left:auto; border:0; background:transparent; color:var(--subtle-foreground); }
-${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row] { display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box; padding:8px; min-width:0; border-radius:10px; text-align:left; cursor:pointer; background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; transition:background-color 150ms ease-out; }
+${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row] { display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box; padding:8px 0; min-width:0; border-radius:10px; text-align:left; cursor:pointer; background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; transition:background-color 150ms ease-out; }
 ${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row]:hover, ${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row]:focus-visible { background:color-mix(in oklab,var(--foreground) 6%,transparent) !important; }
 [${MARK}-child-row] + [${MARK}-child-row] { border-top:1px solid var(--border-hairline,var(--border)); }
 [${MARK}-child-row] [${MARK}-avatar] { width:27px; height:27px; margin-left:0; }
@@ -189,7 +189,7 @@ ${DETAIL}.agentation-staging-shell > div:first-child > div:last-child > button:l
 ${DETAIL}.agentation-staging-shell > .grid { grid-area:body; width:100%; }
 ${DETAIL}.agentation-staging-shell > .grid > div > div { padding:0 !important; }
 ${DETAIL}.agentation-staging-shell ul { max-height:none !important; margin:0 !important; padding:0 !important; border:0 !important; overflow:visible !important; }
-${DETAIL}.agentation-staging-shell li { display:flex !important; align-items:center; gap:8px; min-width:0; min-height:52px; box-sizing:border-box; padding:10px 8px; margin:0 !important; border:0 !important; border-radius:10px; background:transparent !important; transition:background-color 150ms ease-out; }
+${DETAIL}.agentation-staging-shell li { display:flex !important; align-items:center; gap:8px; min-width:0; min-height:52px; box-sizing:border-box; padding:10px 0; margin:0 !important; border:0 !important; border-radius:10px; background:transparent !important; transition:background-color 150ms ease-out; }
 ${DETAIL}.agentation-staging-shell li + li { margin-top:4px !important; }
 ${DETAIL}.agentation-staging-shell li:hover, ${DETAIL}.agentation-staging-shell li:focus-within { background:color-mix(in oklab,var(--foreground) 6%,transparent) !important; }
 ${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] { display:grid !important; grid-template-areas:"comment comment" "location target"; grid-template-columns:auto minmax(0,1fr); gap:0 6px; flex:1; min-width:0; }
