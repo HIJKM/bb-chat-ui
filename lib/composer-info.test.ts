@@ -44,6 +44,29 @@ test("overflow reserves the all-information button and prefers Diff and children
   assert.deepEqual(fitComposerInfo(items, 30), []);
 });
 
+test("catalog entries retain their family icon with or without current information", async () => {
+  const f = fixture();
+  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  for (const kind of infoKinds) source.insertAdjacentHTML('beforeend', `<span data-bb-chat-ui-info-icon="${kind.key}"><svg data-family="${kind.key}"><path d="M1 1h1" /></svg></span>`);
+  f.document.querySelector('#thread-prompt-banner-child-threads-toggle')!.insertAdjacentHTML('afterbegin', '<svg data-chevron />');
+  const stop = injectComposerInfo(f.document);
+  f.click('[data-bb-chat-ui-info-all]');
+  for (const kind of infoKinds) {
+    const choice = f.document.querySelector(`[data-bb-chat-ui-info-choice="${kind.key}"]`)!;
+    const icon = choice.querySelector('svg');
+    assert.ok(icon, `${kind.label} has an icon even when no information is available`);
+    assert.equal(icon.getAttribute('data-family'), kind.key);
+    assert.equal(icon.getAttribute('aria-hidden'), 'true');
+  }
+  const goal = f.document.querySelector('section[aria-label="Goal"]')!;
+  goal.remove();
+  await f.tick();
+  const emptyGoal = f.document.querySelector('[data-bb-chat-ui-info-choice="goal"]')!;
+  assert.ok(emptyGoal.hasAttribute('data-bb-chat-ui-info-unavailable'));
+  assert.ok(emptyGoal.querySelector('[data-family="goal"]'));
+  stop(); f.dom.window.close();
+});
+
 test("children use a bare latest-three avatar stack and prefer the designed SDK detail", async () => {
   const f = fixture();
   const children = [

@@ -289,6 +289,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (summary && item.key === "queue") text.textContent = item.node.querySelector('span.tabular-nums')?.textContent?.trim() || item.label;
       if (summary && item.key === "annotations") text.textContent = annotationCount(item);
       const icon = (item.key === "annotations" ? item.node.querySelector('[data-icon="ChatFeedback"]') : null)
+        ?? (!summary ? emptyIcon(item.key) : null)
         ?? item.trigger?.querySelector("svg, [data-icon-root]") ?? item.node.querySelector("svg, [data-icon-root]") ?? emptyIcon(item.key);
       button.replaceChildren();
       if (summary && item.key === "children") {
@@ -398,8 +399,12 @@ export function injectComposerInfo(document: Document): () => void {
             if (items.filter(other => other.key === item.key).length > 1) choice.querySelector("span")!.textContent = `${item.label} · ${describe(item)}`;
           } else {
             choice.setAttribute(`${MARK}-unavailable`, "");
+            const icon = emptyIcon(item.key)?.cloneNode(true) as Element | undefined;
+            icon?.removeAttribute("id");
+            icon?.setAttribute("aria-hidden", "true");
             const label = document.createElement("span"); label.textContent = item.label;
             const state = document.createElement("small"); state.textContent = "현재 없음";
+            if (icon) choice.append(icon);
             choice.append(label, state);
           }
           choice.addEventListener("click", () => {
