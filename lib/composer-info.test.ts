@@ -80,14 +80,15 @@ test("Agentation shows icon and count, retains native actions, and closes with t
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
   source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showAnnotations:'상단 표시' }));
-  source.insertAdjacentHTML('beforeend', '<span data-bb-chat-ui-info-icon="annotations"><svg data-feedback-icon><path d="M9 10h6" /></svg></span>');
+  source.insertAdjacentHTML('beforeend', '<span data-bb-chat-ui-info-icon="annotations"><svg data-sdk-fallback><path d="M1 1h1" /></svg></span>');
   const shell = f.document.createElement('div');
   shell.className = 'agentation-staging-shell';
   stack.append(shell);
   let sent = 0;
   const render = (collapsed: boolean) => {
     shell.classList.toggle('agentation-staging-shell--expanded', !collapsed);
-    shell.innerHTML = `<div>${collapsed ? '<button aria-expanded="false" aria-label="Expand 3 staged annotations">Annotations <span class="tabular-nums">3</span></button>' : '<div><p>Annotations</p><button aria-expanded="true" aria-label="Collapse staged annotations">↑</button></div><div><button data-discard-all>Discard all</button><button data-send-all>Send all</button></div>'}</div>
+    const icon = '<svg data-icon="ChatFeedback" data-feedback-icon><path d="M9 10h6" /></svg>';
+    shell.innerHTML = `<div>${collapsed ? `<button aria-expanded="false" aria-label="Expand 3 staged annotations">${icon}Annotations <span class="tabular-nums">3</span></button>` : `<div>${icon}<p>Annotations</p><button aria-expanded="true" aria-label="Collapse staged annotations"><svg data-chevron /></button></div><div><button data-discard-all>Discard all</button><button data-send-all>Send all</button></div>`}</div>
       <div class="grid"><div><div><ul>${[1,2,3].map(id => `<li><span class="sr-only">Description ${id}</span><span aria-hidden="true"><span>Composer</span><span>button</span><span>→</span><span>Feedback ${id}</span></span><button aria-label="Mention annotation">Mention</button><button aria-label="Send annotation to this thread">Send</button><button aria-label="Discard annotation">Discard</button></li>`).join('')}</ul></div></div></div>`;
     shell.querySelector('button[aria-expanded]')!.addEventListener('click', () => render(!collapsed));
     shell.querySelector('[data-send-all]')?.addEventListener('click', () => sent++);
@@ -103,6 +104,8 @@ test("Agentation shows icon and count, retains native actions, and closes with t
   assert.ok(shell.hasAttribute('data-bb-chat-ui-info-open'));
   assert.equal(shell.parentElement, parent);
   assert.equal(f.dom.window.getComputedStyle(shell).display, 'grid');
+  assert.ok(pill.querySelector('[data-feedback-icon]'), 'expanded native header retains the original feedback glyph');
+  assert.equal(pill.querySelector('[data-chevron]'), null);
   const send = shell.querySelector('[data-send-all]')!;
   const sendParent = send.parentElement;
   f.click('[data-send-all]');

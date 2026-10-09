@@ -248,7 +248,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (summary && item.key === "todos") text.textContent = item.trigger?.textContent?.trim().replace(/\s+/g, " ").slice(0, 30) || item.label;
       if (summary && item.key === "queue") text.textContent = item.node.querySelector('span.tabular-nums')?.textContent?.trim() || item.label;
       if (summary && item.key === "annotations") text.textContent = annotationCount(item);
-      const icon = (item.key === "annotations" ? stack.querySelector(`[${MARK}-icon="annotations"] svg, [${MARK}-icon="annotations"] [data-icon-root]`) : null)
+      const icon = (item.key === "annotations" ? item.node.querySelector('[data-icon="ChatFeedback"]') : null)
         ?? item.trigger?.querySelector("svg, [data-icon-root]") ?? item.node.querySelector("svg, [data-icon-root]");
       button.replaceChildren();
       if (summary && item.key === "children") {
@@ -427,7 +427,7 @@ export function injectComposerInfo(document: Document): () => void {
     const sync = () => {
       const source = stack.querySelector(`[${SOURCE}]`);
       if (!source) return;
-      const feedback = source.querySelector(`[${MARK}-icon="annotations"] svg`);
+      const feedback = stack.querySelector('.agentation-staging-shell [data-icon="ChatFeedback"]');
       if (feedback) {
         const mask = `url("data:image/svg+xml,${encodeURIComponent(new view!.XMLSerializer().serializeToString(feedback))}")`;
         if (stack.style.getPropertyValue("--bb-chat-ui-feedback-icon") !== mask) stack.style.setProperty("--bb-chat-ui-feedback-icon", mask);
