@@ -532,7 +532,7 @@ test("the particle orb reacts briefly to information and disclosure events, stay
       const orb=f.document.querySelector<SVGSVGElement>('[data-bb-chat-ui-info-orb]')!;
       const css=f.dom.window.getComputedStyle(orb);
       assert.equal(css.width,'24px'); assert.equal(css.height,'24px');
-      assert.equal(orb.querySelectorAll('circle').length,96,'the sphere is made from locally projected points');
+      assert.equal(orb.querySelectorAll('circle').length,64,'the sphere uses fewer, more spaced-out projected points');
       assert.ok(new Set([...orb.querySelectorAll('circle')].map(point=>point.getAttribute('opacity'))).size > 1,'depth changes point brightness');
       assert.equal(orb.querySelectorAll('img, image').length,0,'no downloaded asset is bundled');
       assert.ok(!css.animation || css.animation==='none','the resting orb has no continuous animation');
@@ -540,20 +540,20 @@ test("the particle orb reacts briefly to information and disclosure events, stay
       assert.equal(reactions().length,0,'entry uses the button droplet, without an extra orb reaction');
       for (const record of records) record.animation.onfinish?.(new f.dom.window.Event('finish') as unknown as AnimationPlaybackEvent);
       f.click('[data-bb-chat-ui-info-all]');
-      assert.equal(reactions().length,reduced?0:96,'opening a popover briefly moves every particle');
+      assert.equal(reactions().length,reduced?0:64,'opening a popover briefly moves every particle');
       f.click('[data-bb-chat-ui-info-all]');
-      assert.equal(reactions().length,reduced?0:192,'closing briefly moves the orb too');
+      assert.equal(reactions().length,reduced?0:128,'closing briefly moves the orb too');
       if(!reduced) assert.equal(reactions()[0].cancelled,true,'rapid events replace the prior motion instead of stacking it');
       f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent='+18 −4 · 3 files';
       await f.tick();
-      assert.equal(reactions().length,reduced?0:288,'a changed pill gives the orb one activity reaction');
+      assert.equal(reactions().length,reduced?0:192,'a changed pill gives the orb one activity reaction');
       const count=reactions().length;
       await f.tick(); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
       assert.equal(reactions().length,count,'idle and layout updates do not restart activity');
       if(!reduced) {
         assert.ok(reactions().every(record=>record.options.duration===520 && !record.options.iterations));
         assert.equal(reactions().at(-1)!.frames.at(-1)!.transform,'none','the sphere settles back to rest');
-        assert.ok(new Set(reactions().slice(0,96).map(record=>record.frames[3].transform)).size > 1,'the wave displaces points across the surface instead of scaling a flat icon');
+        assert.ok(new Set(reactions().slice(0,64).map(record=>record.frames[3].transform)).size > 1,'the wave displaces points across the surface instead of scaling a flat icon');
       }
       stop();
       assert.ok(reactions().every(record=>record.cancelled),'unload cancels remaining orb motion');
