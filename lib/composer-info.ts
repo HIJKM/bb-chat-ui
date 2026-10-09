@@ -440,6 +440,7 @@ export function injectComposerInfo(document: Document): () => void {
       const presentation = item.key === "diff" ? readDiff()?.presentation : null;
       const icon = (summary && presentation && presentation.mode !== "working" ? emptyIcon("diff") : null)
         ?? (item.key === "annotations" ? item.node.querySelector('[data-icon="ChatFeedback"]') : null)
+        ?? (item.key === "queue" ? emptyIcon("queue") : null)
         ?? (!summary ? emptyIcon(item.key) : null)
         ?? item.trigger?.querySelector("svg, [data-icon-root]") ?? item.node.querySelector("svg, [data-icon-root]") ?? emptyIcon(item.key);
       button.replaceChildren();

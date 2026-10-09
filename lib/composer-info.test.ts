@@ -129,6 +129,24 @@ test("catalog entries retain their family icon with or without current informati
   stop(); f.dom.window.close();
 });
 
+test("queue pill uses its Clock family icon instead of the hidden native disclosure glyph", async () => {
+  const f = fixture();
+  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  source.setAttribute('data-bb-chat-ui-info-settings', '{"showQueue":"상단 표시"}');
+  source.insertAdjacentHTML('beforeend', '<span data-bb-chat-ui-info-icon="queue"><svg data-icon="Clock"><path d="M12 6v6h4" /></svg></span>');
+  const toggle = f.document.querySelector('section[aria-label="Queued messages"] header button')!;
+  toggle.insertAdjacentHTML('afterbegin', '<svg data-icon="ChevronDown" style="display:none"><path d="m6 9 6 6 6-6" /></svg>');
+  const stop = injectComposerInfo(f.document);
+  const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]')!;
+  assert.ok(pill.querySelector('[data-icon="Clock"]'));
+  assert.equal(pill.querySelector('[data-icon="ChevronDown"]'), null);
+  assert.equal(f.dom.window.getComputedStyle(pill.querySelector('svg')!).display, 'inline');
+  f.click('[data-bb-chat-ui-info-trigger="queue"]'); await f.tick();
+  assert.ok(f.document.querySelector('section[aria-label="Queued messages"][data-bb-chat-ui-info-open]'));
+  assert.ok(pill.querySelector('[data-icon="Clock"]'), 'expansion keeps the queue family icon');
+  stop(); f.dom.window.close();
+});
+
 test("popover scroll hints follow available content, including nested scroll areas, and are cleaned up", async () => {
   const f = fixture();
   const stop = injectComposerInfo(f.document);
