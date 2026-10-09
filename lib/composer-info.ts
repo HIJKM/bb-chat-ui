@@ -176,8 +176,9 @@ ${DETAIL}.agentation-staging-shell > div:first-child > div:last-child > button:l
 ${DETAIL}.agentation-staging-shell > .grid { grid-area:body; width:100%; }
 ${DETAIL}.agentation-staging-shell > .grid > div > div { padding:0 !important; }
 ${DETAIL}.agentation-staging-shell ul { max-height:none !important; margin:0 !important; padding:0 !important; border:0 !important; overflow:visible !important; }
-${DETAIL}.agentation-staging-shell li { display:flex !important; align-items:center; gap:8px; min-width:0; padding:7px 0; margin:0 !important; }
-${DETAIL}.agentation-staging-shell li + li { border-top:1px solid var(--border-hairline,var(--border)); }
+${DETAIL}.agentation-staging-shell li { display:flex !important; align-items:center; gap:8px; min-width:0; min-height:52px; box-sizing:border-box; padding:10px 8px; margin:0 !important; border:0 !important; border-radius:10px; background:transparent !important; transition:background-color 150ms ease-out; }
+${DETAIL}.agentation-staging-shell li + li { margin-top:4px !important; }
+${DETAIL}.agentation-staging-shell li:hover, ${DETAIL}.agentation-staging-shell li:focus-within { background:color-mix(in oklab,var(--foreground) 6%,transparent) !important; }
 ${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] { display:grid !important; grid-template-areas:"comment comment" "location target"; grid-template-columns:auto minmax(0,1fr); gap:0 6px; flex:1; min-width:0; }
 ${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span { max-width:none !important; font:inherit; }
 ${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span:nth-child(1) { grid-area:location; font-size:10px; color:var(--subtle-foreground); }
