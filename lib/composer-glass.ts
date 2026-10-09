@@ -891,6 +891,14 @@ function alignComposerControls(footer: HTMLElement): void {
   const column = footer.querySelector(".chat-prompt-box");
   const stack = footer.querySelector(STACK);
   if (!(column instanceof HTMLElement) || !(stack instanceof HTMLElement)) return;
+  if (stack.hasAttribute("data-bb-chat-ui-info-stack")) {
+    stack.removeAttribute(CONTROLS);
+    const anchor = footer.querySelector("[data-follow-up-composer-anchor]") ?? stack;
+    const base = anchor.getBoundingClientRect().top - 8;
+    const bottom = `${Math.round(column.getBoundingClientRect().bottom - base)}px`;
+    if (column.style.getPropertyValue(JUMP_BOTTOM) !== bottom) column.style.setProperty(JUMP_BOTTOM, bottom);
+    return;
+  }
   const button = footer.querySelector(JUMP_BUTTON);
   const jumpVisible = button instanceof HTMLElement && !button.classList.contains("invisible");
   const jumpHeight = button instanceof HTMLElement ? button.getBoundingClientRect().height : 0;

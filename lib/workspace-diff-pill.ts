@@ -266,8 +266,8 @@ interface LiveChangesPanelButton extends ChangesPanelButton {
   element: HTMLButtonElement;
 }
 
-function openChangesPanel(document: Document) {
-  const buttons = readChangesPanelButtons(document);
+export function openChangesPanel(document: Document, scope?: Element) {
+  const buttons = readChangesPanelButtons(document, scope);
   for (const action of planChangesPanelClicks(buttons)) {
     buttonForAction(buttons, action)?.element.click();
   }
@@ -277,7 +277,7 @@ function openChangesPanel(document: Document) {
   let attempts = 0;
   const retryDiff = () => {
     attempts += 1;
-    const live = readChangesPanelButtons(document);
+    const live = readChangesPanelButtons(document, scope);
     const diff = live.find((button) =>
       labelMatches(button.label, DIFF_PANEL_LABEL),
     );
@@ -291,9 +291,9 @@ function openChangesPanel(document: Document) {
   document.defaultView?.requestAnimationFrame(retryDiff);
 }
 
-function readChangesPanelButtons(document: Document): LiveChangesPanelButton[] {
+function readChangesPanelButtons(document: Document, scope?: Element): LiveChangesPanelButton[] {
   const toggle = document.getElementById(TOGGLE_ID);
-  const pane = toggle?.closest("[data-split-pane-id]") ?? null;
+  const pane = scope?.closest("[data-split-pane-id]") ?? toggle?.closest("[data-split-pane-id]") ?? null;
   const buttons = Array.from(document.querySelectorAll("button[aria-label]")).flatMap(
     (node) => {
       if (!(node instanceof HTMLButtonElement)) return [];

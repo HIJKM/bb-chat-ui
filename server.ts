@@ -2,8 +2,10 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 
 import { quoteRpcContract } from "./lib/quote-contract.ts";
 import { QUOTE_PROVIDER_ID, quoteStorageKey } from "./lib/quote-text.ts";
+import { composerInfoSettings } from "./lib/composer-info-settings.ts";
 
 export default function plugin(bb: BbPluginApi) {
+  bb.settings.define(composerInfoSettings);
   bb.rpc.register(quoteRpcContract, {
     async saveQuote({ id, text }) {
       await bb.storage.kv.set(quoteStorageKey(id), text);

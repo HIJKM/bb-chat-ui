@@ -47,6 +47,14 @@ Registers composer customize plus content scripts in `app.tsx` (`composer-glass`
 
 컴포저·변경 필·맨 밑으로 버튼·Agentation staging의 표면은 해당 채팅 배경의 색조를 유지하며 밝기만 조금 올린다. 순백에서는 기존 얇은 그림자로 구분한다. 일반 채팅은 `--background`, sidebar 톤은 `--sidebar`를 기준으로 한다. 고정 캔버스를 덮어쓰지 않는다. glass 불투명도는 라이트 68%, 다크 76%이며, 하이라이트는 흐린 inset `0 1px 3px`로 표면에 부드럽게 이어진다. 컴포저만 흰색을 라이트 60%, 다크 14%로 섞어 상단 반사광을 더 선명하게 한다. footer fade는 컴포저 위 64px까지 옅게 펼친다. 높이의 90%까지는 반투명으로 두고, 마지막 10%에서 채팅 배경색에 완전히 닿게 해 하단 경계를 잇는다. blur와 바깥 그림자, 모션은 유지한다. 다른 플러그인의 색 변수나 설정에 의존하지 않는다.
 
+## 컴포저 위 정보 설정
+
+`Settings → Chat UI`에서 `상단 표시` 항목을 선택한다. 기본값은 Code Diff와 Child Thread다. 공간이 부족하면 일부가 자동으로 전체 정보 버튼 안에 접힌다. 선택하지 않은 정보도 이 버튼에서 모두 열 수 있다. 상세는 한 번에 하나만 펼친다.
+
+입력 요청 중에는 요청만 표시하고 입력창도 숨긴다. 요청이 끝나면 초안을 그대로 복원한다. 큐 편집 중에는 다른 상세로 전환하지 않는다. Archived 화면의 정보도 숨겨서 보관하며, 호스트 복구 버튼은 유지한다. 새 Child Thread는 bubble 모션으로 나타나며 reduced motion 설정을 따른다.
+
+검증: `npm ci`, `npm test`, `npm run typecheck`, `bb plugin build`.
+
 ## related
 
 | plugin | role |

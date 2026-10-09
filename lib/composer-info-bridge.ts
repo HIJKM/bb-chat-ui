@@ -1,0 +1,92 @@
+import { createElement, Fragment, useEffect, useState } from "react";
+import { experimental_Icon, useBbNavigate, useComposer, useSdk, useSettings } from "@get-bb/plugin-sdk/app";
+
+type Sdk = ReturnType<typeof useSdk>;
+type Timeline = Awaited<ReturnType<Sdk["threads"]["timeline"]>>;
+type Children = Awaited<ReturnType<Sdk["threads"]["list"]>>;
+interface Snapshot { threadId: string; timeline: Timeline; children: Children; }
+const mark = "data-bb-chat-ui-info";
+
+export function ComposerInfoBridge() {
+  const sdk = useSdk();
+  const navigate = useBbNavigate();
+  const { scope } = useComposer();
+  const { values } = useSettings();
+  const threadId = scope.kind === "thread" ? scope.threadId : null;
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (!threadId) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    let timer = 0;
+    let fetching = false;
+    let again = false;
+    let childIds = new Set<string>();
+    const refresh = async () => {
+      if (signal.aborted) return;
+      if (fetching) { again = true; return; }
+      fetching = true;
+      try {
+        const timelinePromise = sdk.threads.timeline({ threadId, summaryOnly:"true", signal });
+        const childrenPromise = (async () => {
+          const children: Children = [];
+          for (let offset = 0; !signal.aborted; offset += 100) {
+            const page = await sdk.threads.list({ parentThreadId:threadId, limit:100, offset, signal });
+            children.push(...page);
+            if (page.length < 100) break;
+          }
+          return children;
+        })();
+        const [timeline, children] = await Promise.all([timelinePromise, childrenPromise]);
+        if (!signal.aborted) { childIds = new Set(children.map(child => child.id)); setSnapshot({ threadId, timeline, children }); setError(false); }
+      } catch {
+        if (!signal.aborted) setError(true);
+      } finally {
+        fetching = false;
+        if (again && !signal.aborted) { again = false; schedule(); }
+      }
+    };
+    const schedule = () => {
+      if (timer || signal.aborted) return;
+      timer = window.setTimeout(() => { timer = 0; void refresh(); }, 250);
+    };
+    // Include child changes, and coalesce rapid stream updates into one request.
+    const stop = sdk.subscribe({ event:"thread:changed", callback:event => {
+      if (event.changes.some(change => change === "thread-created" || change === "parent-changed")) { schedule(); return; }
+      if (event.id !== threadId && (!event.id || !childIds.has(event.id))) return;
+      if (event.changes.some(change => change !== "events-appended" && change !== "read-state-changed" && change !== "tabs-changed" && change !== "terminals-changed")) { schedule(); return; }
+      const types = event.metadata?.eventTypes;
+      if (event.changes.includes("events-appended") && (!types || types.some(type => ["thread/goal/updated", "thread/goal/cleared", "turn/plan/updated", "thread/extensionState/updated", "turn/completed"].includes(type)))) schedule();
+    } });
+    const stopConnection = sdk.subscribe({ event:"realtime:connection", callback:event => {
+      if (event.state === "connected" && event.reconnected) schedule();
+    } });
+    window.addEventListener("focus", schedule);
+    void refresh();
+    return () => { controller.abort(); stop(); stopConnection(); window.clearTimeout(timer); window.removeEventListener("focus", schedule); };
+  }, [sdk, threadId]);
+  if (!threadId) return null;
+  const data = snapshot?.threadId === threadId ? snapshot : null;
+  const timeline = data?.timeline;
+  const children = data?.children ?? [];
+  const running = (status: string) => ["active", "pending", "starting", "provisioning", "waiting-for-host", "stopping"].includes(status);
+  const section = (kind: string, title: string, icon: "ListTodo" | "Target" | "UserRound" | "CircleAlert", content: ReturnType<typeof createElement>) => createElement("section", {
+    key:kind, [`${mark}-kind`]:kind, "aria-label":title,
+  }, createElement("h3", null, createElement(experimental_Icon, { name:icon, "aria-hidden":true }), " ", title), content);
+  return createElement(Fragment, null,
+    createElement("span", {
+      hidden:true,
+      [`${mark}-settings`]:JSON.stringify(values ?? {}),
+      [`${mark}-children`]:JSON.stringify(children.map(child => ({ id:child.id, title:child.title ?? child.titleFallback ?? "Child Thread", running:running(child.runtime.displayStatus) }))),
+    }),
+    createElement("div", { [`${mark}-supplements`]:"" },
+      timeline?.activePromptMode ? section("plan", "Plan", "ListTodo", createElement("p", null, timeline.activePromptMode.prompt)) : null,
+      timeline?.goal ? section("goal", "Goal", "Target", createElement("div", null,
+        createElement("p", null, timeline.goal.objective),
+        createElement("p", { className:"text-subtle-foreground" }, `${timeline.goal.status} · ${timeline.goal.tokensUsed.toLocaleString()}${timeline.goal.tokenBudget == null ? "" : ` / ${timeline.goal.tokenBudget.toLocaleString()}`} tokens · ${Math.round(timeline.goal.timeUsedSeconds)}s`))) : null,
+      timeline?.pendingTodos ? section("todos", "할 일", "ListTodo", createElement("ul", null, ...timeline.pendingTodos.items.map(item => createElement("li", { key:item.id }, `${item.status === "completed" ? "✓" : item.status === "in_progress" ? "◉" : "○"} ${item.text}`)))) : null,
+      children.length ? section("children", "Child Thread", "UserRound", createElement("div", null, ...children.map(child => createElement("p", { key:child.id }, createElement("button", { type:"button", onClick:() => navigate.toThread(child.id) }, child.title ?? child.titleFallback ?? "Child Thread"), " · ", child.runtime.displayStatus)))) : null,
+      error && !data ? section("other", "정보를 불러오지 못했습니다", "CircleAlert", createElement("p", null, "연결이 복구되면 다시 읽습니다. 현재 표시된 BB 정보는 계속 열 수 있습니다.")) : null,
+    ));
+}

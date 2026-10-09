@@ -13,13 +13,21 @@ import { injectThreadToc } from "./lib/thread-toc";
 import { injectUserAttachments } from "./lib/user-attachments";
 import { injectWorkspaceDiffPill } from "./lib/workspace-diff-pill";
 import { WorkspaceDiffBridge } from "./lib/workspace-diff-bridge";
+import { ComposerInfoBridge } from "./lib/composer-info-bridge";
+import { injectComposerInfo } from "./lib/composer-info";
+import { infoSettingsNotice } from "./lib/composer-info-settings";
 
 function ComposerBridges() {
   return createElement(Fragment, null,
-    createElement(DeviceChromeBridge), createElement(QuoteMentionBridge), createElement(WorkspaceDiffBridge));
+    createElement(DeviceChromeBridge), createElement(QuoteMentionBridge), createElement(WorkspaceDiffBridge), createElement(ComposerInfoBridge));
 }
 
 export default definePluginApp((app) => {
+  app.slots.settingsSection({
+    id:"composer-info",
+    title:"컴포저 위 정보",
+    component:() => createElement("p", { className:"text-sm text-subtle-foreground" }, infoSettingsNotice),
+  });
   app.composer.customize({
     id: "quote-mention",
     banners: [{ id: "convert", chrome: "bare", component: ComposerBridges }],
@@ -76,5 +84,9 @@ export default definePluginApp((app) => {
     mount() {
       return injectQueuedMessages(document);
     },
+  });
+  app.contentScripts.register({
+    id:"composer-info",
+    mount() { return injectComposerInfo(document); },
   });
 });
