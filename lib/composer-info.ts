@@ -65,6 +65,8 @@ export const composerInfoCss = `
 [${MARK}-choice] svg { width:16px; height:16px; flex-shrink:0; }
 [${MARK}-choice][${MARK}-unavailable] { color:var(--subtle-foreground); }
 [${MARK}-choice] small { margin-left:auto; flex-shrink:0; font-size:10px; color:var(--subtle-foreground); }
+[${MARK}-diff] p { white-space:pre-wrap; }
+[${MARK}-action="diff"] { border:0; border-radius:10px; padding:9px 12px; background:var(--surface-recessed); font-size:12px !important; }
 ${DETAIL} [data-queued-messages-scroll-frame] { position:static !important; width:100% !important; height:auto !important; max-height:22rem; }
 ${DETAIL} header[data-queued-messages-mode] { position:relative !important; width:100% !important; max-width:none !important; height:32px !important; padding:0 12px !important; justify-content:space-between; background:transparent !important; }
 ${DETAIL} header[data-queued-messages-mode]::before { content:none; }
@@ -181,6 +183,11 @@ export function injectComposerInfo(document: Document): () => void {
       const text = item.key === "diff" ? item.trigger?.textContent : item.trigger?.getAttribute("aria-label") ?? item.trigger?.textContent;
       return text?.trim().replace(/\s+/g, " ").slice(0, 200) || item.node.getAttribute("aria-label") || item.label;
     };
+    const describeDiff = (item: InfoItem) => {
+      const branch = item.trigger?.querySelector<HTMLElement>('[data-bb-chat-ui-branch]')?.title
+        || (item.node === diffSupplement && item.trigger?.title !== "Code Diff" ? item.trigger?.title : null);
+      return `${describe(item)}${branch ? `\nBranch · ${branch}` : ""}`;
+    };
     const decorate = (button: HTMLElement, item: InfoItem, summary: boolean) => {
       const text = document.createElement("span");
       text.textContent = summary && item.key === "diff" ? describe(item) : item.label;
@@ -237,7 +244,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (!force && editing()) return false;
       const item = items.find(item => item.node === activeNode && item.key === active);
       activeNode?.removeAttribute(OPEN);
-      if (!editing() && item?.trigger?.getAttribute("aria-expanded") === "true") item.trigger.click();
+      if (!editing() && active !== "diff" && item?.trigger?.getAttribute("aria-expanded") === "true") item.trigger.click();
       menu?.remove();
       menu = null;
       active = null;
@@ -285,7 +292,7 @@ export function injectComposerInfo(document: Document): () => void {
           }
           choice.addEventListener("click", () => {
             open(item.key, orb, "node" in item ? item : undefined);
-            (activeNode ?? menu)?.querySelector<HTMLElement>('button, a, input, [tabindex="0"]')?.focus();
+            (menu ?? activeNode)?.querySelector<HTMLElement>('button, a, input, [tabindex="0"]')?.focus();
           });
           grid.append(choice);
         }
@@ -296,12 +303,13 @@ export function injectComposerInfo(document: Document): () => void {
         return;
       }
       const item = selected ?? items.find(item => item.key === key);
-      if (!item) {
+      if (!item || key === "diff") {
         active = key;
+        activeNode = item?.node ?? null;
         menu = document.createElement("section");
-        menu.id = `bb-composer-info-empty-${++serial}`;
+        menu.id = `bb-composer-info-detail-${++serial}`;
         menu.setAttribute(`${MARK}-menu`, "");
-        menu.setAttribute(`${MARK}-empty`, key);
+        menu.setAttribute(item ? `${MARK}-diff` : `${MARK}-empty`, key);
         menu.setAttribute("aria-label", labelOf(key));
         const header = document.createElement("header");
         header.textContent = labelOf(key);
@@ -310,16 +318,25 @@ export function injectComposerInfo(document: Document): () => void {
         dismiss.setAttribute("aria-label", `${labelOf(key)} 닫기`);
         dismiss.addEventListener("click", () => close(true));
         header.append(dismiss);
-        const caption = document.createElement("p"); caption.textContent = "현재 정보 없음";
+        const caption = document.createElement("p"); caption.textContent = item ? describeDiff(item) : "현재 정보 없음";
         menu.append(header, caption);
+        if (item) {
+          const action = document.createElement("button");
+          action.type = "button";
+          action.setAttribute(`${MARK}-action`, "diff");
+          action.textContent = "Diff 패널 열기";
+          action.addEventListener("click", () => {
+            const current = items.find(item => item.key === "diff");
+            close();
+            if (current?.trigger?.id === "thread-prompt-banner-git-toggle") current.trigger.click();
+            else openChangesPanel(document, stack);
+          });
+          menu.append(action);
+          buttons.get(key)?.setAttribute("aria-expanded", "true");
+        }
         bar.append(menu);
         orb.setAttribute("aria-controls", menu.id);
         orb.setAttribute("aria-expanded", "true");
-        return;
-      }
-      if (key === "diff") {
-        if (item.trigger?.id === "thread-prompt-banner-git-toggle") item.trigger.click();
-        else openChangesPanel(document, stack);
         return;
       }
       active = key;
@@ -420,10 +437,14 @@ export function injectComposerInfo(document: Document): () => void {
           pills.append(button);
         }
         if (active === "all") { close(); open("all", orb); }
+        else if (active === "diff" && menu?.hasAttribute(`${MARK}-diff`)) {
+          const item = items.find(item => item.key === "diff");
+          if (item) menu.querySelector("p")!.textContent = describeDiff(item);
+        }
         else if (active && !activeNode && items.some(item => item.key === active)) {
           const key = active;
           close(); open(key, orb);
-          stack.querySelector<HTMLElement>(`[${OPEN}]`)?.querySelector<HTMLElement>('button, a, input, [tabindex="0"]')?.focus();
+          (bar.querySelector<HTMLElement>(`[${MARK}-menu]`) ?? stack.querySelector<HTMLElement>(`[${OPEN}]`))?.querySelector<HTMLElement>('button, a, input, [tabindex="0"]')?.focus();
         }
         const count = catalog().length;
         badge.textContent = String(count);

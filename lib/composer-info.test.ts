@@ -128,7 +128,11 @@ test("settings change exposed summaries without removing menu entries or losing 
   f.document.querySelector('#thread-prompt-banner-git-toggle')!.addEventListener("click", () => diffOpened++);
   const stop = injectComposerInfo(f.document);
   f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  assert.equal(diffOpened, 0);
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-diff]')?.textContent?.includes('+12 −4 · 3 files'));
+  f.click('[data-bb-chat-ui-info-action="diff"]');
   assert.equal(diffOpened, 1);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff]'), null);
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
   source.setAttribute("data-bb-chat-ui-info-settings", JSON.stringify({ showDiff: false, showGoal: true }));
   await f.tick();
@@ -138,6 +142,69 @@ test("settings change exposed summaries without removing menu entries or losing 
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="diff"]'));
   stop();
   f.dom.window.close();
+});
+
+test("Diff first opens one dismissible popover from either the pill or the catalog", async () => {
+  const f = fixture();
+  let diffOpened = 0;
+  const native = f.document.querySelector('#thread-prompt-banner-git-toggle')!;
+  const parent = native.parentElement;
+  native.addEventListener('click', () => diffOpened++);
+  const stop = injectComposerInfo(f.document);
+  const pill = f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  assert.equal(pill.getAttribute('aria-expanded'), 'true');
+  assert.equal(diffOpened, 0);
+  assert.equal(native.parentElement, parent);
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-menu]'), null);
+  f.click('[aria-label^="전체 정보"]');
+  f.click('[data-bb-chat-ui-info-choice="diff"]');
+  assert.equal(diffOpened, 0);
+  assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-menu]').length, 1);
+  assert.equal(f.document.activeElement?.getAttribute('aria-label'), 'Code Diff 닫기');
+  native.textContent = '+20 −5 · 4 files';
+  await f.tick();
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-diff]')?.textContent?.includes('+20 −5 · 4 files'));
+  f.document.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-menu]'), null);
+  assert.equal(diffOpened, 0);
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  f.click('[data-bb-chat-ui-info-trigger="children"]');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff]'), null);
+  assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-open]').length, 1);
+  stop(); f.dom.window.close();
+});
+
+test("read-only Diff summaries show real branch information and defer the scoped panel action", async t => {
+  const f = fixture();
+  const previousButton = Object.getOwnPropertyDescriptor(globalThis, 'HTMLButtonElement');
+  Object.defineProperty(globalThis, 'HTMLButtonElement', { configurable:true, value:f.dom.window.HTMLButtonElement });
+  t.after(() => {
+    if (previousButton) Object.defineProperty(globalThis, 'HTMLButtonElement', previousButton);
+    else Reflect.deleteProperty(globalThis, 'HTMLButtonElement');
+  });
+  f.document.querySelector('section[aria-label="Thread context before sending"]')!.remove();
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const source = f.document.createElement('span');
+  source.hidden = true;
+  source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify({ insertions:8, deletions:2, files:3, branch:'bb/review' }));
+  stack.append(source);
+  const panel = f.document.createElement('button');
+  panel.setAttribute('aria-label', 'Show diff panel');
+  panel.getClientRects = () => [new f.dom.window.DOMRect(0,0,32,32)] as unknown as DOMRectList;
+  f.document.body.append(panel);
+  let opened = 0;
+  panel.addEventListener('click', () => opened++);
+  const stop = injectComposerInfo(f.document);
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  assert.equal(opened, 0);
+  const popover = f.document.querySelector('[data-bb-chat-ui-info-diff]')!;
+  assert.ok(popover.textContent?.includes('+8 −2 · 3 files'));
+  assert.ok(popover.textContent?.includes('Branch · bb/review'));
+  f.click('[data-bb-chat-ui-info-action="diff"]');
+  assert.equal(opened, 1);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff]'), null);
+  stop(); f.dom.window.close();
 });
 
 test("visibility settings remove disabled live and empty families from the row and catalog", async () => {
