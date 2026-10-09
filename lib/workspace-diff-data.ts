@@ -18,6 +18,8 @@ export interface DiffPresentation {
   label:string;
 }
 
+export type WorkspaceDiffSnapshot = NonNullable<Awaited<ReturnType<typeof readWorkspaceDiff>>>;
+
 export function branchName(ref:string):string {
   return ref.replace(/^refs\/heads\//, "").replace(/^(?:refs\/remotes\/)?origin\//, "");
 }

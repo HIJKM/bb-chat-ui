@@ -1,5 +1,6 @@
 import { exposedInfo, infoKinds, listedInfo, type InfoKind } from "./composer-info-settings.ts";
 import { HEAD_DIFF_MARK, openChangesPanel, type HeadDiffDetail } from "./workspace-diff-pill.ts";
+import type { WorkspaceDiffSnapshot } from "./workspace-diff-data.ts";
 import { childInitial, type ChildState, type ChildSummary } from "./composer-child.ts";
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
 
@@ -47,7 +48,10 @@ export const composerInfoCss = `
 [${MARK}-trigger][${MARK}-unavailable] { width:32px; min-height:32px; padding:0; border-radius:50%; color:var(--subtle-foreground); background:var(--bb-chat-ui-info-face) !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; }
 [${MARK}-trigger] > span:not([${MARK}-avatars]) { overflow:hidden; text-overflow:ellipsis; }
 [${MARK}-trigger] svg { width:16px; height:16px; flex-shrink:0; }
-[${MARK}-trigger] [data-bb-chat-ui-branch] { display:inline-flex; flex-shrink:0; color:var(--color-purple-500,var(--foreground)); }
+[${MARK}-trigger] [data-bb-chat-ui-branch] { display:inline-flex; flex-shrink:0; color:var(--color-purple-500,#a855f7); }
+[${MARK}-diff-content] [${MARK}-diff-branch] { display:flex; align-items:center; gap:6px; color:var(--color-purple-500,#a855f7); }
+[${MARK}-diff-branch] code { min-width:0; overflow-wrap:anywhere; white-space:normal; }
+[${MARK}-diff-branch] svg, [${MARK}-diff-branch] [data-icon-root] { width:16px; height:16px; flex-shrink:0; }
 [${MARK}-trigger="diff"] { min-width:0; }
 [${MARK}-all] { position:absolute; right:0; width:32px; padding:0; }
 [${MARK}-bar][${MARK}-jump] { padding-right:80px; }
@@ -279,6 +283,10 @@ export function injectComposerInfo(document: Document): () => void {
     };
     const labelOf = (key: InfoKind) => infoKinds.find(kind => kind.key === key)!.label;
     const emptyIcon = (key: InfoKind) => stack.querySelector(`[${MARK}-icon="${key}"] svg, [${MARK}-icon="${key}"] [data-icon-root]`);
+    const readDiff = ():Partial<WorkspaceDiffSnapshot> | null => {
+      try { return JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "null"); }
+      catch { return null; }
+    };
     const annotationCount = (item: InfoItem) => {
       const list = item.node.querySelector("ul");
       return list ? String(list.children.length) : item.node.querySelector(".tabular-nums")?.textContent?.trim() ?? "!";
@@ -289,6 +297,7 @@ export function injectComposerInfo(document: Document): () => void {
     });
     const describe = (item: InfoItem) => {
       if (item.key === "annotations") return `${annotationCount(item)} staged`;
+      if (item.key === "diff" && readDiff()?.presentation) return readDiff()!.presentation!.label;
       const text = item.key === "diff" ? item.trigger?.textContent : item.trigger?.getAttribute("aria-label") ?? item.trigger?.textContent;
       return text?.trim().replace(/\s+/g, " ").slice(0, 200) || item.node.getAttribute("aria-label") || item.label;
     };
@@ -303,7 +312,17 @@ export function injectComposerInfo(document: Document): () => void {
       let detail: HeadDiffDetail | undefined;
       try { detail = JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "{}").detail; } catch { /* Summary remains usable while data loads. */ }
       if (!detail || !Array.isArray(detail.files) || !Array.isArray(detail.commits)) return;
-      const basis = document.createElement("p"); basis.textContent = `${detail.branch ?? "detached HEAD"} · ${detail.basis}`; container.append(basis);
+      container.replaceChildren();
+      const branch = document.createElement("p"); branch.setAttribute(`${MARK}-diff-branch`, "");
+      const icon = emptyIcon("diff")?.cloneNode(true) as Element | undefined;
+      icon?.setAttribute("aria-hidden", "true");
+      const name = document.createElement("code"); name.textContent = detail.branch ?? "detached HEAD";
+      if (icon) branch.append(icon);
+      branch.append(name); container.append(branch);
+      const snapshot = readDiff();
+      const basis = document.createElement("p");
+      basis.textContent = `${detail.basis} · +${snapshot?.insertions ?? 0} −${snapshot?.deletions ?? 0} · ${detail.files.length} files`;
+      container.append(basis);
       for (const file of detail.files) {
         const row = document.createElement("div"); row.setAttribute(`${MARK}-diff-file`, "");
         const path = document.createElement("code"); path.textContent = file.path; path.title = file.path;
@@ -317,13 +336,30 @@ export function injectComposerInfo(document: Document): () => void {
         }
         row.append(path, status, stats); container.append(row);
       }
-      if (detail.commits.length) {
-        const label = document.createElement("h4"); label.textContent = `브랜치 커밋 · ${detail.baseRef ?? "Merge base"} 대비`; container.append(label);
+      if (detail.commitKind || detail.commits.length) {
+        const label = document.createElement("h4");
+        label.textContent = detail.commitKind
+          ? `${detail.commitKind === "pr" ? "PR 후보" : "미푸시"} · ${detail.commitCount === null ? "확인 불가" : `${detail.commitCount} commits`} · ${detail.baseRef ?? "기준 없음"} 대비`
+          : `브랜치 커밋 · ${detail.baseRef ?? "Merge base"} 대비`;
+        container.append(label);
         for (const commit of detail.commits) {
           const row = document.createElement("div"); row.setAttribute(`${MARK}-diff-commit`, "");
           const text = document.createElement("code"); text.textContent = `${commit.shortSha} · ${commit.subject}`; text.title = `${commit.sha} · ${commit.subject}`;
           row.append(text); container.append(row);
         }
+      }
+      if (detail.commitKind === "pr") {
+        const push = document.createElement("p");
+        push.textContent = `미푸시 · ${detail.unpushedCount == null ? "확인 불가 · 원격 브랜치 미게시 또는 기준 없음" : `${detail.unpushedCount} commits`} · ${detail.unpushedRef ?? "기준 없음"} 대비`;
+        container.append(push);
+        const note = document.createElement("p"); note.className = "text-subtle-foreground";
+        note.textContent = "PR 후보는 아직 push하지 않은 로컬 커밋도 포함합니다.";
+        container.append(note);
+      }
+      if (detail.commitKind) {
+        const note = document.createElement("p"); note.className = "text-subtle-foreground";
+        note.textContent = "원격 비교는 마지막으로 확인된 상태 기준입니다.";
+        container.append(note);
       }
     };
     const decorate = (button: HTMLElement, item: InfoItem, summary: boolean) => {
@@ -333,7 +369,9 @@ export function injectComposerInfo(document: Document): () => void {
       if (summary && item.key === "todos") text.textContent = item.trigger?.textContent?.trim().replace(/\s+/g, " ").slice(0, 30) || item.label;
       if (summary && item.key === "queue") text.textContent = item.node.querySelector('span.tabular-nums')?.textContent?.trim() || item.label;
       if (summary && item.key === "annotations") text.textContent = annotationCount(item);
-      const icon = (item.key === "annotations" ? item.node.querySelector('[data-icon="ChatFeedback"]') : null)
+      const presentation = item.key === "diff" ? readDiff()?.presentation : null;
+      const icon = (summary && presentation && presentation.mode !== "working" ? emptyIcon("diff") : null)
+        ?? (item.key === "annotations" ? item.node.querySelector('[data-icon="ChatFeedback"]') : null)
         ?? (!summary ? emptyIcon(item.key) : null)
         ?? item.trigger?.querySelector("svg, [data-icon-root]") ?? item.node.querySelector("svg, [data-icon-root]") ?? emptyIcon(item.key);
       button.replaceChildren();
@@ -378,6 +416,7 @@ export function injectComposerInfo(document: Document): () => void {
           const clone = icon.cloneNode(true) as Element;
           clone.removeAttribute("id");
           clone.setAttribute("aria-hidden", "true");
+          if (summary && presentation && presentation.mode !== "working" && presentation.branch) clone.setAttribute("data-bb-chat-ui-branch", "");
           button.append(clone);
         }
         if (summary && item.key === "diff") {
@@ -391,11 +430,16 @@ export function injectComposerInfo(document: Document): () => void {
         }
         button.append(text);
         if (summary && item.key === "diff") {
-          const branch = item.trigger?.querySelector('[data-bb-chat-ui-branch]');
-          if (branch) button.append(branch.cloneNode(true));
+          if (presentation?.mode === "working" && presentation.branch) {
+            const branch = emptyIcon("diff")?.cloneNode(true) as Element | undefined;
+            if (branch) { branch.setAttribute("data-bb-chat-ui-branch", ""); branch.setAttribute("aria-hidden", "true"); button.append(branch); }
+          } else if (!presentation) {
+            const branch = item.trigger?.querySelector('[data-bb-chat-ui-branch]');
+            if (branch) button.append(branch.cloneNode(true));
+          }
         }
       }
-      button.title = `${item.label} · ${describe(item)}${childCount ? ` · ${childCount}개` : ""}${item.key === "diff" && item.trigger?.title ? ` · ${item.trigger.title}` : ""}`;
+      button.title = `${item.label} · ${describe(item)}${childCount ? ` · ${childCount}개` : ""}${presentation?.branch ? ` · ${presentation.branch}` : item.key === "diff" && item.trigger?.title ? ` · ${item.trigger.title}` : ""}`;
       button.setAttribute("aria-label", button.title);
     };
     const close = (restoreFocus = false, force = false) => {
@@ -572,7 +616,7 @@ export function injectComposerInfo(document: Document): () => void {
               bar.append(diffSupplement);
             }
             const button = diffSupplement.querySelector("button")!;
-            const text = `+${summary.insertions} −${summary.deletions} · ${summary.files} files`;
+            const text = summary.presentation?.label ?? `+${summary.insertions} −${summary.deletions} · ${summary.files} files`;
             if (button.textContent !== text) button.textContent = text;
             button.title = summary.branch ?? "Code Diff";
             items.unshift({ key:"diff", node:diffSupplement, trigger:button, label:"Code Diff" });
@@ -588,7 +632,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (active && active !== "all" && !listed.includes(active)) close();
       if (!listed.length) close();
       bar.hidden = request || !listed.length && !editing();
-      const exposed = exposedInfo(settings);
+      const exposed = exposedInfo(settings).filter(key => key !== "diff" || readDiff()?.presentation?.visible !== false);
       const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
       const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK)]);

@@ -87,10 +87,6 @@ function shortBranch(name: string): string {
   return name;
 }
 
-function hasDiff(stats: DiffStats | null | undefined): stats is DiffStats {
-  return !!stats && (stats.files.length > 0 || stats.insertions > 0 || stats.deletions > 0);
-}
-
 export function headDiffSummary(workspace: HeadWorkspace, options: HeadDiffOptions = {}) {
   const { workingTree, branch } = workspace;
   const current = branch.currentBranch;

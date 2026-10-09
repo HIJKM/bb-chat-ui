@@ -628,3 +628,81 @@ test("remounts and two composer scopes do not leak disclosures or hide each othe
   assert.equal(other.querySelector('[data-bb-chat-ui-info-unit]'), null);
   f.dom.window.close();
 });
+
+test("Code Diff pill shows one commit meaning and keeps unpushed counts inside its popover", async () => {
+  const f = fixture();
+  const source = f.document.createElement('span');
+  const name = 'feature/a-very-long-branch-name';
+  const snapshot = {
+    insertions:0, deletions:0, files:0, branch:name,
+    presentation:{ mode:'branch', visible:true, branch:name, branchLabel:'feature/a-very-…', label:'feature/a-very-… · 8 commits' },
+    detail:{ branch:name, basis:'HEAD 대비 미커밋 변경', baseRef:'origin/main', files:[],
+      commitKind:'pr', commitCount:8, unpushedCount:3, unpushedRef:`origin/${name}`,
+      commits:[{ sha:'abc12345678', shortSha:'abc1234', subject:'Saved work' }] },
+  };
+  const publish = () => source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify(snapshot));
+  publish(); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  const stop = injectComposerInfo(f.document);
+  const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!;
+  assert.equal(pill.textContent, 'feature/a-very-… · 8 commits');
+  assert.equal(pill.textContent?.includes('↑'), false);
+  assert.ok(pill.getAttribute('aria-label')?.includes(name));
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  const popup = f.document.querySelector('[data-bb-chat-ui-info-diff]')!;
+  assert.equal(popup.querySelector('[data-bb-chat-ui-info-diff-branch]')?.textContent, name);
+  assert.ok(popup.textContent?.includes('PR 후보 · 8 commits · origin/main 대비'));
+  assert.ok(popup.textContent?.includes('미푸시 · 3 commits'));
+  assert.ok(popup.textContent?.includes(`origin/${name} 대비`));
+  assert.equal(popup.textContent?.includes('feature/a-very-…'), false, 'popover uses the full branch name');
+  assert.equal(popup.querySelectorAll('[data-bb-chat-ui-info-diff-file]').length, 0);
+  snapshot.detail.unpushedCount = 0;
+  publish(); await f.tick();
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff]'), popup);
+  assert.ok(popup.textContent?.includes('미푸시 · 0 commits'));
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent, 'feature/a-very-… · 8 commits');
+  stop(); f.dom.window.close();
+});
+
+test("clean main hides the pill even with empty icons enabled but remains in the catalog", async () => {
+  const f = fixture();
+  f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings', '{"showEmptyIcons":true}');
+  const source = f.document.createElement('span');
+  const snapshot = {
+    insertions:0, deletions:0, files:0, branch:null,
+    presentation:{ mode:'unpushed', visible:true, branch:'main', branchLabel:'main', label:'↑3' },
+    detail:{ branch:'main', basis:'HEAD 대비 미커밋 변경', baseRef:'origin/main', files:[], commits:[], commitKind:'unpushed', commitCount:3, unpushedCount:3, unpushedRef:'origin/main' },
+  };
+  const publish = () => source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify(snapshot));
+  publish(); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  const stop = injectComposerInfo(f.document);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent, '↑3');
+  snapshot.presentation.visible = false; snapshot.presentation.label = 'main';
+  snapshot.detail.commitCount = 0; snapshot.detail.unpushedCount = 0;
+  publish(); await f.tick();
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'), null);
+  f.click('[data-bb-chat-ui-info-all]');
+  f.click('[data-bb-chat-ui-info-choice="diff"]');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff-branch]')?.textContent, 'main');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-diff]')?.textContent?.includes('미푸시 · 0 commits · origin/main 대비'));
+  stop(); f.dom.window.close();
+});
+
+test("dirty Code Diff keeps only HEAD line stats above composer and reports unknown remote counts without zero", () => {
+  const f = fixture();
+  const source = f.document.createElement('span');
+  source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify({
+    insertions:7, deletions:2, files:1, branch:'feature/chat',
+    presentation:{ mode:'working', visible:true, branch:'feature/chat', branchLabel:null, label:'+7 −2 · 1 file' },
+    detail:{ branch:'feature/chat', basis:'HEAD 대비 미커밋 변경', baseRef:'origin/main', files:[{ path:'draft.ts', status:'M', insertions:7, deletions:2 }], commits:[], commitKind:'pr', commitCount:8, unpushedCount:null, unpushedRef:'origin/feature/chat' },
+  }));
+  f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  const stop = injectComposerInfo(f.document);
+  const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!;
+  assert.equal(pill.textContent, '+7 −2 · 1 file');
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  const popup = f.document.querySelector('[data-bb-chat-ui-info-diff]')!;
+  assert.ok(popup.textContent?.includes('확인 불가'));
+  assert.equal(popup.textContent?.includes('미푸시 · 0'), false);
+  assert.equal(popup.querySelectorAll('[data-bb-chat-ui-info-diff-file]').length, 1);
+  stop(); f.dom.window.close();
+});
