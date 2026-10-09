@@ -280,21 +280,24 @@ export function injectComposerInfo(document: Document): () => void {
       if (reduced() || button.hidden || bar.hidden || !button.animate) return;
       cancelDiffExit();
       const rect = button.getBoundingClientRect();
-      const anchor = bar.getBoundingClientRect();
+      const width = `${button.offsetWidth || rect.width}px`;
+      const padding = view!.getComputedStyle(button);
       const ghost = button.cloneNode(true) as HTMLButtonElement;
       ghost.setAttribute(`${MARK}-exiting`, ""); ghost.setAttribute("aria-hidden", "true");
       ghost.removeAttribute("aria-busy"); ghost.removeAttribute("aria-controls"); ghost.disabled = true;
-      Object.assign(ghost.style, { position:"absolute", left:`${rect.left - anchor.left}px`, top:`${rect.top - anchor.top}px`, width:`${button.offsetWidth || rect.width}px`, pointerEvents:"none" });
-      pills.append(ghost);
+      Object.assign(ghost.style, { width, minWidth:"0", boxSizing:"border-box", overflow:"hidden", pointerEvents:"none" });
+      button.before(ghost);
       const animation = ghost.animate([
-        { opacity:1, transform:"none" },
-        { opacity:0, transform:"translateY(4px) scale(.88)" },
-      ], { duration:200, easing:"cubic-bezier(.22,1,.36,1)", fill:"forwards" });
+        { width, paddingLeft:padding.paddingLeft, paddingRight:padding.paddingRight, marginRight:"0px", opacity:1, transform:"none" },
+        { width:"0px", paddingLeft:"0px", paddingRight:"0px", marginRight:"-8px", opacity:0, transform:"translateY(4px) scale(.88)" },
+      ], { duration:200, easing:"cubic-bezier(.4,0,.2,1)", fill:"forwards" });
       diffExit = { node:ghost, animation }; entryAnimations.add(animation);
-      animation.onfinish = animation.oncancel = () => {
+      const remove = () => {
         ghost.remove(); entryAnimations.delete(animation);
         if (diffExit?.animation === animation) diffExit = null;
       };
+      animation.oncancel = remove;
+      animation.onfinish = () => { remove(); fit(); };
     };
     let threadId = stack.querySelector(`[${SOURCE}]`)?.getAttribute(`${MARK}-thread`) ?? null;
     let active: InfoKind | "all" | null = null;
@@ -905,6 +908,7 @@ export function injectComposerInfo(document: Document): () => void {
         // Entry transforms change visual bounds, but must not change which pills fit.
         return { key, width:widthAnimations.get(button)?.width ?? (button.offsetWidth || button.getBoundingClientRect().width) };
       });
+      if (diffExit) widths.push({ key:"diff", width:diffExit.node.offsetWidth });
       const width = stack.getBoundingClientRect().width;
       const visible = new Set(fitComposerInfo(widths, width > 0 ? width - (bar.hasAttribute(`${MARK}-jump`) ? 40 : 0) : Number.POSITIVE_INFINITY));
       for (const [key, button] of buttons) button.hidden = !visible.has(key);
@@ -1024,8 +1028,8 @@ export function injectComposerInfo(document: Document): () => void {
         if (signature) pulse();
         signature = next;
         for (const [key, button] of buttons) if (!exposed.includes(key) || !showEmpty && !items.some(item => item.key === key)) {
-          widthAnimations.get(button)?.animation.cancel();
           if (key === "diff" && button.hasAttribute("aria-busy") && exposedInfo(settings).includes("diff") && (unavailableDiff || diff?.presentation?.visible === false)) leaveLoadingDiff(button);
+          widthAnimations.get(button)?.animation.cancel();
           button.remove(); buttons.delete(key);
         }
         for (const key of exposed) {

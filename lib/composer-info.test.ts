@@ -1309,6 +1309,7 @@ test("a loading Diff with no result fades away, staying inert and cancelling whe
   for (const result of ['non-git','clean-main']) for (const reduced of [false,true]) {
     const f = fixture();
     Object.defineProperty(f.dom.window,'matchMedia',{ value:() => ({ matches:reduced }) });
+    Object.defineProperty(f.dom.window.HTMLElement.prototype,'offsetWidth',{get() { return this.hasAttribute('data-bb-chat-ui-info-trigger') ? 64 : 0; }});
     const source = f.document.createElement('span'); source.setAttribute('data-bb-chat-ui-head-diff','');
     f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
     const exits:{ node:HTMLElement; frames:Keyframe[]; options:KeyframeAnimationOptions; animation:Animation; cancelled:boolean }[] = [];
@@ -1328,6 +1329,10 @@ test("a loading Diff with no result fades away, staying inert and cancelling whe
     if (!reduced) {
       assert.equal(exits[0].options.duration,200);
       assert.equal(exits[0].frames.at(-1)?.opacity,0);
+      assert.equal(exits[0].frames[0].width,'64px','the departing pill keeps its original slot initially');
+      assert.equal(exits[0].frames.at(-1)?.width,'0px','the slot shrinks with the visible pill');
+      assert.notEqual(exits[0].node.style.position,'absolute','neighbours follow the shrinking slot instead of jumping');
+      assert.equal(exits[0].node.nextElementSibling,f.document.querySelector('[data-bb-chat-ui-info-trigger="children"]'),'the exit stays in the original pill order');
       assert.equal(exits[0].node.getAttribute('aria-hidden'),'true');
       assert.equal(exits[0].node.hasAttribute('disabled'),true);
       source.setAttribute('data-bb-chat-ui-head-diff-state','ready');
