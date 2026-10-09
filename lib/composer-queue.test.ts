@@ -98,6 +98,26 @@ test("native queue editing protects the draft and releasing it restores every in
   } finally { stopInfo(); stopQueue(); f.cleanup(); }
 });
 
+test("managed queue hides the redundant native collapse handle and restores it on unload", async () => {
+  const f = fixture();
+  const handle = f.queue.querySelector<HTMLElement>('[data-collapse]')!;
+  const button = handle.querySelector('button')!;
+  const stop = injectComposerInfo(f.document);
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="queue"]'); await f.tick();
+    assert.equal(f.dom.window.getComputedStyle(handle).display, 'none');
+    assert.equal(button.parentElement, handle, 'the native handler remains available');
+    f.click('[data-bb-chat-ui-info-trigger="queue"]'); await f.tick();
+    assert.equal(f.toggle.getAttribute('aria-expanded'), 'false');
+    f.click('[data-bb-chat-ui-info-trigger="queue"]'); await f.tick();
+    f.document.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
+    assert.equal(f.toggle.getAttribute('aria-expanded'), 'false');
+    stop();
+    f.toggle.click();
+    assert.notEqual(f.dom.window.getComputedStyle(handle).display, 'none', 'the standalone queue keeps its handle');
+  } finally { stop(); f.cleanup(); }
+});
+
 test("managed queue confines overflow to the native message list without replacing its controls", async () => {
   const f = fixture();
   const frame = f.queue.querySelector<HTMLElement>('[data-queued-messages-scroll-frame]')!;
