@@ -33,6 +33,18 @@ function fixture() {
   return { dom, document, tick, click };
 }
 
+test("default settings expose all available information while empty families stay catalog-only", () => {
+  const f = fixture();
+  const stop = injectComposerInfo(f.document);
+  try {
+    assert.deepEqual([...f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')].map(node => node.getAttribute('data-bb-chat-ui-info-trigger')), ['diff','children','goal','todos','queue','pullRequest','other']);
+    f.click('[data-bb-chat-ui-info-all]');
+    assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-choice]').length,infoKinds.length);
+    assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="plan"][data-bb-chat-ui-info-unavailable]'));
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="plan"]'),null);
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("native popovers replace only their bottom collapse with a small close without ending Plan or Goal", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
@@ -142,7 +154,8 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   };
   const stop = injectComposerInfo(f.document);
   const pills = () => entries.filter(entry => entry.key !== 'orb' && entry.options.duration === 460);
-  assert.deepEqual(pills().map(entry => entry.key), ['diff', 'goal', 'queue']);
+  const visible = ['diff', 'goal', 'todos', 'queue', 'pullRequest', 'other'];
+  assert.deepEqual(pills().map(entry => entry.key), visible);
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]'), 'avatars retain their existing individual bubbles');
   assert.deepEqual(pills()[0].frames.map(frame => frame.transform), [
     'translateY(8px) scale(.82,.72)', 'translateY(-4px) scale(.94,1.16)',
@@ -150,7 +163,7 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   ]);
   assert.deepEqual(pills()[0].frames.map(frame => frame.offset), [0,.35,.65,.82,1], 'stretch, landing squash and gentle recovery fit inside one quick entrance');
   assert.equal(pills()[0].options.duration, 460);
-  assert.deepEqual(pills().map(entry => entry.options.delay), [0,180,225], 'visible pills and child avatars enter from left to right in 45ms steps');
+  assert.deepEqual(pills().map(entry => entry.options.delay), [0,180,225,270,315,360], 'visible pills and child avatars enter from left to right in 45ms steps');
   assert.ok(pills().every(entry => entry.options.fill === 'backwards'), 'delayed pills hold their starting pose until their turn');
   assert.deepEqual([...f.document.querySelectorAll<HTMLElement>('[data-bb-chat-ui-info-avatar][data-new]')].map(avatar => avatar.style.animationDelay), ['45ms','90ms','135ms']);
   assert.equal(pills()[0].frames[0].easing, 'cubic-bezier(.36,0,.18,1)');
@@ -166,9 +179,9 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'상단 표시', showQueue:'상단 표시' }));
   await f.tick();
   f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
-  assert.deepEqual(pills().map(entry => entry.key), ['diff', 'goal', 'queue'], 'refresh, re-enable and resize do not replay entry motion');
+  assert.deepEqual(pills().map(entry => entry.key), visible, 'refresh, re-enable and resize do not replay entry motion');
   assert.equal(entries.filter(entry => entry.key === 'orb' && entry.options.duration === 460).length,1,'the all-information button enters once after the pills');
-  assert.equal(entries.find(entry => entry.key === 'orb')?.options.delay,270);
+  assert.equal(entries.find(entry => entry.key === 'orb')?.options.delay,405);
   assert.ok(entries.filter(entry => entry.key === 'orb' && entry.options.duration !== 460).every(entry => entry.options.duration === 360), 'activity reactions settle quickly too');
   stop();
   assert.ok(pills().every(entry => entry.cancelled), 'in-progress entry animations are cancelled on unload');
@@ -523,7 +536,7 @@ test("empty top icons can be enabled and disabled without exposing catalog-only 
   assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]').length, 0);
   settings.showEmptyIcons = true; publish(); await f.tick();
   const icons = f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]');
-  assert.deepEqual([...icons].map(icon => icon.getAttribute('data-bb-chat-ui-info-trigger')), ['diff','children','annotations']);
+  assert.deepEqual([...icons].map(icon => icon.getAttribute('data-bb-chat-ui-info-trigger')), infoKinds.filter(kind => kind.key !== 'goal' && kind.key !== 'plan').map(kind => kind.key));
   for (const icon of icons) {
     assert.equal(icon.textContent, '');
     assert.ok(icon.querySelector('[data-placeholder-icon]'));
@@ -1171,11 +1184,12 @@ test("entering another thread replays the sequence even when the composer DOM is
     return {cancel(){}} as Animation;
   };
   const stop=injectComposerInfo(f.document);
-  assert.deepEqual(animated,['diff','all']);
+  const sequence = ['diff','goal','todos','queue','pullRequest','other','all'];
+  assert.deepEqual(animated,sequence);
   source.setAttribute('data-bb-chat-ui-info-thread','thread-b'); await f.tick();
-  assert.deepEqual(animated,['diff','all','diff','all']);
+  assert.deepEqual(animated,[...sequence,...sequence]);
   f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
-  assert.equal(animated.length,4,'resize does not restart the sequence');
+  assert.equal(animated.length,sequence.length * 2,'resize does not restart the sequence');
   stop(); f.dom.window.close();
 });
 
