@@ -83,6 +83,7 @@ export const composerInfoCss = `
 [${MARK}-avatar][data-new] { animation:bb-info-bubble 700ms cubic-bezier(.22,1,.36,1); }
 [${MARK}-menu], ${DETAIL} { position:absolute !important; display:block !important; left:0 !important; right:0 !important; top:auto !important; bottom:40px !important; transform:none !important; width:100% !important; max-width:none !important; min-height:0 !important; height:auto !important; max-height:min(50dvh,26rem) !important; overflow:auto !important; margin:0 !important; order:0 !important; border:0 !important; border-radius:18px !important; background:var(--bb-chat-ui-info-face) !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); color:var(--foreground); box-shadow:0 12px 32px -14px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; z-index:52; animation:bb-info-enter 320ms cubic-bezier(.22,1,.36,1); }
 [${MARK}-menu] { padding:12px; }
+[${MARK}-menu], ${DETAIL} { overscroll-behavior:contain !important; }
 [${MARK}-menu] header { display:flex; align-items:center; justify-content:space-between; font-size:12px; padding-bottom:8px; }
 [${MARK}-menu] p { font-size:11px; color:var(--subtle-foreground); margin:0 0 8px; }
 [${MARK}-menu] > div { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr)); gap:6px; }
@@ -283,6 +284,48 @@ export function injectComposerInfo(document: Document): () => void {
     };
     const edgeResize = typeof view!.ResizeObserver === "function" ? new view!.ResizeObserver(updateScrollHints) : null;
     stack.addEventListener("scroll", updateScrollHints, true);
+    const scrollRoot = (event:Event) => {
+      const root = menu ?? activeNode;
+      return event.target && root?.contains(event.target as Node) ? root : null;
+    };
+    const canScroll = (event:Event, root:HTMLElement, dx:number, dy:number) => {
+      for (let node = event.target as HTMLElement | null; node; node = node.parentElement) {
+        const css = view!.getComputedStyle(node);
+        const available = (overflow:string, delta:number, position:number, size:number, total:number) =>
+          /auto|scroll|overlay/.test(overflow) && (delta < 0 ? position > 0 : delta > 0 && position + size < total - 1);
+        if (available(css.overflowY || css.overflow, dy, node.scrollTop, node.clientHeight, node.scrollHeight)
+          || available(css.overflowX || css.overflow, dx, node.scrollLeft, node.clientWidth, node.scrollWidth)) return true;
+        if (node === root) break;
+      }
+      return false;
+    };
+    const onWheel = (event:WheelEvent) => {
+      const root = scrollRoot(event);
+      if (!root || event.ctrlKey) return;
+      event.stopPropagation();
+      if (!canScroll(event, root, event.deltaX, event.deltaY)) event.preventDefault();
+    };
+    let touch:{ x:number; y:number } | null = null;
+    const onTouchStart = (event:TouchEvent) => {
+      touch = null;
+      if (!scrollRoot(event) || event.touches.length !== 1) return;
+      touch = { x:event.touches[0].clientX, y:event.touches[0].clientY };
+      event.stopPropagation();
+    };
+    const onTouchMove = (event:TouchEvent) => {
+      const root = scrollRoot(event);
+      if (!root || !touch || event.touches.length !== 1) { touch = null; return; }
+      const next = { x:event.touches[0].clientX, y:event.touches[0].clientY };
+      event.stopPropagation();
+      if (!canScroll(event, root, touch.x - next.x, touch.y - next.y)) event.preventDefault();
+      touch = next;
+    };
+    const endTouch = () => { touch = null; };
+    stack.addEventListener("wheel", onWheel, { passive:false });
+    stack.addEventListener("touchstart", onTouchStart, { passive:true });
+    stack.addEventListener("touchmove", onTouchMove, { passive:false });
+    stack.addEventListener("touchend", endTouch);
+    stack.addEventListener("touchcancel", endTouch);
     const editing = () => stack.querySelector('[data-queued-message-inline-editor]') !== null;
     const reduced = () => view!.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const pulse = () => {
@@ -713,6 +756,11 @@ export function injectComposerInfo(document: Document): () => void {
       resize?.disconnect();
       edgeResize?.disconnect();
       stack.removeEventListener("scroll", updateScrollHints, true);
+      stack.removeEventListener("wheel", onWheel);
+      stack.removeEventListener("touchstart", onTouchStart);
+      stack.removeEventListener("touchmove", onTouchMove);
+      stack.removeEventListener("touchend", endTouch);
+      stack.removeEventListener("touchcancel", endTouch);
       bar.remove();
       stack.removeAttribute(`${MARK}-stack`);
       stack.removeAttribute(`${MARK}-request`);

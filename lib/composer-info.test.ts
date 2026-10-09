@@ -104,6 +104,72 @@ test("popover scroll hints follow available content, including nested scroll are
   f.dom.window.close();
 });
 
+test("popover wheel scrolling stays inside its scrollable root and nested editors, including empty and edge states", () => {
+  const f = fixture();
+  let chatWheels = 0;
+  f.document.body.addEventListener('wheel', () => { chatWheels++; });
+  const stop = injectComposerInfo(f.document);
+  f.click('[data-bb-chat-ui-info-all]');
+  const menu = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-menu]')!;
+  menu.style.overflowY = 'auto';
+  let height = 600;
+  Object.defineProperties(menu, { scrollHeight:{ get:() => height }, clientHeight:{ value:200 } });
+  const wheel = (target:Element, deltaY:number) => {
+    const event = new f.dom.window.WheelEvent('wheel', { deltaY, bubbles:true, cancelable:true });
+    target.dispatchEvent(event); return event;
+  };
+  menu.scrollTop = 100;
+  assert.equal(wheel(menu.querySelector('button')!,100).defaultPrevented,false,'native scrolling works inside the popup');
+  assert.equal(chatWheels,0,'ancestor chat handlers cannot process popup wheel events');
+  menu.scrollTop = 400;
+  assert.equal(wheel(menu,100).defaultPrevented,true,'bottom edge cannot chain to the chat');
+  menu.scrollTop = 0;
+  assert.equal(wheel(menu,-100).defaultPrevented,true,'top edge cannot chain to the chat');
+  height = 200;
+  assert.equal(wheel(menu,100).defaultPrevented,true,'a short popup cannot scroll the chat either');
+  const editor = f.document.createElement('textarea'); editor.style.overflowY = 'auto'; menu.append(editor);
+  Object.defineProperties(editor, { scrollHeight:{ value:500 }, clientHeight:{ value:100 } });
+  assert.equal(wheel(editor,100).defaultPrevented,false,'nested editable content retains native scrolling');
+  f.click('[data-bb-chat-ui-info-choice="queue"]');
+  const queue = f.document.querySelector<HTMLElement>('[data-queued-messages-scroll-frame]')!;
+  queue.style.overflowY = 'auto'; Object.defineProperties(queue,{ scrollHeight:{ value:500 },clientHeight:{ value:180 } });
+  assert.equal(wheel(queue,100).defaultPrevented,false,'native queue lists retain scrolling');
+  queue.scrollTop = 320;
+  assert.equal(wheel(queue,100).defaultPrevented,true);
+  assert.equal(chatWheels,0);
+  stop();
+  assert.equal(wheel(queue,100).defaultPrevented,false,'cleanup restores native event handling');
+  assert.equal(chatWheels,1);
+  f.dom.window.close();
+});
+
+test("single-finger popup gestures do not reach chat handlers or chain from a short popup", () => {
+  const f = fixture();
+  let chatMoves = 0;
+  f.document.body.addEventListener('touchmove', () => { chatMoves++; });
+  const stop = injectComposerInfo(f.document);
+  f.click('[data-bb-chat-ui-info-all]');
+  const menu = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-menu]')!;
+  let target:Element = menu;
+  const gesture = (type:string,y:number) => {
+    const event = new f.dom.window.TouchEvent(type, { bubbles:true,cancelable:true,touches:[{ clientX:30,clientY:y }] });
+    target.dispatchEvent(event); return event;
+  };
+  gesture('touchstart',200);
+  assert.equal(gesture('touchmove',180).defaultPrevented,true);
+  assert.equal(chatMoves,0);
+  menu.style.overflowY = 'auto'; Object.defineProperties(menu,{ scrollHeight:{ value:600 },clientHeight:{ value:200 } });
+  assert.equal(gesture('touchmove',160).defaultPrevented,false,'touch can scroll popup content');
+  assert.equal(chatMoves,0);
+  f.click('[data-bb-chat-ui-info-choice="queue"]');
+  target = f.document.querySelector('[data-queued-messages-scroll-frame]')!;
+  gesture('touchstart',160);
+  stop();
+  assert.equal(gesture('touchmove',140).defaultPrevented,false);
+  assert.equal(chatMoves,1);
+  f.dom.window.close();
+});
+
 test("children use a bare latest-three avatar stack and prefer the designed SDK detail", async () => {
   const f = fixture();
   const children = [
