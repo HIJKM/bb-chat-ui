@@ -33,6 +33,96 @@ function fixture() {
   return { dom, document, tick, click };
 }
 
+function pointer(f: ReturnType<typeof fixture>, type: 'pointerover' | 'pointerout', target: Element, relatedTarget: Element | null = null, pointerType = 'mouse') {
+  const event = new f.dom.window.MouseEvent(type, { bubbles:true, relatedTarget });
+  Object.defineProperty(event, 'pointerType', { value:pointerType });
+  target.dispatchEvent(event);
+}
+
+test("desktop hover previews wait for intent, bridge the popover gap, and pin on click", async () => {
+  const f=fixture();
+  f.document.body.insertAdjacentHTML('beforeend','<span hidden data-bb-chat-ui-device="desktop" data-bb-chat-ui-viewport="narrow"></span>');
+  const wait=(ms:number)=>new Promise(resolve=>f.dom.window.setTimeout(resolve,ms));
+  const stop=injectComposerInfo(f.document);
+  const goal=f.document.querySelector('[data-bb-chat-ui-info-trigger="goal"]')!;
+  const queue=f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]')!;
+  const orb=f.document.querySelector('[data-bb-chat-ui-info-all]')!;
+  try {
+    pointer(f,'pointerover',goal);
+    assert.equal(goal.getAttribute('aria-expanded'),'false','hover does not open immediately');
+    pointer(f,'pointerout',goal,f.document.body); await wait(210);
+    assert.equal(goal.getAttribute('aria-expanded'),'false','passing over a pill is ignored');
+    pointer(f,'pointerover',goal); await wait(210);
+    assert.equal(goal.getAttribute('aria-expanded'),'true');
+    const panel=f.document.querySelector('[data-bb-chat-ui-info-open]')!;
+    pointer(f,'pointerout',goal,f.document.body);
+    pointer(f,'pointerover',panel,f.document.body); await wait(170);
+    assert.equal(goal.getAttribute('aria-expanded'),'true','the gap does not close a preview before entering its card');
+    pointer(f,'pointerout',panel,f.document.body); await wait(170);
+    assert.equal(goal.getAttribute('aria-expanded'),'false');
+    pointer(f,'pointerover',goal); await wait(210);
+    f.click('[data-bb-chat-ui-info-trigger="goal"]');
+    pointer(f,'pointerout',goal,f.document.body); await wait(170);
+    assert.equal(goal.getAttribute('aria-expanded'),'true','click pins the preview instead of toggling it shut');
+    pointer(f,'pointerover',queue); await wait(210);
+    assert.equal(goal.getAttribute('aria-expanded'),'true','hover cannot replace a clicked popover');
+    assert.equal(queue.getAttribute('aria-expanded'),'false');
+    f.click('[data-bb-chat-ui-info-trigger="goal"]');
+    assert.equal(goal.getAttribute('aria-expanded'),'false','a second click keeps the normal toggle');
+    pointer(f,'pointerover',orb); await wait(210);
+    assert.ok(f.document.querySelector('[data-bb-chat-ui-info-menu]'));
+    f.click('[data-bb-chat-ui-info-choice="queue"]');
+    pointer(f,'pointerout',f.document.querySelector('[data-bb-chat-ui-info-open]')!,f.document.body); await wait(170);
+    assert.equal(queue.getAttribute('aria-expanded'),'true','catalog selection opens a persistent detail');
+    f.click('[data-bb-chat-ui-info-trigger="queue"]');
+    pointer(f,'pointerover',goal); await wait(210);
+    const focusTarget=f.document.querySelector<HTMLElement>('[aria-label="Clear active Goal"]')!;
+    focusTarget.focus();
+    pointer(f,'pointerout',focusTarget,f.document.body); await wait(170);
+    assert.equal(goal.getAttribute('aria-expanded'),'true','keyboard focus within the preview keeps its actions available');
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("hover previews exclude phone, tablet, and touch input while clicks keep working", async () => {
+  for (const [device,pointerType] of [['phone','mouse'],['tablet','mouse'],['desktop','touch']]) {
+    const f=fixture();
+    f.document.body.insertAdjacentHTML('beforeend',`<span hidden data-bb-chat-ui-device="${device}" data-bb-chat-ui-viewport="wide"></span>`);
+    const stop=injectComposerInfo(f.document);
+    try {
+      const goal=f.document.querySelector('[data-bb-chat-ui-info-trigger="goal"]')!;
+      pointer(f,'pointerover',goal,null,pointerType);
+      await new Promise(resolve=>f.dom.window.setTimeout(resolve,210));
+      assert.equal(goal.getAttribute('aria-expanded'),'false');
+      f.click('[data-bb-chat-ui-info-trigger="goal"]');
+      assert.equal(goal.getAttribute('aria-expanded'),'true');
+    } finally { stop(); f.dom.window.close(); }
+  }
+});
+
+test("hover timers are cancelled on thread changes, input requests, and unload", async () => {
+  const f=fixture();
+  f.document.body.insertAdjacentHTML('beforeend','<span hidden data-bb-chat-ui-device="desktop"></span>');
+  const source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  const stack=f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const stop=injectComposerInfo(f.document);
+  const goal=f.document.querySelector('[data-bb-chat-ui-info-trigger="goal"]')!;
+  try {
+    pointer(f,'pointerover',goal);
+    source.setAttribute('data-bb-chat-ui-info-thread','another'); await f.tick();
+    await new Promise(resolve=>f.dom.window.setTimeout(resolve,210));
+    assert.equal(goal.getAttribute('aria-expanded'),'false','a pending hover cannot open in another thread');
+    pointer(f,'pointerover',goal);
+    stack.insertAdjacentHTML('beforeend','<div data-testid="user-question-banner">Question</div>'); await f.tick();
+    await new Promise(resolve=>f.dom.window.setTimeout(resolve,210));
+    assert.equal(goal.getAttribute('aria-expanded'),'false','input requests take priority');
+    stack.querySelector('[data-testid="user-question-banner"]')!.remove(); await f.tick();
+    pointer(f,'pointerover',goal); stop();
+    await new Promise(resolve=>f.dom.window.setTimeout(resolve,210));
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-open]'),null);
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-menu]'),null);
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("default settings expose all available information while empty families stay catalog-only", () => {
   const f = fixture();
   const stop = injectComposerInfo(f.document);

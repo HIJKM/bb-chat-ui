@@ -4,6 +4,7 @@ import type { WorkspaceDiffSnapshot } from "./workspace-diff-data.ts";
 import { commitIcon, fileStatusIcon } from "./composer-diff-icons.ts";
 import { childInitial, type ChildState, type ChildSummary } from "./composer-child.ts";
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
+import { isDesktopChrome } from "./device-chrome.ts";
 
 const STACK = "[data-promptbox-shell] > .grid";
 const MARK = "data-bb-chat-ui-info";
@@ -324,6 +325,13 @@ export function injectComposerInfo(document: Document): () => void {
     let activeNode: HTMLElement | null = null;
     let menu: HTMLElement | null = null;
     let lastTrigger: HTMLElement | null = null;
+    let hoverPreview = false;
+    let hoverOpenTimer: number | undefined;
+    let hoverCloseTimer: number | undefined;
+    const cancelHover = () => {
+      view!.clearTimeout(hoverOpenTimer); view!.clearTimeout(hoverCloseTimer);
+      hoverOpenTimer = hoverCloseTimer = undefined;
+    };
     let signature = "";
     let childStates = new Map<string, ChildState>();
     let queueSnapshot:{ count:number; seenIds:Set<string>; pendingRows:number; pendingCount:number } | null = null;
@@ -875,7 +883,9 @@ export function injectComposerInfo(document: Document): () => void {
       }
     };
     const close = (restoreFocus = false, force = false) => {
+      cancelHover();
       if (!force && editing()) return false;
+      hoverPreview = false;
       const item = items.find(item => item.node === activeNode && item.key === active);
       activeNode?.removeAttribute(OPEN);
       if (!editing() && active !== "diff" && item?.trigger?.getAttribute("aria-expanded") === "true") item.trigger.click();
@@ -920,11 +930,15 @@ export function injectComposerInfo(document: Document): () => void {
         if (alert.textContent !== error) alert.textContent = error;
       } else alert?.remove();
     };
-    const open = (key: InfoKind | "all", trigger: HTMLElement, selected?: InfoItem) => {
+    const open = (key: InfoKind | "all", trigger: HTMLElement, selected?: InfoItem, preview = false) => {
       if (editing() || stack.hasAttribute(`${MARK}-request`)) return;
       if (key !== "all" && !listed.includes(key)) return;
+      cancelHover();
+      if (active === key && hoverPreview && !preview && (!selected || selected.node === activeNode)) { hoverPreview = false; return; }
+      if (preview && active !== null && (!hoverPreview || active === key)) return;
       if (active === key && (!selected || selected.node === activeNode)) { close(true); return; }
       close();
+      hoverPreview = preview;
       lastTrigger = trigger;
       if (key === "all") {
         active = "all";
@@ -1027,6 +1041,38 @@ export function injectComposerInfo(document: Document): () => void {
       buttons.get(key)?.setAttribute("aria-expanded", "true");
       updateScrollHints();
     };
+    const inHoverArea = (target: EventTarget | null) => target instanceof view!.Node &&
+      (lastTrigger?.contains(target) || (menu ?? activeNode)?.contains(target));
+    const onHoverOver = (event: PointerEvent) => {
+      if (!isDesktopChrome(document) || event.pointerType !== "mouse") return;
+      const button = (event.target as Element).closest<HTMLElement>(`[${MARK}-trigger], [${MARK}-all]`);
+      if (button && bar.contains(button) && !button.hidden && !bar.hidden) {
+        if (event.relatedTarget instanceof view!.Node && button.contains(event.relatedTarget)) return;
+        cancelHover();
+        const key = button.hasAttribute(`${MARK}-all`) ? "all" : button.getAttribute(`${MARK}-trigger`) as InfoKind;
+        if (active === key || active !== null && !hoverPreview) return;
+        hoverOpenTimer = view!.setTimeout(() => {
+          hoverOpenTimer = undefined;
+          if (isDesktopChrome(document) && button.isConnected && !button.hidden && !bar.hidden) open(key, button, undefined, true);
+        }, 180);
+      } else if (inHoverArea(event.target)) cancelHover();
+    };
+    const onHoverOut = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") return;
+      const button = (event.target as Element).closest<HTMLElement>(`[${MARK}-trigger], [${MARK}-all]`);
+      if (button && event.relatedTarget instanceof view!.Node && button.contains(event.relatedTarget)) return;
+      view!.clearTimeout(hoverOpenTimer); hoverOpenTimer = undefined;
+      if (!hoverPreview || inHoverArea(event.relatedTarget)) return;
+      view!.clearTimeout(hoverCloseTimer);
+      hoverCloseTimer = view!.setTimeout(() => { if (hoverPreview) close(); }, 150);
+    };
+    const pinPreview = (event: Event) => {
+      if (hoverPreview && (menu ?? activeNode)?.contains(event.target as Node)) { cancelHover(); hoverPreview = false; }
+    };
+    stack.addEventListener("pointerover", onHoverOver);
+    stack.addEventListener("pointerout", onHoverOut);
+    stack.addEventListener("pointerdown", pinPreview, true);
+    stack.addEventListener("focusin", pinPreview);
     orb.addEventListener("click", () => open("all", orb));
     const fit = (motion = true) => {
       const previouslyVisible = new Set([...buttons.values()].filter(button => !button.hidden && positions.has(button)));
@@ -1316,6 +1362,10 @@ export function injectComposerInfo(document: Document): () => void {
       stack.removeEventListener("touchmove", onTouchMove);
       stack.removeEventListener("touchend", endTouch);
       stack.removeEventListener("touchcancel", endTouch);
+      stack.removeEventListener("pointerover", onHoverOver);
+      stack.removeEventListener("pointerout", onHoverOut);
+      stack.removeEventListener("pointerdown", pinPreview, true);
+      stack.removeEventListener("focusin", pinPreview);
       bar.remove();
       stack.removeAttribute(`${MARK}-stack`);
       stack.removeAttribute(`${MARK}-request`);

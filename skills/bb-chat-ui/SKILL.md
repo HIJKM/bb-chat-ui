@@ -82,6 +82,8 @@ Diff 팝오버의 파일·커밋 목록은 각각 5개까지 먼저 보여 준�
 
 팝오버 닫기 버튼은 Child Thread·Agentation·native 상세·전체 정보·빈 상태·Diff 모두 24px 원형 영역과 12px `×`를 공유한다. 글자 굵기는 400, line-height는 1이며 flex로 중앙 정렬해 제목의 글자 크기·굵기를 상속하지 않는다.
 
+데스크톱에서는 정보 pill·전체 정보 원 버튼 위에 mouse pointer가 180ms 머물면 팝오버를 미리 연다. 기기는 `DeviceChromeBridge`의 `desktop` 값을 사용하며 화면 폭으로 판단하지 않는다. phone·tablet·touch·pen에는 hover 열기를 적용하지 않는다. pointer가 pill과 열린 카드 사이를 이동하면 유지하고, 둘 다 벗어나면 150ms 뒤 닫는다. 미리 열린 pill을 클릭하면 닫지 않고 고정하며 다음 클릭은 기존처럼 닫는다. 팝오버 내부의 pointerdown·키보드 포커스·전체 정보 항목 선택도 열린 상태를 유지한다. 클릭으로 연 카드나 편집 중인 큐를 다른 pill의 hover로 교체하지 않는다. 입력 요청·스레드 이동·해제 시 hover 타이머를 취소하고, hover에는 햅틱을 추가하지 않는다.
+
 전체 정보 목록과 모든 상세 팝오버의 카드 자체 패딩은 사방 `16px`, 너비 계산은 `border-box`로 통일한다. 개별 본문·목록·행에 둔 기존 내부 여백은 유지하되 Child Thread와 Agentation의 본문 행은 가로 패딩을 0으로 두어 제목과 같은 왼쪽 시작점에서 표시한다. Child Thread의 세로 패딩 8px, Agentation의 세로 패딩 10px와 기존 행 높이·hover·둥근 모서리는 유지한다. Parent는 native 인라인 링크 행이나 아이콘 전용 toggle 행을 제목으로 쓰지 않고, 별도 `Parent` 제목을 28px 높이에서 중앙 정렬한다. 원래 링크·disclosure 동작과 DOM 부모는 유지하며 닫기·해제 시 추가 제목을 제거한다. Status 등 custom 아이콘의 pill·목록 래퍼도 builtin 아이콘과 같은 16px 정사각형에서 중앙 정렬한다.
 
 정보 줄이 관리하는 대기 큐의 액션 묶음에는 native `::before`의 왼쪽 takeover 그라데이션을 표시하지 않는다. 목록 안쪽에 불투명한 배경이 남지 않도록 하고, 팝오버 glass와 위·아래 스크롤 힌트는 유지한다. standalone 큐의 원래 효과는 유지한다.
