@@ -30,7 +30,7 @@ test("detail files use the same comparison as the pill and distinguish branch co
   });
   workspace.workingTree = { insertions:0, deletions:0, files:[] };
   assert.deepEqual(headDiffDetail(workspace, { isWorktree:true }), {
-    branch:'feature/chat', basis:'main 대비 커밋된 변경', baseRef:'main', files:[committed], commits,
+    branch:'feature/chat', basis:'HEAD 대비 미커밋 변경', baseRef:'main', files:[], commits,
   });
   assert.deepEqual(headDiffDetail(workspace).files, []);
 });
@@ -51,14 +51,14 @@ test("omits the branch icon on the repository's default branch", () => {
   }
 });
 
-test("shows a clean worktree's committed diff and leaves a normal branch at zero", () => {
+test("clean worktrees and regular checkouts never replace HEAD stats with committed changes", () => {
   const workspace = {
     branch: { currentBranch: "bb/chat-1", defaultBranch: "main" },
     workingTree: { insertions: 0, deletions: 0, files: [] },
     mergeBase: { insertions: 23, deletions: 27, files: [{}, {}, {}, {}, {}] },
   };
   assert.deepEqual(headDiffSummary(workspace, { isWorktree: true }), {
-    insertions: 23, deletions: 27, files: 5, branch: "bb/chat-1",
+    insertions: 0, deletions: 0, files: 0, branch: "bb/chat-1",
   });
   assert.deepEqual(headDiffSummary(workspace), {
     insertions: 0, deletions: 0, files: 0, branch: "bb/chat-1",

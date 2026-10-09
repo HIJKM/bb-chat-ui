@@ -92,25 +92,21 @@ export function headDiffSummary(workspace: HeadWorkspace, options: HeadDiffOptio
   const { workingTree, branch } = workspace;
   const current = branch.currentBranch;
   const onDefault = current !== null && shortBranch(current) === shortBranch(branch.defaultBranch);
-  const counts = hasDiff(workingTree) || !options.isWorktree || !hasDiff(workspace.mergeBase)
-    ? workingTree
-    : workspace.mergeBase;
   return {
-    insertions: counts.insertions,
-    deletions: counts.deletions,
-    files: counts.files.length,
+    insertions: workingTree.insertions,
+    deletions: workingTree.deletions,
+    files: workingTree.files.length,
     branch: current !== null && !onDefault ? current : null,
   };
 }
 
 export function headDiffDetail(workspace: DetailedWorkspace, options: HeadDiffOptions = {}): HeadDiffDetail {
-  const useCommitted = !hasDiff(workspace.workingTree) && options.isWorktree && hasDiff(workspace.mergeBase);
   const baseRef = workspace.mergeBase?.baseRef ?? workspace.mergeBase?.mergeBaseBranch ?? null;
   return {
     branch:workspace.branch.currentBranch,
-    basis:useCommitted ? `${baseRef ?? "Merge base"} 대비 커밋된 변경` : "HEAD 대비 미커밋 변경",
+    basis:"HEAD 대비 미커밋 변경",
     baseRef,
-    files:(useCommitted ? workspace.mergeBase! : workspace.workingTree).files,
+    files:workspace.workingTree.files,
     commits:workspace.mergeBase?.commits ?? [],
   };
 }
