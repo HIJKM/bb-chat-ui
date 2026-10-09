@@ -83,7 +83,7 @@ test('in-flight results are discarded when the thread changes environments', asy
   const refresh = f.refresh(); await tick();
   f.setEnvironment('env_feature'); f.emit('thread:changed','thread',['environment-changed']);
   gate.resolve(workspace('env_main')); await refresh; await tick();
-  assert.deepEqual(f.labels(), ['↑3','feature/chat · 8 commits']);
+  assert.deepEqual(f.labels(), ['↑3','feature/c… · 8 commits']);
   f.stop();
   const before=f.output.length; f.emit('environment:changed','env_feature',['workspace-changed']); await f.refresh();
   assert.equal(f.output.length,before,'disposed controllers cannot publish');

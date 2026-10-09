@@ -635,7 +635,7 @@ test("Code Diff pill shows one commit meaning and keeps unpushed counts inside i
   const name = 'feature/a-very-long-branch-name';
   const snapshot = {
     insertions:0, deletions:0, files:0, branch:name,
-    presentation:{ mode:'branch', visible:true, branch:name, branchLabel:'feature/a-very-…', label:'feature/a-very-… · 8 commits' },
+    presentation:{ mode:'branch', visible:true, branch:name, branchLabel:'feature/a…', label:'feature/a… · 8 commits' },
     detail:{ branch:name, basis:'HEAD 대비 미커밋 변경', baseRef:'origin/main', files:[],
       commitKind:'pr', commitCount:8, unpushedCount:3, unpushedRef:`origin/${name}`,
       commits:[{ sha:'abc12345678', shortSha:'abc1234', subject:'Saved work' }] },
@@ -644,7 +644,7 @@ test("Code Diff pill shows one commit meaning and keeps unpushed counts inside i
   publish(); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
   const stop = injectComposerInfo(f.document);
   const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!;
-  assert.equal(pill.textContent, 'feature/a-very-… · 8');
+  assert.equal(pill.textContent, 'feature/a… · 8');
   assert.ok(pill.querySelector('[data-bb-chat-ui-info-commit-count] svg'));
   assert.equal(pill.querySelector('[data-bb-chat-ui-info-commit-count]')?.getAttribute('aria-label'), '커밋 8개');
   assert.equal(pill.textContent?.includes('↑'), false);
@@ -657,13 +657,13 @@ test("Code Diff pill shows one commit meaning and keeps unpushed counts inside i
   assert.ok(popup.textContent?.includes(`origin/${name} 대비`));
   assert.equal(popup.textContent?.includes('PR 후보는 아직 push하지 않은 로컬 커밋도 포함합니다.'), false);
   assert.equal(popup.textContent?.includes('원격 비교는 마지막으로 확인된 상태 기준입니다.'), false);
-  assert.equal(popup.textContent?.includes('feature/a-very-…'), false, 'popover uses the full branch name');
+  assert.equal(popup.textContent?.includes('feature/a…'), false, 'popover uses the full branch name');
   assert.equal(popup.querySelectorAll('[data-bb-chat-ui-info-diff-file]').length, 0);
   snapshot.detail.unpushedCount = 0;
   publish(); await f.tick();
   assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff]'), popup);
   assert.ok(popup.textContent?.includes('미푸시 · 0 commits'));
-  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent, 'feature/a-very-… · 8');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent, 'feature/a… · 8');
   stop(); f.dom.window.close();
 });
 

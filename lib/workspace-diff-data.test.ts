@@ -34,7 +34,7 @@ test("feature snapshot compares PR base and origin branch separately using ahead
   assert.equal(snapshot.detail.baseRef, "origin/main");
   assert.equal(snapshot.detail.unpushedRef, "origin/feature/chat");
   assert.equal(snapshot.detail.commits.length, 1, "a limited commit list does not change the count");
-  assert.equal(snapshot.presentation.label, "feature/chat · 8 commits");
+  assert.equal(snapshot.presentation.label, "feature/c… · 8 commits");
   assert.equal(snapshot.presentation.label.includes("↑"), false);
   assert.equal(snapshot.insertions, 0);
   assert.deepEqual(snapshot.detail.files, []);
@@ -89,11 +89,16 @@ test("missing remote refs with SDK zero counts stay unknown, while a new branch 
   assert.equal(unknown?.presentation.visible, true, "unknown is not clean zero");
 });
 
-test("line stats win when dirty; only the pill truncates branch names to 16 characters", () => {
+test("line stats win when dirty; only the pill truncates branch names to 10 characters", () => {
   const w = workspace("feature/a-very-long-branch-name");
   const clean = diffPresentation(w, { main:false, count:8 });
-  assert.equal(clean.branchLabel, "feature/a-very-…");
-  assert.equal(Array.from(clean.branchLabel!).length, 16);
+  assert.equal(clean.branchLabel, "feature/a…");
+  assert.equal(Array.from(clean.branchLabel!).length, 10);
+  for (const branch of ["short", "1234567890", "12345678901", "🚀1234567890"]) {
+    const label = diffPresentation(workspace(branch), { main:false, count:0 }).branchLabel!;
+    const characters = Array.from(branch);
+    assert.equal(label, characters.length <= 10 ? branch : `${characters.slice(0,9).join("")}…`);
+  }
   assert.equal(clean.branch, "feature/a-very-long-branch-name");
   w.workingTree = { insertions:7, deletions:2, files:[{ path:"draft.ts", status:"M", insertions:7, deletions:2 }] };
   const dirty = diffPresentation(w, { main:false, count:8 });

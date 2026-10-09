@@ -28,7 +28,7 @@ export function diffPresentation(workspace:Workspace, info:{ main:boolean; count
   const name = workspace.branch.currentBranch ? branchName(workspace.branch.currentBranch) : null;
   const dirty = workspace.workingTree.hasUncommittedChanges === true || workspace.workingTree.files.length > 0 || workspace.workingTree.insertions > 0 || workspace.workingTree.deletions > 0;
   const letters = Array.from(name ?? "");
-  const branchLabel = dirty || !name ? null : letters.length > 16 ? `${letters.slice(0, 15).join("")}…` : name;
+  const branchLabel = dirty || !name ? null : letters.length > 10 ? `${letters.slice(0, 9).join("")}…` : name;
   const mode = dirty ? "working" : info.main ? "unpushed" : name ? "branch" : "detached";
   const { insertions, deletions, files } = headDiffSummary(workspace);
   const label = dirty ? `+${insertions} −${deletions} · ${files} ${files === 1 ? "file" : "files"}`
