@@ -1086,6 +1086,39 @@ test("SDK restoration capability overrides a stale native action and archive tak
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("restoring returns to normal pills before the SDK read-only snapshot catches up", async () => {
+  for (const showEmptyIcons of [false,true]) for (const [nativeLabel,sdkLabel] of [['Thread is archived','Archived thread'],['Environment unavailable','Environment unavailable']]) {
+    const f=fixture();
+    const stack=f.document.querySelector('[data-promptbox-shell] > .grid')!;
+    const source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+    source.setAttribute('data-bb-chat-ui-info-settings',JSON.stringify({showEmptyIcons}));
+    source.setAttribute('data-bb-chat-ui-info-read-only-label',sdkLabel);
+    source.insertAdjacentHTML('beforeend','<span data-bb-chat-ui-info-icon="status"><svg data-placeholder-icon="status" /></span>');
+    const status=f.document.createElement('section'); status.setAttribute('aria-label','Thread history');
+    status.innerHTML=`<div role="status" aria-label="${nativeLabel}">${nativeLabel}</div><button>Unarchive</button>`;
+    stack.append(status);
+    const stop=injectComposerInfo(f.document);
+    try {
+      const bar=f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-bar]')!;
+      assert.equal(bar.hasAttribute('data-bb-chat-ui-info-archived'),true);
+      f.click('[data-bb-chat-ui-info-trigger="status"]');
+      status.remove(); await f.tick();
+      assert.equal(bar.hasAttribute('data-bb-chat-ui-info-archived'),false,'a delayed SDK snapshot cannot leave a full-width empty status pill after restore');
+      assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-all]')!.hidden,false);
+      assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="goal"]'));
+      assert.equal(f.document.querySelector('[data-bb-chat-ui-info-archived-detail]'),null);
+      const pill=f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-trigger="status"]');
+      if (showEmptyIcons) {
+        assert.equal(pill?.getAttribute('aria-label'),'스레드 상태 · 현재 없음');
+        assert.ok(pill?.querySelector('[data-placeholder-icon="status"]'));
+        assert.notEqual(f.dom.window.getComputedStyle(pill!).width,'100%','the requested empty icon uses its normal size');
+      } else assert.equal(pill,null);
+      source.removeAttribute('data-bb-chat-ui-info-read-only-label'); await f.tick();
+      assert.equal(bar.hasAttribute('data-bb-chat-ui-info-archived'),false);
+    } finally { stop(); f.dom.window.close(); }
+  }
+});
+
 test("archived restore uses a lazily mounted parent-context action without exposing parent information", async () => {
   const f=fixture();
   const status=f.document.createElement('section'); status.setAttribute('aria-label','Thread history');

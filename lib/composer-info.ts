@@ -1129,7 +1129,8 @@ export function injectComposerInfo(document: Document): () => void {
       items = [...native, ...found.filter(item => item.node.hasAttribute(`${MARK}-kind`) && !native.some(other => other.key === item.key))];
       const status = items.find(item => item.key === "status");
       const unavailable = status && (status.node.matches(UNAVAILABLE) ? status.node : status.node.querySelector(UNAVAILABLE));
-      const nextReadOnlyLabel = source.getAttribute(`${MARK}-read-only-label`) ?? (status && (status.node.matches(ARCHIVED) || status.node.querySelector(ARCHIVED)) ? "Archived thread" : unavailable?.getAttribute("aria-label") ?? null);
+      // The native card disappears first after restore; its old SDK snapshot must not leave an empty read-only row.
+      const nextReadOnlyLabel = status ? source.getAttribute(`${MARK}-read-only-label`) ?? (status.node.matches(ARCHIVED) || status.node.querySelector(ARCHIVED) ? "Archived thread" : unavailable?.getAttribute("aria-label") ?? null) : null;
       if (readOnlyLabel !== nextReadOnlyLabel) { readOnlyLabel = nextReadOnlyLabel; cancelQueueMotion(); cancelExit(); close(false, true); }
       bar.toggleAttribute(`${MARK}-archived`, readOnlyLabel !== null);
       if (readOnlyLabel) bar.removeAttribute(`${MARK}-jump`);
