@@ -17,15 +17,26 @@ export const infoKinds = [
 ] as const;
 
 export type InfoKind = typeof infoKinds[number]["key"];
-export const infoSettingsNotice = "컴포저 위에 꺼내 둘 정보를 선택하세요. 공간이 부족하면 일부가 자동으로 전체 정보 버튼 안에 접힙니다. 선택하지 않은 정보도 그 버튼에서 모두 열 수 있습니다. 입력 요청 중에는 요청만 표시합니다.";
+export const infoSettingsNotice = "각 정보의 표시 방식을 선택하세요. 상단 표시는 공간이 부족하면 자동으로 전체 정보 버튼 안에 접힙니다. 목록에만 표시는 현재 정보가 없어도 목록에 남습니다. 끄기는 상단과 목록에서 모두 숨깁니다. 입력 요청 중에는 요청만 표시합니다.";
 export const composerInfoSettings = Object.fromEntries(infoKinds.map(kind => [kind.setting, {
-  type: "boolean" as const,
-  label: `상단 표시 · ${kind.label}`,
+  type: "select" as const,
+  label: kind.label,
   description: kind.key === "diff" ? infoSettingsNotice : undefined,
-  default: kind.default,
+  options: ["상단 표시", "목록에만 표시", "끄기"],
+  default: kind.default ? "상단 표시" : "목록에만 표시",
 }]));
 
+// Boolean values can still arrive from a frontend loaded before the settings upgrade.
 export function exposedInfo(values: Record<string, unknown> = {}): InfoKind[] {
-  return infoKinds.filter(kind => typeof values[kind.setting] === "boolean"
-    ? values[kind.setting] : kind.default).map(kind => kind.key);
+  return infoKinds.filter(kind => {
+    const value = values[kind.setting];
+    if (typeof value === "boolean") return value;
+    if (value === "상단 표시") return true;
+    if (value === "목록에만 표시" || value === "끄기") return false;
+    return kind.default;
+  }).map(kind => kind.key);
+}
+
+export function listedInfo(values: Record<string, unknown> = {}): InfoKind[] {
+  return infoKinds.filter(kind => values[kind.setting] !== "끄기").map(kind => kind.key);
 }

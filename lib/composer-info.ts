@@ -1,4 +1,4 @@
-import { exposedInfo, infoKinds, type InfoKind } from "./composer-info-settings.ts";
+import { exposedInfo, infoKinds, listedInfo, type InfoKind } from "./composer-info-settings.ts";
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
 import { HEAD_DIFF_MARK, openChangesPanel } from "./workspace-diff-pill.ts";
 
@@ -151,6 +151,7 @@ export function injectComposerInfo(document: Document): () => void {
     bar.append(pills, orb);
     stack.append(bar);
     let items: InfoItem[] = [];
+    let listed = listedInfo();
     const owned = new Set<HTMLElement>();
     const wrappers = new Set<HTMLElement>();
     const buttons = new Map<InfoKind, HTMLButtonElement>();
@@ -172,7 +173,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (!node.hasAttribute(attr)) node.setAttribute(attr, "");
     };
     const labelOf = (key: InfoKind) => infoKinds.find(kind => kind.key === key)!.label;
-    const catalog = () => infoKinds.flatMap<InfoItem | { key:InfoKind; label:string }>(kind => {
+    const catalog = () => infoKinds.filter(kind => listed.includes(kind.key)).flatMap<InfoItem | { key:InfoKind; label:string }>(kind => {
       const available = items.filter(item => item.key === kind.key);
       return available.length ? available : [{ key:kind.key, label:kind.label }];
     });
@@ -248,6 +249,7 @@ export function injectComposerInfo(document: Document): () => void {
     };
     const open = (key: InfoKind | "all", trigger: HTMLElement, selected?: InfoItem) => {
       if (editing() || stack.hasAttribute(`${MARK}-request`)) return;
+      if (key !== "all" && !listed.includes(key)) return;
       if (active === key && (!selected || selected.node === activeNode)) { close(true); return; }
       close();
       lastTrigger = trigger;
@@ -388,10 +390,13 @@ export function injectComposerInfo(document: Document): () => void {
       }
       const request = stack.querySelector(REQUEST) !== null;
       if (request !== stack.hasAttribute(`${MARK}-request`)) stack.toggleAttribute(`${MARK}-request`, request);
-      bar.hidden = request;
       if (request || activeNode && !items.some(item => item.node === activeNode)) close(false, true);
       let settings = {};
       try { settings = JSON.parse(source.getAttribute(SOURCE) || "{}"); } catch { /* Defaults work while settings load. */ }
+      listed = listedInfo(settings);
+      if (active && active !== "all" && !listed.includes(active)) close();
+      if (!listed.length) close();
+      bar.hidden = request || !listed.length && !editing();
       const exposed = exposedInfo(settings);
       const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`)]);
       if (signature !== next) {

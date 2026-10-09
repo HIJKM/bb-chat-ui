@@ -140,6 +140,58 @@ test("settings change exposed summaries without removing menu entries or losing 
   f.dom.window.close();
 });
 
+test("visibility settings remove disabled live and empty families from the row and catalog", async () => {
+  const f = fixture();
+  const stop = injectComposerInfo(f.document);
+  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  f.click('[aria-label^="전체 정보"]');
+  f.click('[data-bb-chat-ui-info-choice="goal"]');
+  source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'끄기', showDiff:'끄기', showWorkflow:'끄기', showChildren:'목록에만 표시' }));
+  await f.tick();
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-open]'), null);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'), null);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="children"]'), null);
+  f.click('[aria-label^="전체 정보"]');
+  for (const key of ['diff','goal','workflow']) assert.equal(f.document.querySelector(`[data-bb-chat-ui-info-choice="${key}"]`), null, key);
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="children"]'));
+  assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-choice]').length, infoKinds.length - 3);
+  source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'상단 표시', showWorkflow:'목록에만 표시' }));
+  await f.tick();
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="goal"]'));
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="workflow"]')?.textContent?.includes('현재 없음'));
+  f.click('[data-bb-chat-ui-info-choice="workflow"]');
+  source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showWorkflow:'끄기' }));
+  await f.tick();
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-empty]'), null);
+  source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify(Object.fromEntries(infoKinds.map(kind => [kind.setting,'끄기']))));
+  await f.tick();
+  assert.equal((f.document.querySelector('[data-bb-chat-ui-info-bar]') as HTMLElement).hidden, true);
+  assert.equal(f.document.querySelector('textarea')!.value, 'keep draft');
+  source.setAttribute('data-bb-chat-ui-info-settings', '{}');
+  await f.tick();
+  assert.equal((f.document.querySelector('[data-bb-chat-ui-info-bar]') as HTMLElement).hidden, false);
+  stop(); f.dom.window.close();
+});
+
+test("disabling the queue preserves an in-progress edit and hides its detail when editing ends", async () => {
+  const f = fixture();
+  const stop = injectComposerInfo(f.document);
+  f.click('[aria-label^="전체 정보"]');
+  f.click('[data-bb-chat-ui-info-choice="queue"]');
+  const queue = f.document.querySelector('section[aria-label="Queued messages"]')!;
+  queue.insertAdjacentHTML('beforeend', '<textarea data-queued-message-inline-editor>unsaved edit</textarea>');
+  f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showQueue:'끄기' }));
+  await f.tick();
+  assert.ok(queue.hasAttribute('data-bb-chat-ui-info-open'));
+  assert.equal(queue.querySelector('textarea')!.value, 'unsaved edit');
+  queue.querySelector('textarea')!.remove();
+  await f.tick();
+  assert.equal(queue.hasAttribute('data-bb-chat-ui-info-open'), false);
+  f.click('[aria-label^="전체 정보"]');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-choice="queue"]'), null);
+  stop(); f.dom.window.close();
+});
+
 test("current and child requests suppress information and the editor, and resolution restores the draft", async () => {
   for (const id of ["tool-use-ask", "plugin-request-banner", "plan-review-request", "approval-banner", "user-question-banner", "plan-review-banner"]) {
     const f = fixture();
