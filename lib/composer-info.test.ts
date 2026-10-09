@@ -48,6 +48,7 @@ test("pills bubble once on first visible appearance, preserving avatar motion an
   const f = fixture();
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
   source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'상단 표시', showQueue:'상단 표시' }));
+  source.setAttribute('data-bb-chat-ui-info-children', JSON.stringify([1,2,3].map(id => ({ id:String(id),title:`Child ${id}`,state:'run' }))));
   const entries: { key:string; frames:Keyframe[]; options:KeyframeAnimationOptions; cancelled:boolean }[] = [];
   f.dom.window.HTMLElement.prototype.animate = function(frames, options) {
     const key = this.getAttribute('data-bb-chat-ui-info-trigger');
@@ -60,11 +61,14 @@ test("pills bubble once on first visible appearance, preserving avatar motion an
   assert.deepEqual(pills().map(entry => entry.key), ['diff', 'goal', 'queue']);
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]'), 'avatars retain their existing individual bubbles');
   assert.deepEqual(pills()[0].frames.map(frame => frame.transform), ['translateY(8px) scale(.85)', 'translateY(-2px) scale(1.1)', 'none']);
-  assert.equal(pills()[0].options.duration, 1100);
-  assert.equal(pills()[0].frames[0].easing, 'cubic-bezier(.4,0,.2,1)');
-  assert.equal(pills()[0].frames[1].easing, 'cubic-bezier(.4,0,.2,1)', 'each segment slows to zero at the turn and the end');
-  assert.match(composerInfoCss, /animation:bb-info-bubble 1100ms cubic-bezier\(\.4,0,\.2,1\)/);
-  assert.match(composerInfoCss, /65% \{ transform:translateY\(-2px\) scale\(1\.1\); \} 100% \{ transform:none; \}/);
+  assert.equal(pills()[0].options.duration, 460);
+  assert.deepEqual(pills().map(entry => entry.options.delay), [0,180,225], 'visible pills and child avatars enter from left to right in 45ms steps');
+  assert.ok(pills().every(entry => entry.options.fill === 'backwards'), 'delayed pills hold their starting pose until their turn');
+  assert.deepEqual([...f.document.querySelectorAll<HTMLElement>('[data-bb-chat-ui-info-avatar][data-new]')].map(avatar => avatar.style.animationDelay), ['45ms','90ms','135ms']);
+  assert.equal(pills()[0].frames[0].easing, 'cubic-bezier(.36,0,.18,1)');
+  assert.equal(pills()[0].frames[1].easing, 'cubic-bezier(.36,0,.18,1)', 'each segment slows to zero at the turn and the end');
+  assert.match(composerInfoCss, /animation:bb-info-bubble 460ms cubic-bezier\(\.36,0,\.18,1\) backwards/);
+  assert.match(composerInfoCss, /60% \{ transform:translateY\(-2px\) scale\(1\.1\); \} 100% \{ transform:none; \}/);
   f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent = '+14 −4 · 3 files';
   await f.tick();
   source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'끄기', showQueue:'상단 표시' }));
@@ -73,6 +77,7 @@ test("pills bubble once on first visible appearance, preserving avatar motion an
   await f.tick();
   f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
   assert.deepEqual(pills().map(entry => entry.key), ['diff', 'goal', 'queue'], 'refresh, re-enable and resize do not replay entry motion');
+  assert.ok(entries.filter(entry => entry.key === 'orb').every(entry => entry.options.duration === 360), 'activity reactions settle quickly too');
   stop();
   assert.ok(pills().every(entry => entry.cancelled), 'in-progress entry animations are cancelled on unload');
   f.dom.window.close();
