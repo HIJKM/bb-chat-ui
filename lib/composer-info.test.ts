@@ -175,6 +175,7 @@ test("queue and list cards share the same horizontal content gutter as their hea
       const gutter=inset(outer.paddingLeft)+inset(row.marginLeft)+inset(row.paddingLeft)+(scroll?inset(f.dom.window.getComputedStyle(scroll).paddingLeft):0);
       assert.equal(gutter,inset(outer.paddingLeft),`${key}: body starts at the same inset as its header`);
       assert.equal(outer.paddingLeft,outer.paddingRight,'left and right card gutters match');
+      if (key === 'queue') assert.equal(f.dom.window.getComputedStyle(card.querySelector('[data-bb-chat-ui-info-close-heading]')!).marginBottom,'12px','queue messages have a little more space below the title');
       gutters.push(gutter);
     }
     assert.equal(new Set(gutters).size,1,'the queue does not get an extra horizontal gutter');
