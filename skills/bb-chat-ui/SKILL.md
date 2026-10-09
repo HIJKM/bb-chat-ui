@@ -48,7 +48,7 @@ Agentation은 원래 카드의 `data-icon="ChatFeedback"` SVG와 실제 staged �
 
 기존 boolean 설정을 쓴 설치를 업그레이드할 때는 빌드·reload 전에 `bb plugin config bb-chat-ui --json`의 값을 보관하고, reload 후 같은 키에 `true → 상단 표시`, `false → 목록에만 표시`로 저장해 선택을 유지한다.
 
-Code Diff pill의 커밋 수는 `commits` 문구 대신 가운데 원과 가로선이 있는 커밋 아이콘과 숫자로 압축한다. 접근성 라벨과 툴팁에는 커밋 개수 의미를 유지한다. 팝오버는 커밋 목록을 위에, HEAD 이후 변경 파일 목록을 아래에 둔다. 커밋 행 왼쪽의 원을 세로선으로 연결하고 첫·마지막 원 밖으로는 선을 늘리지 않는다. 파일 행 왼쪽에는 BB 스레드 정보의 실제 glyph와 같은 아이콘을 둔다. 수정은 `DiffModified`, 추가와 미추적(`??`)은 `DiffAdded`, 삭제는 `DiffRemoved`, 이름 변경은 `DiffRenamed`, 복사는 `Copy`, 충돌은 `DiffConflict`, 상태 불명(`?`)은 `CircleQuestion`이다. 추가·미추적은 `text-diff-added`, 삭제는 `text-diff-removed`, 충돌은 `text-destructive`, 나머지는 `text-subtle-foreground`를 사용한다. 파일 경로와 라인 통계, 기존 아이콘 크기와 행 배치는 유지한다. 팝오버의 일반 안내 문구는 표시하지 않으며, PR 후보의 미푸시 보조 줄은 개수를 확인할 수 있을 때만 표시한다.
+Code Diff pill의 커밋 수는 `commits` 문구 대신 가운데 원과 가로선이 있는 커밋 아이콘과 숫자로 압축한다. 접근성 라벨과 툴팁에는 커밋 개수 의미를 유지한다. 팝오버에 HEAD 이후 변경 파일이 있으면 항상 커밋 제목과 목록보다 위에 둔다. 열린 팝오버를 갱신해도 같은 순서를 유지한다. 커밋 행 왼쪽의 원을 세로선으로 연결하고 첫·마지막 원 밖으로는 선을 늘리지 않는다. 파일 행 왼쪽에는 BB 스레드 정보의 실제 glyph와 같은 아이콘을 둔다. 수정은 `DiffModified`, 추가와 미추적(`??`)은 `DiffAdded`, 삭제는 `DiffRemoved`, 이름 변경은 `DiffRenamed`, 복사는 `Copy`, 충돌은 `DiffConflict`, 상태 불명(`?`)은 `CircleQuestion`이다. 추가·미추적은 `text-diff-added`, 삭제는 `text-diff-removed`, 충돌은 `text-destructive`, 나머지는 `text-subtle-foreground`를 사용한다. 파일 경로와 라인 통계, 기존 아이콘 크기와 행 배치는 유지한다. 팝오버의 일반 안내 문구는 표시하지 않으며, PR 후보의 미푸시 보조 줄은 개수를 확인할 수 있을 때만 표시한다.
 
 Diff 재조회는 마지막 정상 표시를 유지한 채 진행한다. 메시지 스트림·제목 등 환경과 무관한 스레드 변경으로 데이터를 비우거나 재조회하지 않는다. 환경 변경과 5초 polling·focus에서 완성된 결과로 교체하며, 조회 중 변경 이벤트가 오면 이전 요청 결과를 버린다. 다른 스레드로 이동하면 이전 스레드 데이터를 표시하지 않고, 환경 해제는 확인된 뒤 비운다.
 

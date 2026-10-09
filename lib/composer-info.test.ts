@@ -998,7 +998,7 @@ test("dirty Code Diff keeps HEAD stats and PR counts while hiding unknown unpush
   stop(); f.dom.window.close();
 });
 
-test("Diff popover puts a connected commit rail before file rows with semantic status icons", () => {
+test("Diff popover puts changed files before the commit heading and connected rail", async () => {
   const f = fixture();
   const source = f.document.createElement('span');
   const statuses = ['M','A','D','R','C','U','??'];
@@ -1014,7 +1014,8 @@ test("Diff popover puts a connected commit rail before file rows with semantic s
   const rail = popup.querySelector('[data-bb-chat-ui-info-diff-commits]');
   const files = popup.querySelector('[data-bb-chat-ui-info-diff-files]');
   assert.ok(rail); assert.ok(files);
-  assert.ok(rail.compareDocumentPosition(files) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(files.compareDocumentPosition(popup.querySelector('h4[data-bb-chat-ui-info-diff-meta="commits"]')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(files.compareDocumentPosition(rail) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
   assert.equal(rail.querySelectorAll('[data-bb-chat-ui-info-diff-commit]').length, 3);
   assert.equal(rail.querySelectorAll('[data-bb-chat-ui-info-diff-graph] svg circle').length, 3);
   for (const [index,row] of [...files.querySelectorAll('[data-bb-chat-ui-info-diff-file]')].entries()) {
@@ -1027,6 +1028,12 @@ test("Diff popover puts a connected commit rail before file rows with semantic s
   }
   assert.ok(files.querySelector('[data-bb-chat-ui-info-file-status="A"]')?.classList.contains('text-diff-added'));
   assert.ok(files.querySelector('[data-bb-chat-ui-info-file-status="D"]')?.classList.contains('text-diff-removed'));
+  const updated = JSON.parse(source.getAttribute('data-bb-chat-ui-head-diff')!);
+  updated.detail.files.pop();
+  source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify(updated)); await f.tick();
+  const refreshedFiles = popup.querySelector('[data-bb-chat-ui-info-diff-files]')!;
+  assert.equal(refreshedFiles.querySelectorAll('[data-bb-chat-ui-info-diff-file]').length, 6);
+  assert.ok(refreshedFiles.compareDocumentPosition(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'open popover refresh keeps changed files above commits');
   stop(); f.dom.window.close();
 });
 

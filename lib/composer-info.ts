@@ -490,6 +490,7 @@ export function injectComposerInfo(document: Document): () => void {
         }
         row.append(status, path, stats); files.append(row);
       }
+      container.append(files);
       if (detail.commitKind || detail.commits.length) {
         const label = document.createElement("h4");
         label.setAttribute(`${MARK}-diff-meta`, "commits");
@@ -518,7 +519,6 @@ export function injectComposerInfo(document: Document): () => void {
         }
         container.append(commits);
       }
-      container.append(files);
       if (detail.commitKind === "pr" && detail.unpushedCount != null) {
         const push = document.createElement("p");
         push.textContent = `미푸시 · ${detail.unpushedCount} commits · ${detail.unpushedRef ?? "기준 없음"} 대비`;
