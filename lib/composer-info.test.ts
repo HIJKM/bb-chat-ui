@@ -605,6 +605,32 @@ test("Diff first opens one dismissible popover from either the pill or the catal
   stop(); f.dom.window.close();
 });
 
+test("Diff popover uses compact HEAD and commit metadata without losing comparison meaning or inventing counts", async () => {
+  const f = fixture();
+  const source = f.document.createElement('span');
+  const detail = { branch:'feature/chat', basis:'HEAD 대비 미커밋 변경', baseRef:'origin/main', files:[],
+    commitKind:'pr', commitCount:28 as number | null, commits:[{ sha:'abc1234', shortSha:'abc1234', subject:'Latest' }] };
+  const publish = () => source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({insertions:0,deletions:0,files:0,detail}));
+  publish(); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  const stop = injectComposerInfo(f.document);
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  const popup = f.document.querySelector('[data-bb-chat-ui-info-diff]')!;
+  assert.equal(popup.querySelector('[data-bb-chat-ui-info-diff-meta="head"]')?.textContent, 'HEAD · +0 −0 · 0 files');
+  assert.ok(popup.querySelector('[data-bb-chat-ui-info-diff-meta="head"]')?.getAttribute('title')?.includes('미커밋'));
+  const commits = () => popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')!;
+  assert.equal(commits().textContent, 'origin/main → HEAD · 28');
+  assert.ok(commits().getAttribute('aria-label')?.includes('PR 후보'));
+  assert.equal(commits().querySelector('[data-bb-chat-ui-info-commit-count]')?.getAttribute('aria-label'), '커밋 28개');
+  assert.ok(commits().querySelector('svg'));
+  assert.equal(commits().textContent?.includes('commits'), false);
+  detail.commitCount = null; publish(); await f.tick();
+  assert.equal(commits().textContent, 'origin/main → HEAD · —');
+  assert.equal(commits().querySelector('[data-bb-chat-ui-info-commit-count]')?.getAttribute('aria-label'), '커밋 수 확인 불가');
+  detail.commitCount = 0; publish(); await f.tick();
+  assert.equal(commits().textContent, 'origin/main → HEAD · 0');
+  stop(); f.dom.window.close();
+});
+
 test("Diff popover retains changed files, line statistics, comparison basis and actual branch commits while open", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
@@ -619,7 +645,7 @@ test("Diff popover retains changed files, line statistics, comparison basis and 
   const stop = injectComposerInfo(f.document);
   f.click('[data-bb-chat-ui-info-trigger="diff"]');
   const popup = f.document.querySelector('[data-bb-chat-ui-info-diff]')!;
-  assert.ok(popup.textContent?.includes('HEAD 대비 미커밋 변경'));
+  assert.ok(popup.querySelector('[data-bb-chat-ui-info-diff-meta="head"]')?.getAttribute('title')?.includes('HEAD 대비 미커밋 변경'));
   const rows = popup.querySelectorAll('[data-bb-chat-ui-info-diff-file]');
   assert.equal(rows.length, 2);
   assert.ok(rows[0].textContent?.includes('app.tsx'));
@@ -627,7 +653,7 @@ test("Diff popover retains changed files, line statistics, comparison basis and 
   assert.ok(rows[0].textContent?.includes('−2'));
   assert.ok(rows[1].textContent?.includes('통계 없음'));
   assert.ok(popup.textContent?.includes('a7c21f0 · 컴포저 정보 정리'));
-  assert.ok(popup.textContent?.includes('main 대비'));
+  assert.ok(popup.textContent?.includes('main → HEAD'));
   assert.equal(popup.textContent?.includes('unpushed'), false);
   detail.files[0].path = 'lib/composer.ts';
   publish(); await f.tick();
@@ -876,7 +902,7 @@ test("Code Diff pill shows one commit meaning and keeps unpushed counts inside i
   f.click('[data-bb-chat-ui-info-trigger="diff"]');
   const popup = f.document.querySelector('[data-bb-chat-ui-info-diff]')!;
   assert.equal(popup.querySelector('[data-bb-chat-ui-info-diff-branch]')?.textContent, name);
-  assert.ok(popup.textContent?.includes('PR 후보 · 8 commits · origin/main 대비'));
+  assert.equal(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')?.textContent, 'origin/main → HEAD · 8');
   assert.ok(popup.textContent?.includes('미푸시 · 3 commits'));
   assert.ok(popup.textContent?.includes(`origin/${name} 대비`));
   assert.equal(popup.textContent?.includes('PR 후보는 아직 push하지 않은 로컬 커밋도 포함합니다.'), false);
@@ -941,7 +967,8 @@ test("clean main hides the pill even with empty icons enabled but remains in the
   f.click('[data-bb-chat-ui-info-all]');
   f.click('[data-bb-chat-ui-info-choice="diff"]');
   assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff-branch]')?.textContent, 'main');
-  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-diff]')?.textContent?.includes('미푸시 · 0 commits · origin/main 대비'));
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')?.textContent, 'origin/main → HEAD · 0');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')?.getAttribute('aria-label')?.includes('미푸시'));
   stop(); f.dom.window.close();
 });
 
@@ -959,7 +986,7 @@ test("dirty Code Diff keeps HEAD stats and PR counts while hiding unknown unpush
   assert.equal(pill.textContent, '+7 −2 · 1 file');
   f.click('[data-bb-chat-ui-info-trigger="diff"]');
   const popup = f.document.querySelector('[data-bb-chat-ui-info-diff]')!;
-  assert.ok(popup.textContent?.includes('PR 후보 · 8 commits · origin/main 대비'));
+  assert.equal(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')?.textContent, 'origin/main → HEAD · 8');
   assert.equal(popup.textContent?.includes('미푸시'), false);
   assert.equal(popup.textContent?.includes('확인 불가'), false);
   assert.equal(popup.querySelectorAll('[data-bb-chat-ui-info-diff-file]').length, 1);

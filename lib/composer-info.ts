@@ -115,6 +115,8 @@ export const composerInfoCss = `
 [${MARK}-diff-file] code, [${MARK}-diff-commit] code { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:11px/1.6 var(--font-mono,monospace); }
 [${MARK}-diff-file] > span { flex-shrink:0; font-size:11px; }
 [${MARK}-diff-content] h4 { font-size:10px; font-weight:400; color:var(--subtle-foreground); margin:9px 0 3px; }
+[${MARK}-diff-meta] { display:flex; flex-wrap:wrap; align-items:center; gap:4px; font-size:11px !important; color:var(--subtle-foreground); }
+[${MARK}-diff-meta] code { font:inherit; overflow-wrap:anywhere; }
 ${DETAIL}[aria-label="Queued messages"] { --bb-chat-ui-queue-height:min(36dvh,16rem); display:flex !important; flex-direction:column; max-height:var(--bb-chat-ui-queue-height) !important; overflow:hidden !important; padding:8px !important; gap:0 !important; }
 ${DETAIL}[aria-label="Queued messages"] > * { min-height:0; }
 ${DETAIL} [data-queued-messages-scroll-frame] { position:static !important; display:grid !important; grid-template-rows:minmax(0,1fr); flex:0 1 auto !important; width:100% !important; height:auto !important; min-height:0 !important; max-height:var(--bb-chat-ui-queue-height); overflow:hidden !important; }
@@ -448,7 +450,12 @@ export function injectComposerInfo(document: Document): () => void {
       branch.append(name); container.append(branch);
       const snapshot = readDiff();
       const basis = document.createElement("p");
-      basis.textContent = `${detail.basis} · +${snapshot?.insertions ?? 0} −${snapshot?.deletions ?? 0} · ${detail.files.length} files`;
+      basis.setAttribute(`${MARK}-diff-meta`, "head");
+      basis.title = detail.basis;
+      basis.setAttribute("aria-label", `${detail.basis} · +${snapshot?.insertions ?? 0} −${snapshot?.deletions ?? 0} · ${detail.files.length} files`);
+      const added = document.createElement("span"); added.className = "text-diff-added"; added.textContent = `+${snapshot?.insertions ?? 0}`;
+      const removed = document.createElement("span"); removed.className = "text-diff-removed"; removed.textContent = `−${snapshot?.deletions ?? 0}`;
+      basis.append("HEAD · ", added, " ", removed, ` · ${detail.files.length} files`);
       container.append(basis);
       const files = document.createElement("div"); files.setAttribute(`${MARK}-diff-files`, "");
       if (detail.files.length) {
@@ -469,9 +476,19 @@ export function injectComposerInfo(document: Document): () => void {
       }
       if (detail.commitKind || detail.commits.length) {
         const label = document.createElement("h4");
-        label.textContent = detail.commitKind
-          ? `${detail.commitKind === "pr" ? "PR 후보" : "미푸시"} · ${detail.commitCount === null ? "확인 불가" : `${detail.commitCount} commits`} · ${detail.baseRef ?? "기준 없음"} 대비`
+        label.setAttribute(`${MARK}-diff-meta`, "commits");
+        label.title = detail.commitKind
+          ? `${detail.commitKind === "pr" ? "PR 후보" : "미푸시"} · ${detail.commitCount == null ? "확인 불가" : `${detail.commitCount} commits`} · ${detail.baseRef ?? "기준 없음"} 대비`
           : `브랜치 커밋 · ${detail.baseRef ?? "Merge base"} 대비`;
+        label.setAttribute("aria-label", label.title);
+        const comparison = document.createElement("code"); comparison.textContent = `${detail.baseRef ?? "?"} → HEAD`;
+        const count = detail.commitCount == null ? document.createElement("span") : commitCount(detail.commitCount);
+        if (detail.commitCount == null) {
+          count.setAttribute(`${MARK}-commit-count`, "");
+          count.setAttribute("role", "img"); count.setAttribute("aria-label", "커밋 수 확인 불가");
+          count.append(commitIcon(document), "—");
+        }
+        label.append(comparison, " · ", count);
         container.append(label);
         const commits = document.createElement("div"); commits.setAttribute(`${MARK}-diff-commits`, "");
         for (const commit of [...detail.commits].sort((a,b) => (b.authoredAt ?? 0) - (a.authoredAt ?? 0))) {
