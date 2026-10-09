@@ -9,7 +9,7 @@ export const infoKinds = [
   { key: "queue", icon: "Clock", setting: "showQueue", label: "대기 메시지", default: false },
   { key: "annotations", icon: "MessageSquarePlus", setting: "showAnnotations", label: "Agentation", default: false },
   { key: "pullRequest", icon: "GitPullRequest", setting: "showPullRequest", label: "Pull request", default: false },
-  { key: "parent", icon: "MessageSquare", setting: "showParent", label: "상위 스레드", default: false },
+  { key: "parent", icon: "MessageSquare", setting: "showParent", label: "Parent", default: false },
   { key: "machine", icon: "Terminal", setting: "showMachine", label: "실행 환경", default: false },
   { key: "fallback", icon: "AlertTriangle", setting: "showFallback", label: "Model fallback", default: false },
   { key: "status", icon: "MessageSquare", setting: "showStatus", label: "스레드 상태", default: false },
