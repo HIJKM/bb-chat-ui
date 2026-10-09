@@ -655,6 +655,8 @@ test("Code Diff pill shows one commit meaning and keeps unpushed counts inside i
   assert.ok(popup.textContent?.includes('PR 후보 · 8 commits · origin/main 대비'));
   assert.ok(popup.textContent?.includes('미푸시 · 3 commits'));
   assert.ok(popup.textContent?.includes(`origin/${name} 대비`));
+  assert.equal(popup.textContent?.includes('PR 후보는 아직 push하지 않은 로컬 커밋도 포함합니다.'), false);
+  assert.equal(popup.textContent?.includes('원격 비교는 마지막으로 확인된 상태 기준입니다.'), false);
   assert.equal(popup.textContent?.includes('feature/a-very-…'), false, 'popover uses the full branch name');
   assert.equal(popup.querySelectorAll('[data-bb-chat-ui-info-diff-file]').length, 0);
   snapshot.detail.unpushedCount = 0;
@@ -689,7 +691,7 @@ test("clean main hides the pill even with empty icons enabled but remains in the
   stop(); f.dom.window.close();
 });
 
-test("dirty Code Diff keeps only HEAD line stats above composer and reports unknown remote counts without zero", () => {
+test("dirty Code Diff keeps HEAD stats and PR counts while hiding unknown unpushed information", () => {
   const f = fixture();
   const source = f.document.createElement('span');
   source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify({
@@ -703,8 +705,9 @@ test("dirty Code Diff keeps only HEAD line stats above composer and reports unkn
   assert.equal(pill.textContent, '+7 −2 · 1 file');
   f.click('[data-bb-chat-ui-info-trigger="diff"]');
   const popup = f.document.querySelector('[data-bb-chat-ui-info-diff]')!;
-  assert.ok(popup.textContent?.includes('확인 불가'));
-  assert.equal(popup.textContent?.includes('미푸시 · 0'), false);
+  assert.ok(popup.textContent?.includes('PR 후보 · 8 commits · origin/main 대비'));
+  assert.equal(popup.textContent?.includes('미푸시'), false);
+  assert.equal(popup.textContent?.includes('확인 불가'), false);
   assert.equal(popup.querySelectorAll('[data-bb-chat-ui-info-diff-file]').length, 1);
   stop(); f.dom.window.close();
 });

@@ -377,18 +377,10 @@ export function injectComposerInfo(document: Document): () => void {
         container.append(commits);
       }
       container.append(files);
-      if (detail.commitKind === "pr") {
+      if (detail.commitKind === "pr" && detail.unpushedCount != null) {
         const push = document.createElement("p");
-        push.textContent = `미푸시 · ${detail.unpushedCount == null ? "확인 불가 · 원격 브랜치 미게시 또는 기준 없음" : `${detail.unpushedCount} commits`} · ${detail.unpushedRef ?? "기준 없음"} 대비`;
+        push.textContent = `미푸시 · ${detail.unpushedCount} commits · ${detail.unpushedRef ?? "기준 없음"} 대비`;
         container.append(push);
-        const note = document.createElement("p"); note.className = "text-subtle-foreground";
-        note.textContent = "PR 후보는 아직 push하지 않은 로컬 커밋도 포함합니다.";
-        container.append(note);
-      }
-      if (detail.commitKind) {
-        const note = document.createElement("p"); note.className = "text-subtle-foreground";
-        note.textContent = "원격 비교는 마지막으로 확인된 상태 기준입니다.";
-        container.append(note);
       }
     };
     const decorate = (button: HTMLElement, item: InfoItem, summary: boolean) => {
