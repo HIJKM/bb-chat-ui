@@ -151,11 +151,12 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-kind="children"] h3 { display:flex; align-items:center; gap:7px; min-height:28px; margin:0 0 8px; }
 [${MARK}-kind="children"] h3 [data-icon-root] { width:14px; height:14px; }
 [${MARK}-kind="children"] [${MARK}-dismiss] { margin-left:auto; width:24px; height:24px; padding:0; border-radius:50%; border:0; background:transparent; color:var(--subtle-foreground); font-size:16px; }
-[${MARK}-child-row] { display:flex; align-items:center; gap:8px; padding:7px 0; min-width:0; }
+${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row] { display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box; padding:8px; min-width:0; border-radius:10px; text-align:left; cursor:pointer; background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; transition:background-color 150ms ease-out; }
+${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row]:hover, ${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row]:focus-visible { background:color-mix(in oklab,var(--foreground) 6%,transparent) !important; }
 [${MARK}-child-row] + [${MARK}-child-row] { border-top:1px solid var(--border-hairline,var(--border)); }
 [${MARK}-child-row] [${MARK}-avatar] { width:27px; height:27px; margin-left:0; }
 [${MARK}-child-main] { flex:1; min-width:0; }
-[${MARK}-child-main] button { padding:0; border:0; border-radius:0; background:transparent; max-width:100%; text-align:left; font-size:12px; }
+[${MARK}-child-title] { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
 [${MARK}-child-meta], [${MARK}-child-status] { font-size:10px; color:var(--subtle-foreground); }
 [${MARK}-child-status] { white-space:nowrap; }
 ${DETAIL}.agentation-staging-shell { display:grid !important; grid-template-areas:"heading" "body" "actions"; padding:12px 14px 14px !important; border:0 !important; border-radius:18px !important; gap:0; }

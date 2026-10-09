@@ -106,12 +106,12 @@ export function ComposerInfoBridge() {
       children.length ? section("children", "Child Threads", "UserRound", createElement("div", null, ...children.map(child => {
         const title = child.title ?? child.titleFallback ?? "Child Thread";
         const state = childState(child.runtime.displayStatus, child.hasPendingInteraction);
-        return createElement("div", { key:child.id, [`${mark}-child-row`]:"" },
+        return createElement("button", { key:child.id, type:"button", [`${mark}-child-row`]:"", onClick:() => navigate.toThread(child.id) },
           createElement("span", { [`${mark}-avatar`]:"", "data-state":state, "aria-hidden":true }, childInitial(title),
             createElement("span", { [`${mark}-avatar-dot`]:"" }, state === "done" ? createElement(experimental_Icon, { name:"Check" }) : null)),
-          createElement("div", { [`${mark}-child-main`]:"" },
-            createElement("button", { type:"button", onClick:() => navigate.toThread(child.id) }, title),
-            createElement("div", { [`${mark}-child-meta`]:"" }, `${child.providerId} · ${child.runtime.displayStatus}`)),
+          createElement("span", { [`${mark}-child-main`]:"" },
+            createElement("span", { [`${mark}-child-title`]:"" }, title),
+            createElement("span", { [`${mark}-child-meta`]:"" }, `${child.providerId} · ${child.runtime.displayStatus}`)),
           createElement("span", { [`${mark}-child-status`]:"" }, state === "run" ? "실행 중" : state === "wait" ? child.hasPendingInteraction ? "입력 대기" : "호스트 대기" : state === "error" ? "오류" : "완료"));
       }))) : null,
       data?.queue.length ? section("queue", "대기 메시지", "ListTodo", createElement("div", null, ...data.queue.map(row => createElement("div", { key:row.id },
