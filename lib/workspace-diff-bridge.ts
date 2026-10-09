@@ -1,7 +1,8 @@
 import { createElement, useEffect, useState } from "react";
 import { experimental_Icon, useComposer, useSdk } from "@get-bb/plugin-sdk/app";
 
-import { HEAD_DIFF_MARK, headDiffSummary, headDiffDetail } from "./workspace-diff-pill.ts";
+import { HEAD_DIFF_MARK } from "./workspace-diff-pill.ts";
+import { readWorkspaceDiff } from "./workspace-diff-data.ts";
 
 export function WorkspaceDiffBridge() {
   const sdk = useSdk();
@@ -15,7 +16,6 @@ export function WorkspaceDiffBridge() {
     const controller = new AbortController();
     const { signal } = controller;
     let environmentId: string | null = null;
-    let isWorktree = false;
     let mergeBaseBranch: string | undefined;
     let fetching = false;
     let pending = false;
@@ -33,18 +33,13 @@ export function WorkspaceDiffBridge() {
           if (!id) return;
           const environment = await sdk.environments.get({ environmentId: id, signal });
           environmentId = id;
-          isWorktree = environment.isWorktree;
-          const base = environment.mergeBaseBranch ?? environment.defaultBranch;
+          const base = environment.mergeBaseBranch;
           mergeBaseBranch = base && base.length > 0 ? base : undefined;
         }
-        const result = await sdk.environments.status({
-          environmentId,
-          signal,
-          ...mergeBaseBranch ? { mergeBaseBranch } : {},
-        });
-        if (signal.aborted) return;
-        setSummary(result.outcome === "available"
-          ? JSON.stringify({ ...headDiffSummary(result.workspace, { isWorktree }), detail:headDiffDetail(result.workspace, { isWorktree }) }) : "");
+        const id = environmentId;
+        const result = await readWorkspaceDiff(sdk.environments, id, mergeBaseBranch, signal);
+        if (signal.aborted || environmentId !== id) return;
+        setSummary(result ? JSON.stringify(result) : "");
       } catch {
         // Keep the last summary during a temporary disconnect.
       } finally {
@@ -59,7 +54,7 @@ export function WorkspaceDiffBridge() {
       event: "thread:changed", threadId,
       callback: () => {
         environmentId = null;
-        isWorktree = false;
+        setSummary("");
         mergeBaseBranch = undefined;
         void refresh();
       },
@@ -69,6 +64,7 @@ export function WorkspaceDiffBridge() {
       callback: (event) => {
         if (environmentId && event.id && event.id !== environmentId) return;
         environmentId = null;
+        setSummary("");
         void refresh();
       },
     });

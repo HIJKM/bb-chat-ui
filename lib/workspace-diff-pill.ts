@@ -65,13 +65,16 @@ export interface HeadDiffOptions {
 }
 
 interface DiffFile { path:string; status:string; insertions:number | null; deletions:number | null; }
-interface DiffCommit { sha:string; shortSha:string; subject:string; }
-interface DetailedWorkspace extends HeadWorkspace {
+export interface DiffCommit { sha:string; shortSha:string; subject:string; }
+export interface DetailedWorkspace extends HeadWorkspace {
   workingTree: DiffStats & { files:readonly DiffFile[] };
   mergeBase?: (DiffStats & { files:readonly DiffFile[]; commits:readonly DiffCommit[]; baseRef:string | null; mergeBaseBranch:string }) | null;
 }
 
-export interface HeadDiffDetail { branch:string | null; basis:string; baseRef:string | null; files:readonly DiffFile[]; commits:readonly DiffCommit[]; }
+export interface HeadDiffDetail {
+  branch:string | null; basis:string; baseRef:string | null; files:readonly DiffFile[]; commits:readonly DiffCommit[];
+  commitKind?:"pr" | "unpushed"; commitCount?:number | null; unpushedCount?:number | null; unpushedRef?:string | null;
+}
 
 function shortBranch(name: string): string {
   if (name.startsWith("refs/heads/")) return name.slice("refs/heads/".length);
