@@ -482,7 +482,7 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   const pills = () => entries.filter(entry => entry.key !== 'orb' && entry.options.duration === 460);
   const bar=f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
   assert.ok(bar.firstElementChild?.matches('[data-bb-chat-ui-info-all]'),'the all-information button is the leftmost flex item');
-  assert.equal(f.dom.window.getComputedStyle(bar.firstElementChild!).position,'static','the orb occupies a stable slot before the pills');
+  assert.equal(f.dom.window.getComputedStyle(bar.firstElementChild!).position,'relative','the orb occupies a stable slot and anchors its own count badge');
   const visible = ['diff', 'goal', 'todos', 'queue', 'pullRequest', 'other'];
   assert.deepEqual(pills().map(entry => entry.key), visible);
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]'), 'avatars retain their existing individual bubbles');
@@ -511,10 +511,54 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   assert.deepEqual(pills().map(entry => entry.key), visible, 'refresh, re-enable and resize do not replay entry motion');
   assert.equal(entries.filter(entry => entry.key === 'orb' && entry.options.duration === 460).length,1,'the all-information button enters once before the pills');
   assert.equal(entries.find(entry => entry.key === 'orb')?.options.delay,0);
-  assert.ok(entries.filter(entry => entry.key === 'orb' && entry.options.duration !== 460).every(entry => entry.options.duration === 360), 'activity reactions settle quickly too');
+  assert.ok(entries.filter(entry => entry.key === 'orb' && entry.options.duration !== 460).every(entry => entry.options.duration === 520), 'activity reactions settle quickly too');
   stop();
   assert.ok(pills().every(entry => entry.cancelled), 'in-progress entry animations are cancelled on unload');
   f.dom.window.close();
+});
+
+test("the particle orb reacts briefly to information and disclosure events, staying still between them", async () => {
+  for (const reduced of [false, true]) {
+    const f=fixture();
+    Object.defineProperty(f.dom.window,'matchMedia',{value:() => ({matches:reduced})});
+    const records:{node:Element; frames:Keyframe[]; options:KeyframeAnimationOptions; animation:Animation; cancelled:boolean}[]=[];
+    f.dom.window.HTMLElement.prototype.animate=function(frames,options) {
+      const record={node:this,frames:frames as Keyframe[],options:options as KeyframeAnimationOptions,animation:null as unknown as Animation,cancelled:false};
+      record.animation={cancel:() => {record.cancelled=true;}} as Animation; records.push(record); return record.animation;
+    };
+    f.dom.window.SVGElement.prototype.animate=f.dom.window.HTMLElement.prototype.animate;
+    const stop=injectComposerInfo(f.document);
+    try {
+      const orb=f.document.querySelector<SVGSVGElement>('[data-bb-chat-ui-info-orb]')!;
+      const css=f.dom.window.getComputedStyle(orb);
+      assert.equal(css.width,'24px'); assert.equal(css.height,'24px');
+      assert.equal(orb.querySelectorAll('circle').length,96,'the sphere is made from locally projected points');
+      assert.ok(new Set([...orb.querySelectorAll('circle')].map(point=>point.getAttribute('opacity'))).size > 1,'depth changes point brightness');
+      assert.equal(orb.querySelectorAll('img, image').length,0,'no downloaded asset is bundled');
+      assert.ok(!css.animation || css.animation==='none','the resting orb has no continuous animation');
+      const reactions=() => records.filter(record=>record.node.parentElement===orb);
+      assert.equal(reactions().length,0,'entry uses the button droplet, without an extra orb reaction');
+      for (const record of records) record.animation.onfinish?.(new f.dom.window.Event('finish') as unknown as AnimationPlaybackEvent);
+      f.click('[data-bb-chat-ui-info-all]');
+      assert.equal(reactions().length,reduced?0:96,'opening a popover briefly moves every particle');
+      f.click('[data-bb-chat-ui-info-all]');
+      assert.equal(reactions().length,reduced?0:192,'closing briefly moves the orb too');
+      if(!reduced) assert.equal(reactions()[0].cancelled,true,'rapid events replace the prior motion instead of stacking it');
+      f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent='+18 −4 · 3 files';
+      await f.tick();
+      assert.equal(reactions().length,reduced?0:288,'a changed pill gives the orb one activity reaction');
+      const count=reactions().length;
+      await f.tick(); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+      assert.equal(reactions().length,count,'idle and layout updates do not restart activity');
+      if(!reduced) {
+        assert.ok(reactions().every(record=>record.options.duration===520 && !record.options.iterations));
+        assert.equal(reactions().at(-1)!.frames.at(-1)!.transform,'none','the sphere settles back to rest');
+        assert.ok(new Set(reactions().slice(0,96).map(record=>record.frames[3].transform)).size > 1,'the wave displaces points across the surface instead of scaling a flat icon');
+      }
+      stop();
+      assert.ok(reactions().every(record=>record.cancelled),'unload cancels remaining orb motion');
+    } finally {stop();f.dom.window.close();}
+  }
 });
 
 test("pill bubbles wait for visible space and requests, and respect reduced motion", async () => {
@@ -1856,7 +1900,7 @@ test("entering another thread replays the sequence even when the composer DOM is
     return {cancel(){}} as Animation;
   };
   const stop=injectComposerInfo(f.document);
-  const sequence = ['diff','goal','todos','queue','pullRequest','other','all'];
+  const sequence = ['all','diff','goal','todos','queue','pullRequest','other'];
   assert.deepEqual(animated,sequence);
   source.setAttribute('data-bb-chat-ui-info-thread','thread-b'); await f.tick();
   assert.deepEqual(animated,[...sequence,...sequence]);

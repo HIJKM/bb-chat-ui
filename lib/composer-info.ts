@@ -104,10 +104,10 @@ ${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] > :is(svg, [data-i
 [${MARK}-diff-previous] { position:absolute; inset:0; pointer-events:none; animation:bb-info-count-out 180ms cubic-bezier(.2,.8,.2,1) forwards; }
 [${MARK}-diff-previous]::before { content:attr(${MARK}-diff-value); }
 [${MARK}-queue-drop] { position:fixed; width:12px; height:12px; border-radius:50%; pointer-events:none; z-index:54; background:color-mix(in oklab,var(--bb-chat-ui-info-face) 60%,var(--foreground) 40%); backdrop-filter:blur(14px) saturate(1.25); box-shadow:inset 0 1px 3px var(--bb-chat-ui-info-edge),0 2px 8px -2px var(--bb-chat-ui-info-shadow); }
-[${MARK}-all] { position:static; width:32px; padding:0; }
+[${MARK}-all] { position:relative; width:32px; padding:0; }
 [${MARK}-bar][${MARK}-jump] { padding-right:40px; }
-[${MARK}-orb] { display:grid; grid-template-columns:repeat(2,4px); gap:3px; }
-[${MARK}-orb] i { width:4px; height:4px; border-radius:50%; background:currentColor; }
+[${MARK}-orb] { display:block; width:24px; height:24px; overflow:visible; pointer-events:none; color:var(--foreground); }
+[${MARK}-orb] circle { fill:currentColor; }
 [${MARK}-badge] { position:absolute; right:-3px; top:-4px; font-size:9px; min-width:14px; line-height:14px; padding:0 3px; border-radius:999px; background:var(--bb-chat-ui-info-face); color:var(--subtle-foreground); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)); }
 [${MARK}-avatar], [${MARK}-badge] { backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); }
 [${MARK}-trigger="children"] { padding:0 7px 0 0; min-height:34px; border-radius:0; background:transparent !important; backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:none !important; }
@@ -291,10 +291,25 @@ export function injectComposerInfo(document: Document): () => void {
     orb.type = "button";
     orb.setAttribute(`${MARK}-all`, "");
     orb.setAttribute("aria-expanded", "false");
-    const symbol = document.createElement("span");
+    const symbol = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     symbol.setAttribute(`${MARK}-orb`, "");
     symbol.setAttribute("aria-hidden", "true");
-    for (let i = 0; i < 4; i++) symbol.append(document.createElement("i"));
+    symbol.setAttribute("viewBox", "0 0 32 32");
+    const particles = Array.from({ length:96 }, (_, index) => {
+      const y = 1 - 2 * (index + .5) / 96;
+      const angle = index * Math.PI * (3 - Math.sqrt(5));
+      const ring = Math.sqrt(1 - y * y);
+      return { x:ring * Math.cos(angle), y, z:ring * Math.sin(angle) };
+    }).sort((a,b) => a.z - b.z).map(point => {
+      const circle = document.createElementNS(symbol.namespaceURI, "circle");
+      const perspective = 1 + point.z * .12, depth = (point.z + 1) / 2;
+      const x = 16 + point.x * 12 * perspective, y = 16 + point.y * 12 * perspective;
+      const opacity = .18 + depth * .72;
+      circle.setAttribute("cx", String(x)); circle.setAttribute("cy", String(y));
+      circle.setAttribute("r", String(.35 + depth * .35)); circle.setAttribute("opacity", String(opacity));
+      symbol.append(circle);
+      return { ...point, circle, screenX:x, screenY:y, opacity };
+    });
     const badge = document.createElement("span");
     badge.setAttribute(`${MARK}-badge`, "");
     badge.setAttribute("aria-hidden", "true");
@@ -583,13 +598,27 @@ export function injectComposerInfo(document: Document): () => void {
     stack.addEventListener("touchcancel", endTouch);
     const editing = () => stack.querySelector('[data-queued-message-inline-editor]') !== null;
     const reduced = () => view!.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const orbReactions = new Set<Animation>();
     const pulse = () => {
-      if (reduced() || entering.has(orb)) return;
-      orb.animate?.([
-        { transform:"scale(1)", offset:0, easing:"cubic-bezier(.36,0,.18,1)" },
-        { transform:"scale(1.1)", offset:.6, easing:"cubic-bezier(.36,0,.18,1)" },
-        { transform:"scale(1)", offset:1 },
-      ], { duration:360 });
+      for (const animation of orbReactions) { animation.cancel(); entryAnimations.delete(animation); }
+      orbReactions.clear();
+      if (reduced() || entering.has(orb) || orb.hidden || bar.hidden) return;
+      for (const point of particles) {
+        const frames = Array.from({ length:7 }, (_, index) => {
+          const progress = index / 6, envelope = Math.sin(Math.PI * progress);
+          if (!index || index === 6) return { transform:"none", opacity:point.opacity, offset:progress };
+          const wave = Math.sin(Math.acos(point.y) * 6 - progress * Math.PI * 2) * envelope * .12;
+          const turn = envelope * .3;
+          const x = point.x * Math.cos(turn) - point.z * Math.sin(turn);
+          const z = point.z * Math.cos(turn) + point.x * Math.sin(turn);
+          const radius = 12 * (1 + wave), perspective = 1 + z * .12;
+          return { transform:`translate(${16 + x * radius * perspective - point.screenX}px,${16 + point.y * radius * perspective - point.screenY}px)`, opacity:Math.min(1, point.opacity + envelope * .15 + wave), offset:progress };
+        });
+        const animation = point.circle.animate?.(frames, { duration:520, easing:"linear" });
+        if (!animation) continue;
+        orbReactions.add(animation); entryAnimations.add(animation);
+        animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); orbReactions.delete(animation); };
+      }
     };
     const mark = (node: HTMLElement, attr: string, collection: Set<HTMLElement>) => {
       collection.add(node);
@@ -971,9 +1000,10 @@ export function injectComposerInfo(document: Document): () => void {
         number.replaceChildren(current, previous);
       }
     };
-    const close = (restoreFocus = false, force = false) => {
+    const close = (restoreFocus = false, force = false, react = true) => {
       cancelHover();
       if (!force && editing()) return false;
+      if (active !== null && !force && react) pulse();
       clearTitleIcon();
       hoverPreview = false;
       const item = items.find(item => item.node === activeNode && item.key === active);
@@ -1027,7 +1057,8 @@ export function injectComposerInfo(document: Document): () => void {
       if (active === key && hoverPreview && !preview && (!selected || selected.node === activeNode)) { hoverPreview = false; return; }
       if (preview && active !== null && (!hoverPreview || active === key)) return;
       if (active === key && (!selected || selected.node === activeNode)) { close(true); return; }
-      close();
+      close(false, false, false);
+      pulse();
       hoverPreview = preview;
       lastTrigger = trigger;
       if (key === "all") {
