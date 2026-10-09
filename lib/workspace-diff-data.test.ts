@@ -122,6 +122,24 @@ test("a checkout switch during comparison cannot attach another branch's commit 
     return { outcome:"available", workspace:w };
   } };
   const s = await readWorkspaceDiff(sdk, "env_test", undefined, new AbortController().signal);
-  assert.equal(s?.detail.commitCount, null);
-  assert.equal(s?.detail.unpushedCount, null);
+  assert.equal(s, null, "mixed checkouts must not publish an intermediate branch-only snapshot");
+});
+
+test("a temporary remote comparison failure does not replace a known main count with a branch-only snapshot", async () => {
+  const f = reader('main');
+  const sdk = { ...f.sdk, async status(args:{ mergeBaseBranch?:string }) {
+    if (args.mergeBaseBranch) throw new Error('temporary failure');
+    return { outcome:'available', workspace:workspace('main') };
+  } };
+  assert.equal(await readWorkspaceDiff(sdk,'env_test',undefined,new AbortController().signal),null);
+});
+
+test("a new commit during comparison is retried as one coherent snapshot", async () => {
+  const f = reader('main');
+  const sdk = { ...f.sdk, async status(args:{ mergeBaseBranch?:string }) {
+    const w = workspace('main');
+    if (args.mergeBaseBranch) { w.checkout.headSha='new-head'; w.mergeBase.mergeBaseBranch=args.mergeBaseBranch; }
+    return { outcome:'available', workspace:w };
+  } };
+  assert.equal(await readWorkspaceDiff(sdk,'env_test',undefined,new AbortController().signal),null);
 });

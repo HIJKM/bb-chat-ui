@@ -65,6 +65,12 @@ export async function readWorkspaceDiff(sdk:Reader, environmentId:string, baseBr
   const refs = name ? [...new Set([prRef, pushRef!])] : [];
   const results = await Promise.allSettled(refs.map(mergeBaseBranch => sdk.status({ environmentId, signal, mergeBaseBranch })));
   if (signal.aborted) return null;
+  // Do not publish a partial refresh as a branch-only/zero state. A missing
+  // remote ref in an otherwise successful status remains genuinely unknown.
+  if (results.some(result => result.status !== "fulfilled"
+    || result.value.outcome !== "available" || !result.value.workspace
+    || result.value.workspace.branch.currentBranch !== workspace.branch.currentBranch
+    || !!workspace.checkout?.headSha && result.value.workspace.checkout?.headSha !== workspace.checkout.headSha)) return null;
   const compare = (ref:string | null):Comparison => {
     if (!ref) return { ref:null, count:null, commits:[] };
     const result = results[refs.indexOf(ref)];
