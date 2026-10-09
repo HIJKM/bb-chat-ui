@@ -233,6 +233,9 @@ ${MANAGED_QUEUE} [data-queued-message-actions] {
   flex: none;
   background: transparent !important;
 }
+${MANAGED_QUEUE} [data-queued-message-actions]::before {
+  content: none !important;
+}
 ${MANAGED_QUEUE} [data-queued-message-row] > .flex > .min-w-0,
 ${MANAGED_QUEUE} [data-queued-message-actions],
 .dark ${MANAGED_QUEUE} [data-queued-message-row] > .flex > .min-w-0,
