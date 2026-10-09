@@ -13,8 +13,11 @@ test('visibility supports top, catalog-only and off while retaining legacy check
   assert.deepEqual(exposedInfo({ showDiff:false, showGoal:true }), ['children','goal']);
   assert.ok(listedInfo({ showDiff:false }).includes('diff'));
   assert.deepEqual(exposedInfo({ showDiff:'invalid' }), ['diff','children']);
-  for (const descriptor of Object.values(composerInfoSettings)) {
+  for (const kind of infoKinds) {
+    const descriptor = composerInfoSettings[kind.setting];
     assert.equal(descriptor.type, 'select');
     assert.deepEqual(descriptor.options, ['상단 표시','목록에만 표시','끄기']);
   }
+  assert.equal(composerInfoSettings.showEmptyIcons.type, 'boolean');
+  assert.equal(composerInfoSettings.showEmptyIcons.default, false);
 });

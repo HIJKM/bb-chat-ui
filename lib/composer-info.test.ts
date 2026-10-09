@@ -120,6 +120,42 @@ test("Agentation shows icon and count, retains native actions, and closes with t
   stop(); f.dom.window.close();
 });
 
+test("empty top icons can be enabled and disabled without exposing catalog-only or disabled families", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  for (const node of [...stack.children]) if (!node.contains(source)) node.remove();
+  for (const kind of infoKinds) source.insertAdjacentHTML('beforeend', `<span data-bb-chat-ui-info-icon="${kind.key}"><svg data-placeholder-icon="${kind.key}" /></span>`);
+  const settings = { showEmptyIcons:false, showAnnotations:'상단 표시', showGoal:'끄기', showPlan:'목록에만 표시' };
+  const publish = () => source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify(settings));
+  publish();
+  const stop = injectComposerInfo(f.document);
+  assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]').length, 0);
+  settings.showEmptyIcons = true; publish(); await f.tick();
+  const icons = f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]');
+  assert.deepEqual([...icons].map(icon => icon.getAttribute('data-bb-chat-ui-info-trigger')), ['diff','children','annotations']);
+  for (const icon of icons) {
+    assert.equal(icon.textContent, '');
+    assert.ok(icon.querySelector('[data-placeholder-icon]'));
+    assert.ok(icon.getAttribute('aria-label')?.includes('현재 없음'));
+  }
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-empty]')?.textContent?.includes('현재 정보 없음'));
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.getAttribute('aria-expanded'), 'true');
+  const diff = f.document.createElement('span'); diff.hidden = true;
+  diff.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify({ insertions:8, deletions:2, files:1, branch:'bb/review' })); stack.append(diff);
+  await f.tick();
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent?.includes('+8 −2'));
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.hasAttribute('data-bb-chat-ui-info-unavailable'), false);
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-diff]'));
+  settings.showEmptyIcons = false; publish(); await f.tick();
+  assert.deepEqual([...f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')].map(icon => icon.getAttribute('data-bb-chat-ui-info-trigger')), ['diff']);
+  f.click('[data-bb-chat-ui-info-all]');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="plan"]'));
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-choice="goal"]'), null);
+  stop(); f.dom.window.close();
+});
+
 test("an empty composer lists every information family without inventing summary data", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;

@@ -43,6 +43,7 @@ export const composerInfoCss = `
 [${MARK}-trigger]:active, [${MARK}-all]:active { transform:scale(.95); }
 [${MARK}-trigger][aria-expanded=true], [${MARK}-all][aria-expanded=true] { box-shadow:inset 0 0 0 1px var(--border),0 6px 18px -12px var(--foreground); }
 [${MARK}-trigger][hidden] { display:none; }
+[${MARK}-trigger][${MARK}-unavailable] { width:32px; min-height:32px; padding:0; border-radius:50%; color:var(--subtle-foreground); background:var(--bb-chat-ui-info-face) !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 0 var(--bb-chat-ui-info-edge) !important; }
 [${MARK}-trigger] > span:not([${MARK}-avatars]) { overflow:hidden; text-overflow:ellipsis; }
 [${MARK}-trigger] svg { width:16px; height:16px; flex-shrink:0; }
 [${MARK}-trigger] [data-bb-chat-ui-branch] { display:inline-flex; flex-shrink:0; color:var(--color-purple-500,var(--foreground)); }
@@ -231,6 +232,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (!node.hasAttribute(attr)) node.setAttribute(attr, "");
     };
     const labelOf = (key: InfoKind) => infoKinds.find(kind => kind.key === key)!.label;
+    const emptyIcon = (key: InfoKind) => stack.querySelector(`[${MARK}-icon="${key}"] svg, [${MARK}-icon="${key}"] [data-icon-root]`);
     const annotationCount = (item: InfoItem) => {
       const list = item.node.querySelector("ul");
       return list ? String(list.children.length) : item.node.querySelector(".tabular-nums")?.textContent?.trim() ?? "!";
@@ -285,7 +287,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (summary && item.key === "queue") text.textContent = item.node.querySelector('span.tabular-nums')?.textContent?.trim() || item.label;
       if (summary && item.key === "annotations") text.textContent = annotationCount(item);
       const icon = (item.key === "annotations" ? item.node.querySelector('[data-icon="ChatFeedback"]') : null)
-        ?? item.trigger?.querySelector("svg, [data-icon-root]") ?? item.node.querySelector("svg, [data-icon-root]");
+        ?? item.trigger?.querySelector("svg, [data-icon-root]") ?? item.node.querySelector("svg, [data-icon-root]") ?? emptyIcon(item.key);
       button.replaceChildren();
       if (summary && item.key === "children") {
         const avatars = document.createElement("span");
@@ -437,8 +439,8 @@ export function injectComposerInfo(document: Document): () => void {
             else openChangesPanel(document, stack);
           });
           menu.append(action);
-          buttons.get(key)?.setAttribute("aria-expanded", "true");
         }
+        buttons.get(key)?.setAttribute("aria-expanded", "true");
         bar.append(menu);
         orb.setAttribute("aria-controls", menu.id);
         orb.setAttribute("aria-expanded", "true");
@@ -519,33 +521,41 @@ export function injectComposerInfo(document: Document): () => void {
       const request = stack.querySelector(REQUEST) !== null;
       if (request !== stack.hasAttribute(`${MARK}-request`)) stack.toggleAttribute(`${MARK}-request`, request);
       if (request || activeNode && !items.some(item => item.node === activeNode)) close(false, true);
-      let settings = {};
+      let settings: Record<string, unknown> = {};
       try { settings = JSON.parse(source.getAttribute(SOURCE) || "{}"); } catch { /* Defaults work while settings load. */ }
       listed = listedInfo(settings);
       if (active && active !== "all" && !listed.includes(active)) close();
       if (!listed.length) close();
       bar.hidden = request || !listed.length && !editing();
       const exposed = exposedInfo(settings);
+      const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
       const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK)]);
       if (signature !== next) {
         if (signature) pulse();
         signature = next;
-        for (const [key, button] of buttons) if (!exposed.includes(key) || !items.some(item => item.key === key)) { button.remove(); buttons.delete(key); }
+        for (const [key, button] of buttons) if (!exposed.includes(key) || !showEmpty && !items.some(item => item.key === key)) { button.remove(); buttons.delete(key); }
         for (const key of exposed) {
           const item = items.find(item => item.key === key);
-          if (!item) continue;
+          if (!item && !showEmpty) continue;
           let button = buttons.get(key);
           if (!button) {
             button = document.createElement("button");
             button.type = "button";
             button.setAttribute(`${MARK}-trigger`, key);
-            button.setAttribute("aria-label", item.label);
             button.addEventListener("click", () => open(key, button!));
             buttons.set(key, button);
           }
           button.setAttribute("aria-expanded", String(active === key));
-          decorate(button, item, true);
+          button.toggleAttribute(`${MARK}-unavailable`, !item);
+          if (item) decorate(button, item, true);
+          else {
+            const icon = emptyIcon(key)?.cloneNode(true) as Element | undefined;
+            icon?.setAttribute("aria-hidden", "true");
+            button.replaceChildren(...(icon ? [icon] : []));
+            button.title = `${labelOf(key)} · 현재 없음`;
+            button.setAttribute("aria-label", button.title);
+          }
           pills.append(button);
         }
         if (active === "all") { close(); open("all", orb); }
