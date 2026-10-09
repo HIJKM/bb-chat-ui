@@ -44,6 +44,37 @@ test("overflow reserves the all-information button and prefers Diff and children
   assert.deepEqual(fitComposerInfo(items, 30), []);
 });
 
+test("children use a bare latest-three avatar stack and prefer the designed SDK detail", async () => {
+  const f = fixture();
+  const children = [
+    { id:'old',title:'Old review',state:'done' },
+    { id:'ui',title:'UI review',state:'run' },
+    { id:'qa',title:'Queue check',state:'wait' },
+    { id:'diff',title:'Diff review',state:'done' },
+  ];
+  f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-children', JSON.stringify(children));
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  stack.insertAdjacentHTML('beforeend', '<div data-bb-chat-ui-info-supplements><section data-bb-chat-ui-info-kind="children" aria-label="Child Thread"><h3>Child Threads <button data-bb-chat-ui-info-dismiss="children">×</button></h3><button>Open UI review</button></section></div>');
+  const native = f.document.querySelector('section[aria-label="Child threads"]')!;
+  const parent = native.parentElement;
+  const stop = injectComposerInfo(f.document);
+  const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="children"]')!;
+  const avatars = pill.querySelectorAll('[data-bb-chat-ui-info-avatar]');
+  assert.deepEqual(Array.from(avatars, node => node.getAttribute('data-child')), ['ui','qa','diff']);
+  assert.deepEqual(Array.from(avatars, node => node.getAttribute('data-state')), ['run','wait','done']);
+  assert.equal(avatars[0].firstChild?.textContent, 'UI');
+  assert.ok(avatars[2].querySelector('svg'));
+  assert.equal(pill.querySelector('[data-bb-chat-ui-info-avatar-more]')!.textContent, '+1');
+  assert.equal(f.dom.window.getComputedStyle(pill).backgroundColor, 'rgba(0, 0, 0, 0)');
+  f.click('[data-bb-chat-ui-info-trigger="children"]');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-kind="children"]')!.hasAttribute('data-bb-chat-ui-info-open'));
+  assert.equal(native.hasAttribute('data-bb-chat-ui-info-open'), false);
+  assert.equal(native.parentElement, parent);
+  f.click('[data-bb-chat-ui-info-dismiss="children"]');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-open]'), null);
+  stop(); f.dom.window.close();
+});
+
 test("an empty composer lists every information family without inventing summary data", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;

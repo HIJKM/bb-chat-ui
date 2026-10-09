@@ -1,5 +1,6 @@
 import { createElement, Fragment, useEffect, useState } from "react";
 import { experimental_Icon, UrlLink, useBbNavigate, useComposer, useSdk, useSettings } from "@get-bb/plugin-sdk/app";
+import { childInitial, childState } from "./composer-child.ts";
 
 type Sdk = ReturnType<typeof useSdk>;
 type Timeline = Awaited<ReturnType<Sdk["threads"]["timeline"]>>;
@@ -83,15 +84,15 @@ export function ComposerInfoBridge() {
   const timeline = data?.timeline;
   const children = data?.children ?? [];
   const pullRequest = data?.pullRequest?.outcome === "available" ? data.pullRequest.pullRequest : null;
-  const running = (status: string) => ["active", "pending", "starting", "provisioning", "waiting-for-host", "stopping"].includes(status);
   const section = (kind: string, title: string, icon: "ListTodo" | "Target" | "UserRound" | "CircleAlert", content: ReturnType<typeof createElement>) => createElement("section", {
     key:kind, [`${mark}-kind`]:kind, "aria-label":title,
-  }, createElement("h3", null, createElement(experimental_Icon, { name:icon, "aria-hidden":true }), " ", title), content);
+  }, createElement("h3", null, createElement(experimental_Icon, { name:icon, "aria-hidden":true }), " ", title,
+    kind === "children" ? createElement("button", { type:"button", [`${mark}-dismiss`]:kind, "aria-label":"Child Threads 닫기" }, "×") : null), content);
   return createElement(Fragment, null,
     createElement("span", {
       hidden:true,
       [`${mark}-settings`]:JSON.stringify(values ?? {}),
-      [`${mark}-children`]:JSON.stringify(children.map(child => ({ id:child.id, title:child.title ?? child.titleFallback ?? "Child Thread", running:running(child.runtime.displayStatus) }))),
+      [`${mark}-children`]:JSON.stringify(children.map(child => ({ id:child.id, title:child.title ?? child.titleFallback ?? "Child Thread", state:childState(child.runtime.displayStatus, child.hasPendingInteraction) }))),
     }),
     createElement("div", { [`${mark}-supplements`]:"" },
       timeline?.activePromptMode ? section("plan", "Plan", "ListTodo", createElement("p", null, timeline.activePromptMode.prompt)) : null,
@@ -99,7 +100,17 @@ export function ComposerInfoBridge() {
         createElement("p", null, timeline.goal.objective),
         createElement("p", { className:"text-subtle-foreground" }, `${timeline.goal.status} · ${timeline.goal.tokensUsed.toLocaleString()}${timeline.goal.tokenBudget == null ? "" : ` / ${timeline.goal.tokenBudget.toLocaleString()}`} tokens · ${Math.round(timeline.goal.timeUsedSeconds)}s`))) : null,
       timeline?.pendingTodos ? section("todos", "할 일", "ListTodo", createElement("ul", null, ...timeline.pendingTodos.items.map(item => createElement("li", { key:item.id }, `${item.status === "completed" ? "✓" : item.status === "in_progress" ? "◉" : "○"} ${item.text}`)))) : null,
-      children.length ? section("children", "Child Thread", "UserRound", createElement("div", null, ...children.map(child => createElement("p", { key:child.id }, createElement("button", { type:"button", onClick:() => navigate.toThread(child.id) }, child.title ?? child.titleFallback ?? "Child Thread"), " · ", child.runtime.displayStatus)))) : null,
+      children.length ? section("children", "Child Threads", "UserRound", createElement("div", null, ...children.map(child => {
+        const title = child.title ?? child.titleFallback ?? "Child Thread";
+        const state = childState(child.runtime.displayStatus, child.hasPendingInteraction);
+        return createElement("div", { key:child.id, [`${mark}-child-row`]:"" },
+          createElement("span", { [`${mark}-avatar`]:"", "data-state":state, "aria-hidden":true }, childInitial(title),
+            createElement("span", { [`${mark}-avatar-dot`]:"" }, state === "done" ? createElement(experimental_Icon, { name:"Check" }) : null)),
+          createElement("div", { [`${mark}-child-main`]:"" },
+            createElement("button", { type:"button", onClick:() => navigate.toThread(child.id) }, title),
+            createElement("div", { [`${mark}-child-meta`]:"" }, `${child.providerId} · ${child.runtime.displayStatus}`)),
+          createElement("span", { [`${mark}-child-status`]:"" }, state === "run" ? "실행 중" : state === "wait" ? child.hasPendingInteraction ? "입력 대기" : "호스트 대기" : state === "error" ? "오류" : "완료"));
+      }))) : null,
       data?.queue.length ? section("queue", "대기 메시지", "ListTodo", createElement("div", null, ...data.queue.map(row => createElement("div", { key:row.id },
         createElement("p", null, row.content.filter(part => part.visibility !== "agent-only").map(part => part.type === "text" ? part.text : part.type === "localFile" ? part.name ?? part.path : part.type === "localImage" ? part.path : "Image").join("\n")),
         createElement("p", { className:"text-subtle-foreground" }, row.failureReason ?? (row.sendAt ? new Date(row.sendAt).toLocaleString() : "Queued")))))) : null,

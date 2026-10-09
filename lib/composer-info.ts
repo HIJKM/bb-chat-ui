@@ -1,6 +1,7 @@
 import { exposedInfo, infoKinds, listedInfo, type InfoKind } from "./composer-info-settings.ts";
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
 import { HEAD_DIFF_MARK, openChangesPanel } from "./workspace-diff-pill.ts";
+import { childInitial, type ChildState, type ChildSummary } from "./composer-child.ts";
 
 const STACK = "[data-promptbox-shell] > .grid";
 const MARK = "data-bb-chat-ui-info";
@@ -51,9 +52,22 @@ export const composerInfoCss = `
 [${MARK}-orb] { display:grid; grid-template-columns:repeat(2,4px); gap:3px; }
 [${MARK}-orb] i { width:4px; height:4px; border-radius:50%; background:currentColor; }
 [${MARK}-badge] { position:absolute; right:-3px; top:-4px; font-size:9px; min-width:14px; line-height:14px; padding:0 3px; border-radius:999px; background:var(--surface-raised-solid); color:var(--subtle-foreground); box-shadow:0 0 0 2px var(--background); }
-[${MARK}-avatars] { display:flex; align-items:center; padding-left:5px; }
-[${MARK}-avatar] { position:relative; display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; margin-left:-5px; border-radius:50%; background:var(--surface-raised-solid); box-shadow:0 0 0 2px var(--background); font-size:10px; }
-[${MARK}-avatar][data-running]::after { content:""; position:absolute; right:0; bottom:0; width:5px; height:5px; border-radius:50%; background:var(--success-text); animation:bb-info-breathe 2.6s ease-in-out infinite; }
+[${MARK}-trigger="children"] { padding:0 7px 0 0; min-height:34px; border-radius:0; background:transparent !important; backdrop-filter:none; box-shadow:none !important; }
+[${MARK}-trigger="children"]:hover { transform:none; }
+[${MARK}-avatars] { display:flex; align-items:center; }
+[${MARK}-avatar] { position:relative; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:30px; height:30px; margin-left:-8px; border-radius:50%; background:var(--surface-raised-solid); box-shadow:0 0 0 2px var(--background),inset 0 1px 2px #fff2; font-size:10px; font-weight:600; line-height:1; transition:transform 400ms cubic-bezier(.2,.9,.22,1.25); }
+[${MARK}-avatar]:first-child { margin-left:0; }
+[${MARK}-avatar]:nth-child(3n+1) { background:color-mix(in oklch,var(--background) 76%,oklch(.75 .13 250) 24%); }
+[${MARK}-avatar]:nth-child(3n+2) { background:color-mix(in oklch,var(--background) 78%,oklch(.75 .1 155) 22%); }
+[${MARK}-avatar]:nth-child(3n) { background:color-mix(in oklch,var(--background) 78%,oklch(.78 .09 60) 22%); }
+[${MARK}-trigger="children"]:hover [${MARK}-avatar] { transform:translateY(-2px); margin-right:1px; }
+[${MARK}-avatar-more] { font-size:10px; padding-left:7px; color:var(--subtle-foreground); }
+[${MARK}-avatar-dot] { position:absolute; right:0; bottom:0; width:6px; height:6px; border-radius:50%; background:var(--success-text,#80b995); box-shadow:0 0 0 2px var(--background); }
+[${MARK}-avatar][data-state="run"] [${MARK}-avatar-dot] { animation:bb-info-breathe 2.6s ease-in-out infinite; }
+[${MARK}-avatar][data-state="wait"] [${MARK}-avatar-dot] { background:var(--warning-text,#cfb577); }
+[${MARK}-avatar][data-state="error"] [${MARK}-avatar-dot] { background:var(--destructive-text,#d99090); }
+[${MARK}-avatar][data-state="done"] [${MARK}-avatar-dot] { display:flex; align-items:center; justify-content:center; width:11px; height:11px; right:-2px; bottom:-2px; }
+[${MARK}-avatar-dot] svg { width:8px; height:8px; color:var(--background); }
 [${MARK}-avatar][data-new] { animation:bb-info-bubble 700ms cubic-bezier(.22,1,.36,1); }
 [${MARK}-menu], ${DETAIL} { position:absolute !important; display:block !important; left:0 !important; right:0 !important; top:auto !important; bottom:40px !important; transform:none !important; width:100% !important; max-width:none !important; min-height:0 !important; height:auto !important; max-height:min(50dvh,26rem) !important; overflow:auto !important; margin:0 !important; order:0 !important; border:1px solid var(--border-seam) !important; border-radius:16px !important; background:var(--surface-raised-solid) !important; color:var(--foreground); box-shadow:0 14px 40px -16px color-mix(in oklab,var(--foreground) 25%,transparent) !important; z-index:52; animation:bb-info-enter 320ms cubic-bezier(.22,1,.36,1); }
 [${MARK}-menu] { padding:12px; }
@@ -80,6 +94,17 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-kind] h3 { margin:0 0 8px; font-size:12px; font-weight:600; }
 [${MARK}-kind] p { white-space:pre-wrap; margin:6px 0; }
 [${MARK}-kind] button { border-radius:8px; padding:5px 8px; background:var(--surface-recessed); }
+[${MARK}-kind="children"] { padding:12px 14px 14px; border-radius:18px !important; }
+[${MARK}-kind="children"] h3 { display:flex; align-items:center; gap:7px; min-height:28px; margin:0 0 8px; }
+[${MARK}-kind="children"] h3 [data-icon-root] { width:14px; height:14px; }
+[${MARK}-kind="children"] [${MARK}-dismiss] { margin-left:auto; width:24px; height:24px; padding:0; border-radius:50%; border:0; background:transparent; color:var(--subtle-foreground); font-size:16px; }
+[${MARK}-child-row] { display:flex; align-items:center; gap:8px; padding:7px 0; min-width:0; }
+[${MARK}-child-row] + [${MARK}-child-row] { border-top:1px solid var(--border-hairline,var(--border)); }
+[${MARK}-child-row] [${MARK}-avatar] { width:27px; height:27px; margin-left:0; }
+[${MARK}-child-main] { flex:1; min-width:0; }
+[${MARK}-child-main] button { padding:0; border:0; border-radius:0; background:transparent; max-width:100%; text-align:left; font-size:12px; }
+[${MARK}-child-meta], [${MARK}-child-status] { font-size:10px; color:var(--subtle-foreground); }
+[${MARK}-child-status] { white-space:nowrap; }
 @keyframes bb-info-enter { from { opacity:0; transform:translateY(8px) scale(.98); } to { opacity:1; transform:none; } }
 @keyframes bb-info-bubble { 0% { transform:translateY(12px) scale(.25); } 45% { transform:translateY(-4px) scale(1.18); } 65% { transform:scale(.94); } 82% { transform:scale(1.03); } 100% { transform:none; } }
 @keyframes bb-info-breathe { 50% { opacity:.4; } }
@@ -162,7 +187,7 @@ export function injectComposerInfo(document: Document): () => void {
     let menu: HTMLElement | null = null;
     let lastTrigger: HTMLElement | null = null;
     let signature = "";
-    let childStates = new Map<string, boolean>();
+    let childStates = new Map<string, ChildState>();
     let diffSupplement: HTMLElement | null = null;
     const editing = () => stack.querySelector('[data-queued-message-inline-editor]') !== null;
     const reduced = () => view!.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -198,21 +223,32 @@ export function injectComposerInfo(document: Document): () => void {
       if (summary && item.key === "children") {
         const avatars = document.createElement("span");
         avatars.setAttribute(`${MARK}-avatars`, "");
-        let children: { id: string; title: string; running: boolean }[] = [];
+        let children: ChildSummary[] = [];
         try { children = JSON.parse(stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`) ?? "[]"); } catch { /* Host card remains usable. */ }
-        if (!children.length) children = [{ id:"native", title:describe(item).replace(/^.*?:\s*/, ""), running:true }];
-        const nextStates = new Map(children.map(child => [child.id, child.running]));
-        for (const child of children.slice(0, 3)) {
+        if (!children.length) children = [{ id:"native", title:describe(item).replace(/^.*?:\s*/, ""), state:describe(item).startsWith("Active child") ? "run" : "wait" }];
+        const stateOf = (child: ChildSummary): ChildState => child.state ?? (child.running ? "run" : "done");
+        const nextStates = new Map(children.map(child => [child.id, stateOf(child)]));
+        for (const [index, child] of children.slice(-3).entries()) {
           const avatar = document.createElement("span");
           avatar.setAttribute(`${MARK}-avatar`, "");
           avatar.title = child.title;
-          avatar.textContent = Array.from(child.title.trim())[0]?.toUpperCase() || "↗";
-          if (child.running) avatar.setAttribute("data-running", "");
+          avatar.textContent = childInitial(child.title);
+          avatar.setAttribute("data-child", child.id);
+          avatar.setAttribute("data-state", stateOf(child));
+          avatar.style.zIndex = String(4 - index);
+          const dot = document.createElement("span"); dot.setAttribute(`${MARK}-avatar-dot`, "");
+          if (stateOf(child) === "done") {
+            const check = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            check.setAttribute("viewBox", "0 0 24 24"); check.setAttribute("fill", "none"); check.setAttribute("stroke", "currentColor"); check.setAttribute("stroke-width", "3");
+            const path = document.createElementNS(check.namespaceURI, "path"); path.setAttribute("d", "m5 12 4 4L19 6"); check.append(path); dot.append(check);
+          }
+          avatar.append(dot);
           if (!childStates.has(child.id)) avatar.setAttribute("data-new", "");
-          else if (childStates.get(child.id) && !child.running && !reduced()) avatar.animate?.([{ transform:"scale(1)" }, { transform:"scale(1.15)" }, { transform:"scale(1)" }], { duration:450, easing:"cubic-bezier(.22,1,.36,1)" });
+          else if (childStates.get(child.id) !== "done" && stateOf(child) === "done" && !reduced()) avatar.animate?.([{ transform:"scale(1)" }, { transform:"scale(1.1)" }, { transform:"scale(1)" }], { duration:450, easing:"cubic-bezier(.22,1,.36,1)" });
           avatars.append(avatar);
         }
-        text.textContent = String(children.length);
+        text.textContent = children.length > 3 ? `+${children.length - 3}` : String(children.length);
+        text.setAttribute(`${MARK}-avatar-more`, "");
         button.append(avatars, text);
         childStates = nextStates;
       } else {
@@ -382,8 +418,9 @@ export function injectComposerInfo(document: Document): () => void {
       for (const node of wrappers) if (!currentWrappers.has(node)) node.removeAttribute(WRAP);
       owned.clear(); currentOwned.forEach(node => owned.add(node));
       wrappers.clear(); currentWrappers.forEach(node => wrappers.add(node));
-      // Native controls win over SDK read-only supplements of the same family.
-      const native = found.filter(item => !item.node.hasAttribute(`${MARK}-kind`));
+      // Child rows use the SDK design; other families keep their native editable controls.
+      const hasChildRows = found.some(item => item.key === "children" && item.node.hasAttribute(`${MARK}-kind`));
+      const native = found.filter(item => !item.node.hasAttribute(`${MARK}-kind`) && !(hasChildRows && item.key === "children"));
       items = [...native, ...found.filter(item => item.node.hasAttribute(`${MARK}-kind`) && !native.some(other => other.key === item.key))];
       if (!items.some(item => item.key === "diff")) {
         try {
@@ -481,12 +518,17 @@ export function injectComposerInfo(document: Document): () => void {
     if (event.key !== "Escape") return;
     for (const [stack, state] of states) if (stack.contains(event.target as Node) || event.target === document) state.close(true);
   };
+  const onDismiss = (event: MouseEvent) => {
+    const button = (event.target as Element).closest?.(`[${MARK}-dismiss]`);
+    if (button) for (const [stack, state] of states) if (stack.contains(button)) state.close(true);
+  };
   const onOutside = (event: PointerEvent) => {
     const target = event.target as Element;
     if (target.closest?.('[data-radix-popper-content-wrapper], [role="menu"], [role="dialog"]')) return;
     for (const [stack, state] of states) if (!stack.contains(event.target as Node)) state.close();
   };
   document.addEventListener("keydown", onKey);
+  document.addEventListener("click", onDismiss);
   document.addEventListener("pointerdown", onOutside);
   view.addEventListener("resize", schedule);
   sync();
@@ -495,6 +537,7 @@ export function injectComposerInfo(document: Document): () => void {
     observer.disconnect();
     if (frame) view.cancelAnimationFrame(frame);
     document.removeEventListener("keydown", onKey);
+    document.removeEventListener("click", onDismiss);
     document.removeEventListener("pointerdown", onOutside);
     view.removeEventListener("resize", schedule);
     for (const state of states.values()) state.cleanup();
