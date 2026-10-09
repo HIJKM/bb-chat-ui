@@ -1267,6 +1267,30 @@ test("queue editing blocks detail replacement and dismissal until editing finish
   f.dom.window.close();
 });
 
+test("restore action text keeps the compact size when desktop button defaults are larger", () => {
+  for (const [label,kind,text] of [['Thread is archived','unarchive','Unarchive'],['Environment unavailable','environment','Restore workspace']]) {
+    const f=fixture();
+    const style=f.document.createElement('style');
+    style.textContent='[data-promptbox-shell] button { font-size:14px; line-height:20px; }';
+    f.document.head.append(style);
+    f.document.body.insertAdjacentHTML('beforeend','<span hidden data-bb-chat-ui-device="desktop" data-bb-chat-ui-viewport="wide"></span>');
+    f.document.querySelector('[data-promptbox-shell] > .grid')!.insertAdjacentHTML('beforeend',`<section aria-label="Thread history"><div role="status" aria-label="${label}">${label}</div></section>`);
+    const source=f.document.createElement('button'); source.setAttribute('data-bb-chat-ui-info-restore-source',kind); source.textContent=text;
+    f.document.querySelector('[data-bb-chat-ui-info-settings]')!.append(source);
+    let calls=0; source.addEventListener('click',()=>calls++);
+    const stop=injectComposerInfo(f.document);
+    try {
+      f.click('[data-bb-chat-ui-info-trigger="status"]');
+      const action=f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-unarchive]')!;
+      const css=f.dom.window.getComputedStyle(action);
+      assert.equal(css.fontSize,'12px',`${text}: desktop button defaults do not enlarge the label`);
+      assert.equal(css.lineHeight,'18px','compact text keeps its matching line height');
+      assert.equal(css.minHeight,'32px','the button retains its existing hit target');
+      action.click(); assert.equal(calls,1,'the restore action still reaches its original SDK control');
+    } finally { stop(); f.dom.window.close(); }
+  }
+});
+
 test("archived stack-only composer offers only restore and preserves its native action", async () => {
   const f = fixture();
   f.document.querySelector('[data-follow-up-composer-anchor]')!.remove();

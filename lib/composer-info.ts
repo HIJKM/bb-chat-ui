@@ -45,9 +45,9 @@ export const composerInfoCss = `
 [${MARK}-all][hidden] { display:none; }
 [${MARK}-bar][${MARK}-archived] { padding-right:0; }
 [${MARK}-bar][${MARK}-archived] [${MARK}-trigger="status"] { width:100%; max-width:none; justify-content:center; }
-[${MARK}-unarchive] { min-height:32px; border-radius:8px; padding:6px 10px; font-size:12px; }
 [${MARK}-unarchive]:disabled { opacity:.5; cursor:default; }
 [${MARK}-bar] button { font:inherit; cursor:pointer; color:var(--foreground); }
+[${MARK}-unarchive] { min-height:32px; border-radius:8px; padding:6px 10px; font-size:12px !important; line-height:18px !important; }
 [${MARK}-bar] button:focus-visible { outline:2px solid var(--ring); outline-offset:3px; }
 [${MARK}-trigger], [${MARK}-all] { display:inline-flex; flex:none; align-items:center; justify-content:center; gap:6px; height:32px; max-width:100%; padding:4px 11px; border:0; border-radius:999px; font-size:12px !important; line-height:18px; white-space:nowrap; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px color-mix(in oklab,var(--foreground) 22%,transparent),inset 0 1px 3px color-mix(in oklab,var(--popover) 35%,transparent); transition:transform 260ms cubic-bezier(.2,.9,.22,1.25); }
 [${MARK}-trigger], [${MARK}-all], [${MARK}-choice], [${MARK}-menu] button, ${DETAIL} button { background:var(--bb-chat-ui-info-face) !important; border:0 !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); }
