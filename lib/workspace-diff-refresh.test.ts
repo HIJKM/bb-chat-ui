@@ -1,9 +1,13 @@
-import test from "node:test";
+import test, { beforeEach, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { startWorkspaceDiffRefresh } from "./workspace-diff-refresh.ts";
 import type { readWorkspaceDiff } from "./workspace-diff-data.ts";
 
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
+beforeEach(t => t.mock.timers.enable({ apis:["Date", "setTimeout"], now:0 }));
+async function initialResult(t:TestContext) {
+  await tick(); t.mock.timers.tick(500); await tick();
+}
 function deferred<T>() {
   let resolve!:(value:T) => void;
   const promise = new Promise<T>(done => { resolve = done; });
@@ -36,8 +40,8 @@ function fixture(initialStatus?:() => Promise<StatusResponse>) {
   };
 }
 
-test('message streaming does not reset or refetch a stable main Diff', async () => {
-  const f = fixture(); await tick();
+test('message streaming does not reset or refetch a stable main Diff', async t => {
+  const f = fixture(); await initialResult(t);
   assert.deepEqual(f.labels(), ['↑3']);
   for (let i=0;i<5;i++) f.emit('thread:changed','thread',['events-appended']);
   await tick();
@@ -46,8 +50,8 @@ test('message streaming does not reset or refetch a stable main Diff', async () 
   f.stop();
 });
 
-test('environment refresh retains the previous display until a complete result arrives', async () => {
-  const f = fixture(); await tick();
+test('environment refresh retains the previous display until a complete result arrives', async t => {
+  const f = fixture(); await initialResult(t);
   const gate = deferred<Awaited<ReturnType<typeof f.sdk.environments.status>>>();
   f.setStatus(() => gate.promise);
   f.emit('environment:changed','env_main',['workspace-changed']); await tick();
@@ -62,8 +66,8 @@ test('environment refresh retains the previous display until a complete result a
   f.stop();
 });
 
-test('temporary status failure retains the last good display and detachment clears it only after confirmation', async () => {
-  const f = fixture(); await tick();
+test('temporary status failure retains the last good display and detachment clears it only after confirmation', async t => {
+  const f = fixture(); await initialResult(t);
   f.setStatus(async () => { throw new Error('temporarily disconnected'); });
   await f.refresh();
   assert.deepEqual(f.labels(), ['↑3']);
@@ -76,8 +80,8 @@ test('temporary status failure retains the last good display and detachment clea
   f.stop();
 });
 
-test('in-flight results are discarded when the thread changes environments', async () => {
-  const f = fixture(); await tick();
+test('in-flight results are discarded when the thread changes environments', async t => {
+  const f = fixture(); await initialResult(t);
   const gate = deferred<Awaited<ReturnType<typeof f.sdk.environments.status>>>();
   let first = true;
   const workspace = (id:string) => ({ outcome:'available',workspace:{ branch:{ currentBranch:id === 'env_main' ? 'main' : 'feature/chat',defaultBranch:'main' }, checkout:{ headSha:'head' },workingTree:{ insertions:0,deletions:0,files:[] },mergeBase:{ insertions:0,deletions:0,files:[],commits:[],baseRef:'base',aheadCount:8,mergeBaseBranch:'refs/remotes/origin/main' } } });
@@ -91,15 +95,15 @@ test('in-flight results are discarded when the thread changes environments', asy
   assert.equal(f.output.length,before,'disposed controllers cannot publish');
 });
 
-test('confirmed non-Git environments finish initial loading and clear a previous Git snapshot', async () => {
+test('confirmed non-Git environments finish initial loading and clear a previous Git snapshot', async t => {
   for (const response of [
     { outcome:'not_applicable', reason:'non_git_environment' },
     { outcome:'unavailable', failure:{ code:'not_git_repo' } },
   ] satisfies StatusResponse[]) {
-    const f = fixture(async () => response); await tick();
+    const f = fixture(async () => response); await initialResult(t);
     assert.deepEqual(f.labels(), ['<empty>']);
     f.stop();
-    const previous = fixture(); await tick();
+    const previous = fixture(); await initialResult(t);
     previous.setStatus(async () => response);
     await previous.refresh();
     assert.deepEqual(previous.labels(), ['↑3','<empty>']);
@@ -107,8 +111,8 @@ test('confirmed non-Git environments finish initial loading and clear a previous
   }
 });
 
-test('an initial status error ends loading and the next refresh can recover', async () => {
-  const f = fixture(async () => { throw new Error('disconnected'); }); await tick();
+test('an initial status error ends loading and the next refresh can recover', async t => {
+  const f = fixture(async () => { throw new Error('disconnected'); }); await initialResult(t);
   assert.deepEqual(f.labels(), ['<empty>']);
   f.setStatus(async args => ({ outcome:'available', workspace:{
     branch:{ currentBranch:'main', defaultBranch:'main' }, checkout:{ headSha:'head' },
@@ -120,9 +124,33 @@ test('an initial status error ends loading and the next refresh can recover', as
   f.stop();
 });
 
-test('an unavailable initial workspace also finishes loading without fabricating Git information', async () => {
+test('an unavailable initial workspace also finishes loading without fabricating Git information', async t => {
   const f = fixture(async () => ({ outcome:'unavailable', failure:{ code:'permission_denied' } }));
-  await tick();
+  await initialResult(t);
   assert.deepEqual(f.labels(), ['<empty>']);
   f.stop();
+});
+
+test('first fast results remain loading for 500ms, including empty outcomes, without delaying later refreshes', async t => {
+  for (const empty of [true,false]) {
+    const f = empty ? fixture(async () => ({ outcome:'not_applicable',reason:'non_git_environment' })) : fixture();
+    await tick(); assert.deepEqual(f.output,[]);
+    t.mock.timers.tick(499); await tick(); assert.deepEqual(f.output,[]);
+    t.mock.timers.tick(1); await tick(); assert.deepEqual(f.labels(),[empty ? '<empty>' : '↑3']);
+    await f.refresh(); assert.equal(f.output.length,2,'only the initial result waits'); f.stop();
+  }
+});
+
+test('stopping or switching environments during the first loading hold cannot publish a stale result', async t => {
+  const stopped=fixture(); await tick(); stopped.stop();
+  t.mock.timers.tick(500); await tick(); assert.deepEqual(stopped.output,[]);
+  const switched=fixture(); await tick(); switched.setEnvironment(null);
+  switched.emit('thread:changed','thread',['environment-changed']);
+  t.mock.timers.tick(500); await tick(); assert.deepEqual(switched.labels(),['<empty>']); switched.stop();
+});
+
+test('a first result taking longer than 500ms does not get an extra loading hold', async t => {
+  const gate=deferred<StatusResponse>(); const f=fixture(()=>gate.promise); await tick();
+  t.mock.timers.tick(700); gate.resolve({ outcome:'not_applicable',reason:'non_git_environment' });
+  await tick(); assert.deepEqual(f.labels(),['<empty>']); f.stop();
 });

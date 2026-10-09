@@ -13,19 +13,30 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
   let fetching = false;
   let pending = false;
   let published = false;
-  const update = (summary:string) => { published = true; publish(summary); };
+  const startedAt = Date.now();
   const refresh = async () => {
     if (signal.aborted) return;
     if (fetching) { pending = true; return; }
     fetching = true;
     const current = revision;
     const stale = () => signal.aborted || current !== revision;
+    const update = async (summary:string) => {
+      if (stale()) return;
+      const remaining = published ? 0 : 500 - (Date.now() - startedAt);
+      if (remaining > 0) await new Promise<void>(resolve => {
+        const finish = () => { clearTimeout(timer); signal.removeEventListener("abort",finish); resolve(); };
+        const timer = setTimeout(finish,remaining);
+        signal.addEventListener("abort",finish,{ once:true });
+      });
+      if (stale()) return;
+      published = true; publish(summary);
+    };
     try {
       if (contextDirty) {
         const thread = await sdk.threads.get({ threadId, signal });
         if (stale()) return;
         const id = thread.environmentId;
-        if (!id) { environmentId = null; update(""); return; }
+        if (!id) { environmentId = null; await update(""); return; }
         const environment = await sdk.environments.get({ environmentId:id, signal });
         if (stale()) return;
         environmentId = id;
@@ -35,12 +46,12 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
       if (!environmentId) return;
       const result = await readWorkspaceDiff(sdk.environments, environmentId, mergeBaseBranch, signal);
       if (!stale()) {
-        if (result) update(JSON.stringify(result));
-        else if (result === undefined || !published) update("");
+        if (result) await update(JSON.stringify(result));
+        else if (result === undefined || !published) await update("");
       }
     } catch {
       // Keep the last summary during a temporary disconnect.
-      if (!stale() && !published) update("");
+      if (!stale() && !published) await update("");
     } finally {
       fetching = false;
       if (pending && !signal.aborted) { pending = false; void refresh(); }
