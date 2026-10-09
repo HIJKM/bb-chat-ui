@@ -14,6 +14,7 @@ const SOURCE = `${MARK}-settings`;
 const REQUEST = ['tool-use-ask', 'plugin-request-banner', 'plan-review-request', 'approval-banner', 'user-question-banner', 'plan-review-banner'].map(id => `[data-testid="${id}"]`).join(", ");
 const NATIVE = `section[aria-label], .agentation-staging-shell, [${MARK}-kind]`;
 const WORKFLOW_COLLAPSE = 'button[aria-label^="Collapse "][aria-label$=" workflows"][aria-controls]';
+const ARCHIVED = '[aria-label="Thread archived"], [aria-label="Thread is archived"], [aria-label="Archived thread"]';
 const DETAIL = `${STACK}[${MARK}-stack] [${UNIT}][${OPEN}]:not([hidden])`;
 
 // The orb is always reachable. Fit measured pills into one row, with essentials first.
@@ -38,6 +39,11 @@ export const composerInfoCss = `
 [${UNIT}] { display:none !important; }
 [${MARK}-bar] { position:relative; display:flex; align-items:center; gap:8px; height:32px; min-width:0; padding-right:40px; }
 [${MARK}-bar][hidden] { display:none; }
+[${MARK}-all][hidden] { display:none; }
+[${MARK}-bar][${MARK}-archived] { padding-right:0; }
+[${MARK}-bar][${MARK}-archived] [${MARK}-trigger="status"] { width:100%; max-width:none; justify-content:center; }
+${DETAIL} [${MARK}-archive-catalog] { position:absolute; top:10px; right:42px; }
+${DETAIL}:has(> [${MARK}-archive-catalog]) [${MARK}-close-heading] { padding-right:64px !important; }
 [${MARK}-bar] button { font:inherit; cursor:pointer; color:var(--foreground); }
 [${MARK}-bar] button:focus-visible { outline:2px solid var(--ring); outline-offset:3px; }
 [${MARK}-trigger], [${MARK}-all] { display:inline-flex; flex:none; align-items:center; justify-content:center; gap:6px; height:32px; max-width:100%; padding:4px 11px; border:0; border-radius:999px; font-size:12px !important; line-height:18px; white-space:nowrap; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px color-mix(in oklab,var(--foreground) 22%,transparent),inset 0 1px 3px color-mix(in oklab,var(--popover) 35%,transparent); transition:transform 260ms cubic-bezier(.2,.9,.22,1.25); }
@@ -269,6 +275,7 @@ export function injectComposerInfo(document: Document): () => void {
     bar.append(pills, orb);
     stack.append(bar);
     let items: InfoItem[] = [];
+    let archived = false;
     let listed = listedInfo();
     const owned = new Set<HTMLElement>();
     const wrappers = new Set<HTMLElement>();
@@ -334,6 +341,7 @@ export function injectComposerInfo(document: Document): () => void {
     const collapseRows = new Set<HTMLElement>();
     const closeHeadings = new Set<HTMLElement>();
     const generatedCloseHeadings = new Set<HTMLElement>();
+    let archiveCatalog: HTMLButtonElement | null = null;
     const syncNativeControls = () => {
       const currentRows = new Set<HTMLElement>();
       for (const row of Array.from(stack.querySelectorAll<HTMLElement>(WORKFLOW_COLLAPSE))) {
@@ -359,6 +367,7 @@ export function injectComposerInfo(document: Document): () => void {
         if (generatedCloseHeadings.delete(heading)) heading.remove();
       }
       const item = items.find(item => item.node === activeNode && item.key === active);
+      if (!archived || item?.key !== "status") { archiveCatalog?.remove(); archiveCatalog = null; }
       if (!item || !item.node.hasAttribute(OPEN) || item.key === "diff" || item.node.matches(".agentation-staging-shell") || item.node.querySelector(`[${MARK}-dismiss]:not([${MARK}-native-dismiss])`)) return;
       let heading = item.node.querySelector<HTMLElement>(`[${MARK}-panel-heading], [${MARK}-close-heading]`);
       if (!heading || heading.closest("button, a")) {
@@ -380,6 +389,15 @@ export function injectComposerInfo(document: Document): () => void {
         nativeDismisses.set(item.node, dismiss);
       }
       if (dismiss.parentElement !== item.node) item.node.append(dismiss);
+      if (archived && item.key === "status") {
+        if (!archiveCatalog) {
+          archiveCatalog = document.createElement("button"); archiveCatalog.type = "button"; archiveCatalog.textContent = "⋯";
+          archiveCatalog.setAttribute(`${MARK}-archive-catalog`, ""); archiveCatalog.setAttribute(`${MARK}-panel-action`, "");
+          archiveCatalog.setAttribute("aria-label", "전체 정보 열기"); archiveCatalog.title = "전체 정보 열기";
+          archiveCatalog.addEventListener("click", () => open("all", buttons.get("status") ?? orb));
+        }
+        if (archiveCatalog.parentElement !== item.node) item.node.append(archiveCatalog);
+      }
     };
     const panelAction = (label:string, run:() => void) => {
       const button = document.createElement("button");
@@ -754,6 +772,7 @@ export function injectComposerInfo(document: Document): () => void {
       const text = document.createElement("span");
       let childCount = 0;
       text.textContent = summary && item.key === "diff" ? describe(item) : item.label;
+      if (summary && item.key === "status" && archived) text.textContent = "Archived thread";
       if (summary && item.key === "todos") text.textContent = item.trigger?.textContent?.trim().replace(/\s+/g, " ").slice(0, 30) || item.label;
       if (summary && item.key === "queue") text.textContent = queueCount(item) || item.label;
       if (summary && item.key === "annotations") text.textContent = annotationCount(item);
@@ -847,6 +866,7 @@ export function injectComposerInfo(document: Document): () => void {
         }
       }
       button.title = `${item.label} · ${describe(item)}${childCount ? ` · ${childCount}개` : ""}${presentation?.branch ? ` · ${presentation.branch}` : item.key === "diff" && item.trigger?.title ? ` · ${item.trigger.title}` : ""}`;
+      if (summary && item.key === "status" && archived) button.title = "Archived thread";
       button.setAttribute("aria-label", button.title);
       if (roll) for (const number of Array.from(button.querySelectorAll(`[${MARK}-diff-number]`))) {
         const before = previousNumbers.get(number.getAttribute(`${MARK}-diff-number`));
@@ -986,7 +1006,7 @@ export function injectComposerInfo(document: Document): () => void {
       });
       for (const [key, exit] of exits) if (!buttons.has(key)) widths.push({ key, width:exit.node.offsetWidth });
       const width = stack.getBoundingClientRect().width;
-      const visible = new Set(fitComposerInfo(widths, width > 0 ? width - (bar.hasAttribute(`${MARK}-jump`) ? 40 : 0) : Number.POSITIVE_INFINITY));
+      const visible = new Set(archived ? ["status"] : fitComposerInfo(widths, width > 0 ? width - (bar.hasAttribute(`${MARK}-jump`) ? 40 : 0) : Number.POSITIVE_INFINITY));
       for (const [key, button] of buttons) {
         if (visible.has(key)) cancelExit(key);
         else if (previouslyVisible.has(button) && !exits.has(key)) leave(key, button);
@@ -1081,6 +1101,11 @@ export function injectComposerInfo(document: Document): () => void {
       const hasChildRows = found.some(item => item.key === "children" && item.node.hasAttribute(`${MARK}-kind`));
       const native = found.filter(item => !item.node.hasAttribute(`${MARK}-kind`) && !(hasChildRows && item.key === "children"));
       items = [...native, ...found.filter(item => item.node.hasAttribute(`${MARK}-kind`) && !native.some(other => other.key === item.key))];
+      const nextArchived = items.some(item => item.key === "status" && (item.node.matches(ARCHIVED) || item.node.querySelector(ARCHIVED)));
+      if (archived !== nextArchived) { archived = nextArchived; cancelQueueMotion(); cancelExit(); close(false, true); }
+      bar.toggleAttribute(`${MARK}-archived`, archived);
+      if (archived) bar.removeAttribute(`${MARK}-jump`);
+      orb.hidden = archived;
       syncPanelActions();
       if (!items.some(item => item.key === "diff")) {
         try {
@@ -1109,22 +1134,23 @@ export function injectComposerInfo(document: Document): () => void {
       let settings: Record<string, unknown> = {};
       try { settings = JSON.parse(source.getAttribute(SOURCE) || "{}"); } catch { /* Defaults work while settings load. */ }
       listed = listedInfo(settings);
+      if (archived && !listed.includes("status")) listed.push("status");
       if (active && active !== "all" && !listed.includes(active)) close();
       if (!listed.length) close();
       bar.hidden = request || !listed.length && !editing();
       const diff = readDiff();
       const unavailableDiff = stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(`${HEAD_DIFF_MARK}-state`) === "unavailable";
-      const exposed = exposedInfo(settings).filter(key => key !== "diff" || !unavailableDiff && diff?.presentation?.visible !== false);
+      const exposed: InfoKind[] = archived ? ["status"] : exposedInfo(settings).filter(key => key !== "diff" || !unavailableDiff && diff?.presentation?.visible !== false);
       if (request || reduced() || bar.hidden) cancelExit();
       const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
-      const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
+      const next = JSON.stringify([settings, archived, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
       let widthChange: { button:HTMLButtonElement; from:number } | null = null;
       if (signature !== next) {
         if (signature) pulse();
         signature = next;
         for (const [key, button] of buttons) if (!exposed.includes(key) || !showEmpty && !items.some(item => item.key === key)) {
-          leave(key, button);
+          if (!archived) leave(key, button);
           widthAnimations.get(button)?.animation.cancel();
           button.remove(); buttons.delete(key);
         }
@@ -1146,6 +1172,7 @@ export function injectComposerInfo(document: Document): () => void {
           button.setAttribute("aria-expanded", String(active === key));
           button.toggleAttribute(`${MARK}-unavailable`, !item);
           const content = JSON.stringify([item ? describe(item) : null, item?.trigger?.title,
+            key === "status" ? archived : null,
             emptyIcon(key)?.outerHTML ?? item?.trigger?.querySelector("svg, [data-icon-root]")?.outerHTML ?? item?.node.querySelector("svg, [data-icon-root]")?.outerHTML,
             key === "children" ? stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`) : null,
             key === "diff" ? [diff?.presentation, diff?.detail?.commitCount] : null]);
@@ -1206,7 +1233,7 @@ export function injectComposerInfo(document: Document): () => void {
           pendingRows:complete ? 0 : Math.max(0,(previousQueue?.pendingRows ?? 0) - rowCredit) + Math.max(0,countArrivals - rowArrivals),
           pendingCount:complete ? 0 : Math.max(0,(previousQueue?.pendingCount ?? 0) - countCredit) + Math.max(0,rowArrivals - countArrivals),
         };
-        if (!listed.includes("queue") || bar.hidden) cancelQueueMotion();
+        if (archived || !listed.includes("queue") || bar.hidden) cancelQueueMotion();
         else for (let index = 0; index < added; index++) queueAddition(index * 45);
       } else {
         // Native rendering can briefly remove the whole queue. Keep its arrival
@@ -1259,6 +1286,7 @@ export function injectComposerInfo(document: Document): () => void {
       for (const heading of panelHeadings) heading.removeAttribute(`${MARK}-panel-heading`);
       for (const heading of generatedHeadings) heading.remove();
       for (const button of nativeDismisses.values()) button.remove();
+      archiveCatalog?.remove();
       for (const row of collapseRows) row.removeAttribute(`${MARK}-collapse`);
       for (const heading of closeHeadings) heading.removeAttribute(`${MARK}-close-heading`);
       for (const heading of generatedCloseHeadings) heading.remove();

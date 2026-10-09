@@ -992,13 +992,58 @@ test("archived stack-only composer retains supplementary data and native restore
   let restored = 0;
   status.querySelector('button')!.addEventListener('click', () => restored++);
   const stop = injectComposerInfo(f.document);
-  f.click('[aria-label^="전체 정보"]');
-  f.click('[data-bb-chat-ui-info-choice="status"]');
+  assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-all]')!.hidden,true);
+  assert.deepEqual([...f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')].map(node => node.getAttribute('data-bb-chat-ui-info-trigger')),['status']);
+  const pill = f.click('[data-bb-chat-ui-info-trigger="status"]');
+  assert.equal(pill.textContent,'Archived thread');
+  assert.equal(f.dom.window.getComputedStyle(pill).width,'100%');
   f.click('[aria-label="Thread archived"] button');
   assert.equal(restored, 1);
   assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-open]').length, 1);
+  f.click('[data-bb-chat-ui-info-archive-catalog]');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="goal"]'),'other information remains available inside the archived popover');
+  status.remove(); await f.tick();
+  assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-all]')!.hidden,false);
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="goal"]'),'unarchiving restores the normal information row');
   stop();
   f.dom.window.close();
+});
+
+test("native Thread history identifies archive status without mistaking a missing workspace for archive", async () => {
+  const f=fixture();
+  const stack=f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const status=f.document.createElement('section'); status.setAttribute('aria-label','Thread history');
+  status.innerHTML='<div role="status" aria-label="Thread is archived">Thread is archived</div><button>Unarchive</button>';
+  stack.append(status);
+  const stop=injectComposerInfo(f.document);
+  try {
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="status"]')?.textContent,'Archived thread');
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null);
+    status.innerHTML='<div role="status" aria-label="Workspace removed">Workspace removed</div><button>Restore workspace</button>';
+    await f.tick();
+    assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'));
+    assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-all]')!.hidden,false);
+    assert.notEqual(f.document.querySelector('[data-bb-chat-ui-info-trigger="status"]')?.textContent,'Archived thread');
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("archived status stays visible on narrow screens and yields to an input request", async () => {
+  const f=fixture();
+  const stack=f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+  stack.getBoundingClientRect=()=>({ width:120 } as DOMRect);
+  Object.defineProperty(f.dom.window.HTMLElement.prototype,'offsetWidth',{get:()=>120});
+  f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings',JSON.stringify(Object.fromEntries(infoKinds.map(kind=>[kind.setting,'끄기']))));
+  stack.insertAdjacentHTML('beforeend','<section aria-label="Thread archived"><button>Unarchive</button></section>');
+  const stop=injectComposerInfo(f.document);
+  try {
+    assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-trigger="status"]')!.hidden,false,'archive status is a required full-width state, not an overflow pill');
+    assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-all]')!.hidden,true);
+    const request=f.document.createElement('section'); request.setAttribute('data-testid','user-question-banner'); stack.append(request);
+    await f.tick();
+    assert.equal(f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-bar]')!.hidden,true);
+    request.remove(); await f.tick();
+    assert.equal(f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-bar]')!.hidden,false);
+  } finally { stop(); f.dom.window.close(); }
 });
 
 test("read-only supplements remain available without replacing native editable cards", async () => {
