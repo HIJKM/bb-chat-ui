@@ -57,7 +57,7 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
     return { cancel:() => { entry.cancelled = true; } } as Animation;
   };
   const stop = injectComposerInfo(f.document);
-  const pills = () => entries.filter(entry => entry.key !== 'orb');
+  const pills = () => entries.filter(entry => entry.key !== 'orb' && entry.options.duration === 460);
   assert.deepEqual(pills().map(entry => entry.key), ['diff', 'goal', 'queue']);
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]'), 'avatars retain their existing individual bubbles');
   assert.deepEqual(pills()[0].frames.map(frame => frame.transform), [
@@ -99,9 +99,9 @@ test("pill bubbles wait for visible space and requests, and respect reduced moti
     Object.defineProperty(f.dom.window.HTMLElement.prototype, 'offsetWidth', { get:() => 120 });
     f.dom.window.HTMLElement.prototype.getBoundingClientRect = () => ({ width:10 } as DOMRect);
     const animated:string[] = [];
-    f.dom.window.HTMLElement.prototype.animate = function() {
+    f.dom.window.HTMLElement.prototype.animate = function(_frames,options) {
       const key = this.getAttribute('data-bb-chat-ui-info-trigger');
-      if (key) animated.push(key);
+      if (key && (options as KeyframeAnimationOptions).duration === 460) animated.push(key);
       return { cancel() {} } as Animation;
     };
     const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
@@ -1028,7 +1028,7 @@ test("Diff loading widens into its result once and respects reduced motion and u
     if(!reduced) assert.equal(width[0].cancelled,false,'detail-only refresh does not interrupt the width transition');
     source.setAttribute('data-bb-chat-ui-head-diff','');
     source.setAttribute('data-bb-chat-ui-head-diff-state','unavailable'); await f.tick();
-    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null,'confirmed missing environment ends the placeholder even with empty icons enabled');
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]:not([data-bb-chat-ui-info-exiting])'),null,'confirmed missing environment ends the placeholder even with empty icons enabled');
     stop(); assert.ok(entries.filter(entry=>entry.options.duration!==360).every(entry=>entry.cancelled),'entry, width and content animations are cancelled on unload'); f.dom.window.close();
   }
 });
@@ -1351,6 +1351,7 @@ test("a loading Diff with no result fades away, staying inert and cancelling whe
       assert.equal(exits[0].frames[0].width,'64px','the departing pill keeps its original slot initially');
       assert.equal(exits[0].frames.at(-1)?.width,'0px','the slot shrinks with the visible pill');
       assert.notEqual(exits[0].node.style.position,'absolute','neighbours follow the shrinking slot instead of jumping');
+      assert.equal(exits[0].node.style.transformOrigin,'left center','the departing pill shrinks towards its left edge');
       assert.equal(exits[0].node.nextElementSibling,f.document.querySelector('[data-bb-chat-ui-info-trigger="children"]'),'the exit stays in the original pill order');
       assert.equal(exits[0].node.getAttribute('aria-hidden'),'true');
       assert.equal(exits[0].node.hasAttribute('disabled'),true);
@@ -1435,4 +1436,44 @@ test("queued addition motion respects reduced motion and disabled queue settings
     assert.equal(flights,0);
     stop();f.dom.window.close();
   }
+});
+
+test("existing pills slide sideways when a new pill enters ahead of them", async () => {
+  const f=fixture();
+  f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings','{"showGoal":"상단 표시"}');
+  f.document.querySelector('[data-promptbox-shell] > .grid')!.getBoundingClientRect=()=>({width:230} as DOMRect);
+  const source=f.document.createElement('span');
+  const publish=(visible:boolean) => source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({insertions:0,deletions:0,files:0,presentation:{mode:'branch',visible,branch:'feature/chat',label:'feature/c…'}}));
+  publish(false); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  Object.defineProperty(f.dom.window.HTMLElement.prototype,'offsetWidth',{get(){return this.hasAttribute('data-bb-chat-ui-info-trigger') ? 64 : 0;}});
+  Object.defineProperty(f.dom.window.HTMLElement.prototype,'offsetLeft',{get(){let x=0; for(let n=this.previousElementSibling;n;n=n.previousElementSibling) if(!n.hidden) x+=72; return x;}});
+  const moves:{node:HTMLElement;frames:Keyframe[];cancelled:boolean}[]=[];
+  f.dom.window.HTMLElement.prototype.animate=function(frames){const record={node:this,frames:frames as Keyframe[],cancelled:false}; if(record.frames[0].translate) moves.push(record); return {cancel(){record.cancelled=true;}} as Animation;};
+  const stop=injectComposerInfo(f.document);
+  assert.equal(moves.length,0,'initial entry retains its droplet animation');
+  const child=f.document.querySelector('[data-bb-chat-ui-info-trigger="children"]');
+  publish(true); await f.tick();
+  const move=moves.find(record=>record.node===child)!;
+  assert.ok(move,'an existing pill is pushed without jumping');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-exiting]'),'overflow retirement must not block neighbours moving sideways');
+  assert.equal(move.frames[0].translate,'-72px 0');
+  assert.equal(move.frames.at(-1)?.translate,'0px 0');
+  stop(); assert.ok(move.cancelled,'unload cancels lateral motion'); f.dom.window.close();
+});
+
+test("ordinary disappearing pills keep an inert shrinking slot and clear it when they return", async () => {
+  const f=fixture(); f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings','{"showGoal":"상단 표시"}');
+  Object.defineProperty(f.dom.window.HTMLElement.prototype,'offsetWidth',{get(){return this.hasAttribute('data-bb-chat-ui-info-trigger') ? 64 : 0;}});
+  const exits:{node:HTMLElement;frames:Keyframe[];cancelled:boolean}[]=[];
+  f.dom.window.HTMLElement.prototype.animate=function(frames){const record={node:this,frames:frames as Keyframe[],cancelled:false}; if(this.hasAttribute('data-bb-chat-ui-info-exiting')) exits.push(record); return {cancel(){record.cancelled=true;}} as Animation;};
+  const stop=injectComposerInfo(f.document);
+  const goal=f.document.querySelector('section[aria-label="Goal"]')!; const parent=goal.parentNode!;
+  goal.remove(); await f.tick();
+  const exit=exits[0]; assert.ok(exit,'exit is not limited to a loading Diff');
+  assert.equal(exit.node.style.transformOrigin,'left center');
+  assert.equal(exit.node.getAttribute('aria-hidden'),'true');
+  assert.equal(exit.frames.at(-1)?.width,'0px');
+  parent.appendChild(goal); await f.tick();
+  assert.equal(exit.cancelled,true); assert.equal(exit.node.isConnected,false);
+  stop();f.dom.window.close();
 });

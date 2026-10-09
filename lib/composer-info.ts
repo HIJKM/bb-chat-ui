@@ -270,34 +270,37 @@ export function injectComposerInfo(document: Document): () => void {
     const entryAnimations = new Set<Animation>();
     const entering = new Set<HTMLElement>();
     const widthAnimations = new Map<HTMLElement, { animation:Animation; width:number }>();
-    let diffExit:{ node:HTMLElement; animation:Animation } | null = null;
-    const cancelDiffExit = () => {
-      const exit = diffExit; diffExit = null;
-      if (!exit) return;
-      exit.animation.cancel(); entryAnimations.delete(exit.animation); exit.node.remove();
+    const exits = new Map<InfoKind, { node:HTMLElement; animation:Animation }>();
+    const positions = new Map<HTMLElement, number>();
+    const moves = new Map<HTMLElement, Animation>();
+    const cancelExit = (key?:InfoKind) => {
+      for (const [kind, exit] of exits) {
+        if (key && kind !== key) continue;
+        exits.delete(kind); exit.animation.cancel(); entryAnimations.delete(exit.animation); exit.node.remove();
+      }
     };
-    const leaveLoadingDiff = (button:HTMLButtonElement) => {
+    const leave = (key:InfoKind, button:HTMLButtonElement) => {
       if (reduced() || button.hidden || bar.hidden || !button.animate) return;
-      cancelDiffExit();
+      cancelExit(key);
       const rect = button.getBoundingClientRect();
       const width = `${button.offsetWidth || rect.width}px`;
       const padding = view!.getComputedStyle(button);
       const ghost = button.cloneNode(true) as HTMLButtonElement;
       ghost.setAttribute(`${MARK}-exiting`, ""); ghost.setAttribute("aria-hidden", "true");
       ghost.removeAttribute("aria-busy"); ghost.removeAttribute("aria-controls"); ghost.disabled = true;
-      Object.assign(ghost.style, { width, minWidth:"0", boxSizing:"border-box", overflow:"hidden", pointerEvents:"none" });
+      Object.assign(ghost.style, { width, minWidth:"0", boxSizing:"border-box", overflow:"hidden", pointerEvents:"none", transformOrigin:"left center" });
       button.before(ghost);
       const animation = ghost.animate([
         { width, paddingLeft:padding.paddingLeft, paddingRight:padding.paddingRight, marginRight:"0px", opacity:1, transform:"none" },
-        { width:"0px", paddingLeft:"0px", paddingRight:"0px", marginRight:"-8px", opacity:0, transform:"translateY(4px) scale(.88)" },
+        { width:"0px", paddingLeft:"0px", paddingRight:"0px", marginRight:"-8px", opacity:0, transform:"scale(.88)" },
       ], { duration:200, easing:"cubic-bezier(.4,0,.2,1)", fill:"forwards" });
-      diffExit = { node:ghost, animation }; entryAnimations.add(animation);
+      exits.set(key, { node:ghost, animation }); entryAnimations.add(animation);
       const remove = () => {
         ghost.remove(); entryAnimations.delete(animation);
-        if (diffExit?.animation === animation) diffExit = null;
+        if (exits.get(key)?.animation === animation) exits.delete(key);
       };
       animation.oncancel = remove;
-      animation.onfinish = () => { remove(); fit(); };
+      animation.onfinish = () => { remove(); fit(false); };
     };
     let threadId = stack.querySelector(`[${SOURCE}]`)?.getAttribute(`${MARK}-thread`) ?? null;
     let active: InfoKind | "all" | null = null;
@@ -908,16 +911,36 @@ export function injectComposerInfo(document: Document): () => void {
       updateScrollHints();
     };
     orb.addEventListener("click", () => open("all", orb));
-    const fit = () => {
+    const fit = (motion = true) => {
+      const previouslyVisible = new Set([...buttons.values()].filter(button => !button.hidden && positions.has(button)));
       const widths = [...buttons].map(([key, button]) => {
         button.hidden = false;
         // Entry transforms change visual bounds, but must not change which pills fit.
         return { key, width:widthAnimations.get(button)?.width ?? (button.offsetWidth || button.getBoundingClientRect().width) };
       });
-      if (diffExit) widths.push({ key:"diff", width:diffExit.node.offsetWidth });
+      for (const [key, exit] of exits) if (!buttons.has(key)) widths.push({ key, width:exit.node.offsetWidth });
       const width = stack.getBoundingClientRect().width;
       const visible = new Set(fitComposerInfo(widths, width > 0 ? width - (bar.hasAttribute(`${MARK}-jump`) ? 40 : 0) : Number.POSITIVE_INFINITY));
-      for (const [key, button] of buttons) button.hidden = !visible.has(key);
+      for (const [key, button] of buttons) {
+        if (visible.has(key)) cancelExit(key);
+        else if (previouslyVisible.has(button) && !exits.has(key)) leave(key, button);
+        button.hidden = !visible.has(key);
+      }
+      const moving = [...buttons.values(), orb].filter(button => !button.hidden && !bar.hidden);
+      for (const button of moving) {
+        const before = positions.get(button), after = button.offsetLeft;
+        if (before !== undefined && before !== after && motion && !reduced() && !widthAnimations.size) {
+          const current = moves.has(button) ? parseFloat(view!.getComputedStyle(button).translate) || 0 : 0;
+          moves.get(button)?.cancel();
+          const animation = button.animate?.([{ translate:`${before + current - after}px 0` }, { translate:"0px 0" }], { duration:280, easing:"cubic-bezier(.22,1,.36,1)" });
+          if (animation) {
+            moves.set(button,animation); entryAnimations.add(animation);
+            animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); if (moves.get(button) === animation) moves.delete(button); };
+          }
+        }
+        positions.set(button,after);
+      }
+      for (const button of positions.keys()) if (!moving.includes(button as HTMLButtonElement)) { positions.delete(button); moves.get(button)?.cancel(); moves.delete(button); }
       if (bar.hidden) return;
       let entryDelay = 0;
       for (const button of [...Array.from(pills.children) as HTMLElement[], orb]) {
@@ -946,7 +969,7 @@ export function injectComposerInfo(document: Document): () => void {
         }
       }
     };
-    const resize = typeof view!.ResizeObserver === "function" ? new view!.ResizeObserver(fit) : null;
+    const resize = typeof view!.ResizeObserver === "function" ? new view!.ResizeObserver(() => fit()) : null;
     resize?.observe(stack);
     const sync = () => {
       const source = stack.querySelector(`[${SOURCE}]`);
@@ -954,7 +977,7 @@ export function injectComposerInfo(document: Document): () => void {
       const nextThreadId = source.getAttribute(`${MARK}-thread`);
       if (nextThreadId !== threadId) {
         cancelQueueMotion(); queueSnapshot = null;
-        cancelDiffExit();
+        cancelExit(); positions.clear(); moves.clear();
         close(false, true);
         for (const animation of entryAnimations) animation.cancel();
         entryAnimations.clear(); widthAnimations.clear(); entering.clear(); appeared.clear(); childStates.clear();
@@ -1025,7 +1048,7 @@ export function injectComposerInfo(document: Document): () => void {
       const diff = readDiff();
       const unavailableDiff = stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(`${HEAD_DIFF_MARK}-state`) === "unavailable";
       const exposed = exposedInfo(settings).filter(key => key !== "diff" || !unavailableDiff && diff?.presentation?.visible !== false);
-      if (request || !exposedInfo(settings).includes("diff") || !unavailableDiff && diff?.presentation?.visible !== false) cancelDiffExit();
+      if (request || reduced() || bar.hidden) cancelExit();
       const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
       const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
@@ -1034,13 +1057,14 @@ export function injectComposerInfo(document: Document): () => void {
         if (signature) pulse();
         signature = next;
         for (const [key, button] of buttons) if (!exposed.includes(key) || !showEmpty && !items.some(item => item.key === key)) {
-          if (key === "diff" && button.hasAttribute("aria-busy") && exposedInfo(settings).includes("diff") && (unavailableDiff || diff?.presentation?.visible === false)) leaveLoadingDiff(button);
+          leave(key, button);
           widthAnimations.get(button)?.animation.cancel();
           button.remove(); buttons.delete(key);
         }
         for (const key of exposed) {
           const item = items.find(item => item.key === key);
           if (!item && !showEmpty) continue;
+          cancelExit(key);
           let button = buttons.get(key);
           if (!button) {
             button = document.createElement("button");
@@ -1070,7 +1094,9 @@ export function injectComposerInfo(document: Document): () => void {
               button.setAttribute("aria-label", button.title);
             }
           }
-          pills.append(button);
+          const order = exposed.filter(kind => buttons.has(kind));
+          const nextButton = Array.from(pills.children).filter(node => !node.hasAttribute(`${MARK}-exiting`))[order.indexOf(key)];
+          if (nextButton !== button) pills.insertBefore(button, nextButton ?? null);
           if (key === "diff" && previousText !== button.textContent) {
             widthAnimations.get(button)?.animation.cancel(); widthAnimations.delete(button);
             if (wasVisible && previousWidth > 0 && !reduced()) widthChange = { button, from:previousWidth };
@@ -1091,7 +1117,7 @@ export function injectComposerInfo(document: Document): () => void {
         orb.setAttribute("aria-label", `전체 정보 ${count}개`);
         orb.title = `전체 정보 · ${count}개`;
       }
-      fit();
+      fit(!widthChange);
       const queue = items.find(item => item.key === "queue");
       const ids = new Set(queue ? Array.from(queue.node.querySelectorAll('[data-queued-message-id]')).map(row => row.getAttribute('data-queued-message-id')!) : []);
       const countText = queue ? queueCount(queue) || queue.trigger?.textContent?.trim() || "" : "0";
@@ -1115,6 +1141,7 @@ export function injectComposerInfo(document: Document): () => void {
               entryAnimations.delete(animation);
               if (widthAnimations.get(button)?.animation === animation) {
                 widthAnimations.delete(button); button.removeAttribute(`${MARK}-resizing`);
+                fit(false);
               }
             };
             const text = button.querySelector<HTMLElement>(":scope > span");
@@ -1127,7 +1154,7 @@ export function injectComposerInfo(document: Document): () => void {
     };
     return { sync, bar, close, editing, resize, cleanup() {
       cancelQueueMotion();
-      cancelDiffExit();
+      cancelExit(); positions.clear(); moves.clear();
       close(false, true);
       for (const animation of entryAnimations) animation.cancel();
       entryAnimations.clear();
