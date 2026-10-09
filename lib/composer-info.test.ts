@@ -1640,6 +1640,14 @@ test("Code Diff pill shows one commit meaning and keeps unpushed counts inside i
   assert.equal(popup.querySelector('[data-bb-chat-ui-info-diff-branch]')?.textContent, name);
   assert.equal(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')?.textContent, 'origin/main → HEAD · 8');
   assert.ok(popup.textContent?.includes('미푸시 · 3 commits'));
+  const overview = popup.querySelector('[data-bb-chat-ui-info-diff-overview]')!;
+  assert.ok(overview, 'branch, working tree, comparison and unpushed metadata share the top overview');
+  assert.equal(overview.querySelector('[data-bb-chat-ui-info-diff-branch]')?.textContent, name);
+  assert.equal(overview.querySelector('[data-bb-chat-ui-info-diff-meta="head"]')?.textContent, 'HEAD · +0 −0 · 0 files');
+  assert.equal(overview.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')?.textContent, 'origin/main → HEAD · 8');
+  assert.ok(overview.textContent?.includes('미푸시 · 3 commits'));
+  assert.ok(overview.compareDocumentPosition(popup.querySelector('hr')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.equal(overview.querySelector('[data-bb-chat-ui-info-diff-commit]'), null, 'individual commits stay below the overview divider');
   assert.ok(popup.textContent?.includes(`origin/${name} 대비`));
   assert.equal(popup.textContent?.includes('PR 후보는 아직 push하지 않은 로컬 커밋도 포함합니다.'), false);
   assert.equal(popup.textContent?.includes('원격 비교는 마지막으로 확인된 상태 기준입니다.'), false);
@@ -1649,6 +1657,8 @@ test("Code Diff pill shows one commit meaning and keeps unpushed counts inside i
   publish(); await f.tick();
   assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff]'), popup);
   assert.ok(popup.textContent?.includes('미푸시 · 0 commits'));
+  assert.equal(popup.querySelectorAll('[data-bb-chat-ui-info-diff-overview]').length, 1);
+  assert.ok(popup.querySelector('[data-bb-chat-ui-info-diff-overview]')?.textContent?.includes('미푸시 · 0 commits'), 'refresh keeps secondary metadata in the overview');
   assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent, 'feature/a… · 8');
   stop(); f.dom.window.close();
 });
@@ -1859,7 +1869,7 @@ test("Diff popover puts changed files before the commit heading and connected ra
   assert.ok(files.compareDocumentPosition(sectionSeparator) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
   assert.ok(sectionSeparator.compareDocumentPosition(commitHeading) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
   assert.ok(files.compareDocumentPosition(commitHeading) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
-  assert.ok(commitHeading.compareDocumentPosition(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')!.compareDocumentPosition(separator) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'the comparison summary is above the first divider');
   assert.ok(files.compareDocumentPosition(rail) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
   assert.equal(rail.querySelectorAll('[data-bb-chat-ui-info-diff-commit]').length, 3);
   assert.equal(rail.querySelectorAll('[data-bb-chat-ui-info-diff-graph] svg circle').length, 3);
@@ -1880,7 +1890,8 @@ test("Diff popover puts changed files before the commit heading and connected ra
   assert.equal(refreshedFiles.querySelectorAll('[data-bb-chat-ui-info-diff-file]').length, 6);
   assert.equal(popup.querySelectorAll('hr').length,2,'refresh replaces rather than duplicates both separators');
   assert.equal([...popup.querySelectorAll('h4')].filter(heading=>heading.textContent==='커밋').length,1);
-  assert.ok(refreshedFiles.compareDocumentPosition(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'open popover refresh keeps changed files above commits');
+  assert.ok(refreshedFiles.compareDocumentPosition(popup.querySelector('[data-bb-chat-ui-info-diff-commits]')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'open popover refresh keeps changed files above commit contents');
+  assert.ok(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')!.compareDocumentPosition(popup.querySelector('hr')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'refresh keeps the comparison summary in the overview');
   updated.detail.files = [];
   source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify(updated)); await f.tick();
   assert.equal(popup.querySelectorAll('hr').length,1,'commits alone need only the metadata divider');

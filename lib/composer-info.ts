@@ -709,6 +709,9 @@ export function injectComposerInfo(document: Document): () => void {
       try { detail = JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "{}").detail; } catch { /* Summary remains usable while data loads. */ }
       if (!detail || !Array.isArray(detail.files) || !Array.isArray(detail.commits)) return;
       container.replaceChildren();
+      const overview = document.createElement("div");
+      overview.setAttribute(`${MARK}-diff-overview`, "");
+      container.append(overview);
       const foldRows = (list: HTMLElement, kind: "files" | "commits") => {
         const rows = Array.from(list.querySelectorAll<HTMLElement>(`[${MARK}-diff-${kind === "files" ? "file" : "commit"}]`));
         if (rows.length <= 5) return;
@@ -740,7 +743,7 @@ export function injectComposerInfo(document: Document): () => void {
       icon?.setAttribute("aria-hidden", "true");
       const name = document.createElement("code"); name.textContent = detail.branch ?? "detached HEAD";
       if (icon) branch.append(icon);
-      branch.append(name); container.append(branch);
+      branch.append(name); overview.append(branch);
       const snapshot = readDiff();
       const basis = document.createElement("p");
       basis.setAttribute(`${MARK}-diff-meta`, "head");
@@ -749,7 +752,7 @@ export function injectComposerInfo(document: Document): () => void {
       const added = document.createElement("span"); added.className = "text-diff-added"; added.textContent = `+${snapshot?.insertions ?? 0}`;
       const removed = document.createElement("span"); removed.className = "text-diff-removed"; removed.textContent = `−${snapshot?.deletions ?? 0}`;
       basis.append("HEAD · ", added, " ", removed, ` · ${detail.files.length} files`);
-      container.append(basis);
+      overview.append(basis);
       if (detail.files.length || detail.commitKind || detail.commits.length) container.append(document.createElement("hr"));
       const files = document.createElement("div"); files.setAttribute(`${MARK}-diff-files`, "");
       if (detail.files.length) {
@@ -793,7 +796,7 @@ export function injectComposerInfo(document: Document): () => void {
           label.title = `원격 기준 없음 · ${detail.baseRef ?? "origin"}`;
           label.setAttribute("aria-label",label.title);
         }
-        container.append(label);
+        overview.append(label);
         const commits = document.createElement("div"); commits.setAttribute(`${MARK}-diff-commits`, "");
         for (const commit of [...detail.commits].sort((a,b) => (b.authoredAt ?? 0) - (a.authoredAt ?? 0))) {
           const row = document.createElement("div"); row.setAttribute(`${MARK}-diff-commit`, "");
@@ -810,7 +813,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (detail.commitKind === "pr" && detail.unpushedCount != null) {
         const push = document.createElement("p");
         push.textContent = `미푸시 · ${detail.unpushedCount} commits · ${detail.unpushedRef ?? "기준 없음"} 대비`;
-        container.append(push);
+        overview.append(push);
       }
     };
     const decorate = (button: HTMLElement, item: InfoItem, summary: boolean) => {
