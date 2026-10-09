@@ -1477,3 +1477,23 @@ test("ordinary disappearing pills keep an inert shrinking slot and clear it when
   assert.equal(exit.cancelled,true); assert.equal(exit.node.isConnected,false);
   stop();f.dom.window.close();
 });
+
+test("queued arrivals survive row-first and count-first rendering without missing or repeating flights", async () => {
+  const f=fixture(); f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings','{"showQueue":"상단 표시"}');
+  const queue=f.document.querySelector('section[aria-label="Queued messages"]')!;
+  queue.querySelector('header button')!.innerHTML='<span data-queued-messages-count>2</span>';
+  const count=queue.querySelector('[data-queued-messages-count]')!; const rows=queue.querySelector('#queue')!;
+  const add=(id:string)=>{const row=f.document.createElement('div');row.setAttribute('data-queued-message-id',id);rows.append(row);return row;};
+  add('a'); const b=add('b');
+  const drops:HTMLElement[]=[];
+  f.dom.window.HTMLElement.prototype.animate=function(){if(this.hasAttribute('data-bb-chat-ui-info-queue-drop')) drops.push(this);return {cancel(){}} as Animation;};
+  const stop=injectComposerInfo(f.document);
+  add('c'); await f.tick(); assert.equal(drops.length,1,'row-first arrivals are immediate');
+  count.textContent='3'; await f.tick(); assert.equal(drops.length,1,'the later counter does not repeat the same arrival');
+  count.textContent='4'; await f.tick(); assert.equal(drops.length,2);
+  add('d'); await f.tick(); assert.equal(drops.length,2,'the later row does not repeat the count-first arrival');
+  b.remove(); add('e'); count.textContent='3'; await f.tick(); assert.equal(drops.length,3,'an arrival concurrent with dispatch still flies');
+  assert.equal(drops.at(-1)?.style.position,'fixed','flight escapes composer clipping and stacking');
+  assert.equal(drops.at(-1)?.parentNode,f.document.body);
+  stop();assert.equal(f.document.querySelector('[data-bb-chat-ui-info-queue-drop]'),null);f.dom.window.close();
+});

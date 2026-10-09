@@ -70,7 +70,7 @@ export const composerInfoCss = `
 [${MARK}-diff-current] { display:block; animation:bb-info-count-in 180ms cubic-bezier(.2,.8,.2,1); }
 [${MARK}-diff-previous] { position:absolute; inset:0; pointer-events:none; animation:bb-info-count-out 180ms cubic-bezier(.2,.8,.2,1) forwards; }
 [${MARK}-diff-previous]::before { content:attr(${MARK}-diff-value); }
-[${MARK}-queue-drop] { position:absolute; width:12px; height:12px; border-radius:50%; pointer-events:none; z-index:54; background:color-mix(in oklab,var(--bb-chat-ui-info-face) 80%,var(--foreground) 20%); backdrop-filter:blur(14px) saturate(1.25); box-shadow:inset 0 1px 3px var(--bb-chat-ui-info-edge),0 2px 8px -2px var(--bb-chat-ui-info-shadow); }
+[${MARK}-queue-drop] { position:fixed; width:12px; height:12px; border-radius:50%; pointer-events:none; z-index:54; background:color-mix(in oklab,var(--bb-chat-ui-info-face) 60%,var(--foreground) 40%); backdrop-filter:blur(14px) saturate(1.25); box-shadow:inset 0 1px 3px var(--bb-chat-ui-info-edge),0 2px 8px -2px var(--bb-chat-ui-info-shadow); }
 [${MARK}-all] { position:absolute; right:0; width:32px; padding:0; }
 [${MARK}-bar][${MARK}-jump] { padding-right:80px; }
 [${MARK}-bar][${MARK}-jump] [${MARK}-all] { right:40px; }
@@ -309,7 +309,7 @@ export function injectComposerInfo(document: Document): () => void {
     let lastTrigger: HTMLElement | null = null;
     let signature = "";
     let childStates = new Map<string, ChildState>();
-    let queueSnapshot:{ count:number; ids:Set<string> } | null = null;
+    let queueSnapshot:{ count:number; ids:Set<string>; pendingRows:number; pendingCount:number } | null = null;
     const queueAnimations = new Set<Animation>();
     const queueDrops = new Set<HTMLElement>();
     const cancelQueueMotion = () => {
@@ -520,18 +520,21 @@ export function injectComposerInfo(document: Document): () => void {
       const origin = shell?.querySelector('[data-promptbox-submit-action][type="submit"]')
         ?? shell?.querySelector('[data-follow-up-composer], textarea');
       if (!origin) return;
-      const start = origin.getBoundingClientRect(), end = target.getBoundingClientRect(), anchor = bar.getBoundingClientRect();
+      const start = origin.getBoundingClientRect(), end = target.getBoundingClientRect();
       const x = start.right - 12, y = start.top + start.height / 2;
       const dx = end.left + end.width / 2 - x, dy = end.top + end.height / 2 - y;
       const angle = Math.atan2(dy, dx) * 180 / Math.PI;
       const drop = document.createElement("span");
       drop.setAttribute(`${MARK}-queue-drop`, ""); drop.setAttribute("aria-hidden", "true");
-      drop.style.left = `${x - anchor.left - 6}px`; drop.style.top = `${y - anchor.top - 6}px`;
-      bar.append(drop); queueDrops.add(drop);
+      drop.style.position = "fixed"; drop.style.left = `${x - 6}px`; drop.style.top = `${y - 6}px`;
+      const face = view!.getComputedStyle(stack);
+      for (const variable of ["--bb-chat-ui-info-face", "--bb-chat-ui-info-edge", "--bb-chat-ui-info-shadow", "--foreground"]) drop.style.setProperty(variable, face.getPropertyValue(variable));
+      document.body.append(drop); queueDrops.add(drop);
       const flight = drop.animate([
         { transform:"scale(.35)", opacity:0, offset:0 },
         { transform:"translateY(-4px) scale(.9,1.1)", opacity:1, offset:.18 },
         { transform:`translate(${dx * .5}px,${dy * .5 - 14}px) rotate(${angle}deg) scale(1.45,.7)`, opacity:1, offset:.55 },
+        { transform:`translate(${dx * .9}px,${dy * .9}px) scale(.85)`, opacity:1, offset:.86 },
         { transform:`translate(${dx}px,${dy}px) scale(.2)`, opacity:0, offset:1 },
       ], { duration:300, delay, easing:"cubic-bezier(.2,.8,.2,1)", fill:"both" });
       queueAnimations.add(flight);
@@ -539,7 +542,7 @@ export function injectComposerInfo(document: Document): () => void {
       flight.oncancel = remove;
       flight.onfinish = () => {
         remove();
-        if (!target.isConnected || bar.hidden || reduced()) return;
+        if (!target.isConnected || target.hidden || bar.hidden || reduced()) return;
         const absorb = target.animate([
           { transform:"scale(1.02,.96)" }, { transform:"scale(1.08)", offset:.45 }, { transform:"none" },
         ], { duration:150, easing:"cubic-bezier(.36,0,.18,1)" });
@@ -1121,12 +1124,20 @@ export function injectComposerInfo(document: Document): () => void {
       const queue = items.find(item => item.key === "queue");
       const ids = new Set(queue ? Array.from(queue.node.querySelectorAll('[data-queued-message-id]')).map(row => row.getAttribute('data-queued-message-id')!) : []);
       const countText = queue ? queueCount(queue) || queue.trigger?.textContent?.trim() || "" : "0";
-      const count = /^\d+$/.test(countText) ? Number(countText) : ids.size;
       const previousQueue = queueSnapshot;
-      const added = !previousQueue ? 0 : count > previousQueue.count ? count - previousQueue.count
-        : count === previousQueue.count && ids.size > 0 && ids.size === previousQueue.ids.size
-          ? [...ids].filter(id => !previousQueue.ids.has(id)).length : 0;
-      queueSnapshot = { count, ids };
+      const count = /^\d+$/.test(countText) ? Number(countText) : previousQueue?.count ?? ids.size;
+      const newIds = previousQueue?.ids.size ? [...ids].filter(id => !previousQueue.ids.has(id)).length : 0;
+      const growth = previousQueue ? Math.max(0,count - previousQueue.count) : 0;
+      const rowCredit = Math.min(previousQueue?.pendingRows ?? 0,newIds);
+      const countCredit = Math.min(previousQueue?.pendingCount ?? 0,growth);
+      const rowArrivals = newIds - rowCredit, countArrivals = growth - countCredit;
+      const added = Math.max(rowArrivals,countArrivals);
+      queueSnapshot = { count, ids,
+        // Match the later counterpart without retaining credit once rows and
+        // header agree, or after the collapsed list is first hydrated.
+        pendingRows:Math.min(Math.max(0,count - ids.size),Math.max(0,(previousQueue?.pendingRows ?? 0) - rowCredit) + Math.max(0,countArrivals - rowArrivals)),
+        pendingCount:Math.min(Math.max(0,ids.size - count),Math.max(0,(previousQueue?.pendingCount ?? 0) - countCredit) + Math.max(0,rowArrivals - countArrivals)),
+      };
       if (!listed.includes("queue") || bar.hidden) cancelQueueMotion();
       else for (let index = 0; index < added; index++) queueAddition(index * 45);
       if (widthChange && !widthChange.button.hidden) {
