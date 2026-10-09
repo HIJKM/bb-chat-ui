@@ -280,21 +280,23 @@ test("catalog entries retain their family icon with or without current informati
   stop(); f.dom.window.close();
 });
 
-test("queue pill uses its Clock family icon instead of the hidden native disclosure glyph", async () => {
+test("queue pill and catalog use the message-delay family icon instead of the hidden native disclosure glyph", async () => {
   const f = fixture();
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
   source.setAttribute('data-bb-chat-ui-info-settings', '{"showQueue":"상단 표시"}');
-  source.insertAdjacentHTML('beforeend', '<span data-bb-chat-ui-info-icon="queue"><svg data-icon="Clock"><path d="M12 6v6h4" /></svg></span>');
+  source.insertAdjacentHTML('beforeend', '<span data-bb-chat-ui-info-icon="queue"><span data-icon-root data-icon="bb-chat-ui-queue"><svg viewBox="0 0 24 24"><path d="M18 6L19 5" /></svg></span></span>');
   const toggle = f.document.querySelector('section[aria-label="Queued messages"] header button')!;
   toggle.insertAdjacentHTML('afterbegin', '<svg data-icon="ChevronDown" style="display:none"><path d="m6 9 6 6 6-6" /></svg>');
   const stop = injectComposerInfo(f.document);
   const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]')!;
-  assert.ok(pill.querySelector('[data-icon="Clock"]'));
+  assert.ok(pill.querySelector('[data-icon="bb-chat-ui-queue"]'));
   assert.equal(pill.querySelector('[data-icon="ChevronDown"]'), null);
-  assert.equal(f.dom.window.getComputedStyle(pill.querySelector('svg')!).display, 'inline');
+  assert.equal(f.dom.window.getComputedStyle(pill.querySelector('[data-icon-root]')!).width, '16px');
+  f.click('[data-bb-chat-ui-info-all]');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="queue"] [data-icon="bb-chat-ui-queue"]'));
   f.click('[data-bb-chat-ui-info-trigger="queue"]'); await f.tick();
   assert.ok(f.document.querySelector('section[aria-label="Queued messages"][data-bb-chat-ui-info-open]'));
-  assert.ok(pill.querySelector('[data-icon="Clock"]'), 'expansion keeps the queue family icon');
+  assert.ok(pill.querySelector('[data-icon="bb-chat-ui-queue"]'), 'expansion keeps the queue family icon');
   stop(); f.dom.window.close();
 });
 

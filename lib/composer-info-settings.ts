@@ -6,7 +6,7 @@ export const infoKinds = [
   { key: "todos", icon: "ListTodo", setting: "showTodos", label: "할 일", default: true },
   { key: "workflow", icon: "Workflow", setting: "showWorkflow", label: "Workflow", default: true },
   { key: "background", icon: "Terminal", setting: "showBackground", label: "백그라운드 작업", default: true },
-  { key: "queue", icon: "Clock", setting: "showQueue", label: "대기 메시지", default: true },
+  { key: "queue", icon: "bb-chat-ui-queue", setting: "showQueue", label: "대기 메시지", default: true },
   { key: "annotations", icon: "MessageSquarePlus", setting: "showAnnotations", label: "Agentation", default: true },
   { key: "pullRequest", icon: "GitPullRequest", setting: "showPullRequest", label: "Pull request", default: true },
   { key: "parent", icon: "MessageSquare", setting: "showParent", label: "Parent", default: true },
