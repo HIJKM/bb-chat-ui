@@ -86,7 +86,33 @@ test("missing remote refs with SDK zero counts stay unknown, while a new branch 
   };
   const unknown = await readWorkspaceDiff(sdk, "env_test", undefined, new AbortController().signal);
   assert.equal(unknown?.detail.unpushedCount, null);
-  assert.equal(unknown?.presentation.visible, true, "unknown is not clean zero");
+  assert.equal(unknown?.detail.remoteBaseMissing, true);
+  assert.equal(unknown?.presentation.visible, false, "unknown remains unknown but does not expose clean main");
+});
+
+test("clean main/master with missing remote refs hide while dirty files remain visible", () => {
+  for (const branch of ["main", "master"]) {
+    const w = workspace(branch, 0, null);
+    assert.equal(diffPresentation(w, { main:true, count:null }).visible, false);
+    w.workingTree = { insertions:1, deletions:0, files:[{ path:"draft.ts", status:"M", insertions:1, deletions:0 }] };
+    assert.equal(diffPresentation(w, { main:true, count:null }).visible, true);
+  }
+});
+
+test("missing origin base never falls back to local merge-base counts", async () => {
+  const f = reader();
+  const sdk = { ...f.sdk, async status(args:{ mergeBaseBranch?:string }) {
+    f.calls.push(args.mergeBaseBranch ?? "HEAD");
+    const w = workspace("feature/chat", 27);
+    if (args.mergeBaseBranch) { w.mergeBase.baseRef = null; w.mergeBase.mergeBaseBranch = args.mergeBaseBranch; }
+    return { outcome:"available", workspace:w };
+  } };
+  const result = await readWorkspaceDiff(sdk,"env_test",undefined,new AbortController().signal);
+  assert.equal(result?.detail.commitCount,null);
+  assert.equal(result?.detail.remoteBaseMissing,true);
+  assert.deepEqual(result?.detail.commits,[]);
+  assert.equal(result?.presentation.visible,true,"feature branch name is still available");
+  assert.deepEqual(f.calls,["HEAD","refs/remotes/origin/main","refs/remotes/origin/feature/chat"]);
 });
 
 test("line stats win when dirty; only the pill truncates branch names to 10 characters", () => {

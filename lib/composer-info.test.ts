@@ -1095,6 +1095,25 @@ test("clean main hides the pill even with empty icons enabled but remains in the
   stop(); f.dom.window.close();
 });
 
+test("missing remote base is visible in the Diff catalog popover while clean main stays hidden", async () => {
+  const f = fixture();
+  f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings','{"showEmptyIcons":true}');
+  const source = f.document.createElement('span');
+  source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({ insertions:0,deletions:0,files:0,
+    presentation:{ mode:'unpushed',visible:false,branch:'main',label:'main' },
+    detail:{ branch:'main',basis:'HEAD 대비 미커밋 변경',baseRef:'origin/main',files:[],commits:[],commitKind:'unpushed',commitCount:null,remoteBaseMissing:true },
+  }));
+  f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  const stop = injectComposerInfo(f.document);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null);
+  f.click('[data-bb-chat-ui-info-all]'); f.click('[data-bb-chat-ui-info-choice="diff"]');
+  const meta = f.document.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')!;
+  assert.equal(meta.textContent,'원격 기준 없음 · origin/main');
+  assert.equal(meta.querySelector('[data-bb-chat-ui-info-commit-count]'),null,"unknown is not zero");
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff-branch]')?.textContent,'main');
+  stop(); f.dom.window.close();
+});
+
 test("dirty Code Diff keeps HEAD stats and PR counts while hiding unknown unpushed information", () => {
   const f = fixture();
   const source = f.document.createElement('span');

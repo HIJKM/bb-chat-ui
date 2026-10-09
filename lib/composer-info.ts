@@ -645,6 +645,12 @@ export function injectComposerInfo(document: Document): () => void {
           count.append(commitIcon(document), "—");
         }
         label.append(comparison, " · ", count);
+        if (detail.remoteBaseMissing) {
+          comparison.textContent = detail.baseRef ?? "origin";
+          label.replaceChildren("원격 기준 없음 · ", comparison);
+          label.title = `원격 기준 없음 · ${detail.baseRef ?? "origin"}`;
+          label.setAttribute("aria-label",label.title);
+        }
         container.append(label);
         const commits = document.createElement("div"); commits.setAttribute(`${MARK}-diff-commits`, "");
         for (const commit of [...detail.commits].sort((a,b) => (b.authoredAt ?? 0) - (a.authoredAt ?? 0))) {

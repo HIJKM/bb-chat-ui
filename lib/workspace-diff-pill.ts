@@ -74,6 +74,7 @@ export interface DetailedWorkspace extends HeadWorkspace {
 export interface HeadDiffDetail {
   branch:string | null; basis:string; baseRef:string | null; files:readonly DiffFile[]; commits:readonly DiffCommit[];
   commitKind?:"pr" | "unpushed"; commitCount?:number | null; unpushedCount?:number | null; unpushedRef?:string | null;
+  remoteBaseMissing?:boolean;
 }
 
 function shortBranch(name: string): string {

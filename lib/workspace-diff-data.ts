@@ -9,7 +9,7 @@ interface Reader {
   status(args:{ environmentId:string; signal:AbortSignal; mergeBaseBranch?:string }):Promise<{ outcome:string; workspace?:Workspace; reason?:string; failure?:{ code:string } }>;
   pullRequest(args:{ environmentId:string; signal:AbortSignal }):Promise<{ outcome:string; pullRequest?:{ state:string; baseRefName:string; headRefName:string } }>;
 }
-interface Comparison { ref:string | null; count:number | null; commits:readonly DiffCommit[]; }
+interface Comparison { ref:string | null; count:number | null; commits:readonly DiffCommit[]; remoteBaseMissing:boolean; }
 export interface DiffPresentation {
   mode:"working" | "unpushed" | "branch" | "detached";
   visible:boolean;
@@ -39,7 +39,7 @@ export function diffPresentation(workspace:Workspace, info:{ main:boolean; count
   const label = dirty ? `+${insertions} −${deletions} · ${files} ${files === 1 ? "file" : "files"}`
     : info.main && info.count !== null && info.count > 0 ? `↑${info.count}`
     : name ? `${branchLabel}${!info.main && info.count !== null && info.count > 0 ? ` · ${info.count} commits` : ""}` : "detached HEAD";
-  return { mode, visible:dirty || !!name && (!info.main || info.count === null || info.count > 0), branch:name, branchLabel, label };
+  return { mode, visible:dirty || !!name && (!info.main || info.count !== null && info.count > 0), branch:name, branchLabel, label };
 }
 
 // SDK missing-ref results can report zero. Only a resolved ref and the same HEAD
@@ -50,7 +50,7 @@ function comparison(result:{ workspace?:Workspace } | undefined, ref:string, wor
   const sameHead = other?.branch.currentBranch === workspace.branch.currentBranch
     && (!workspace.checkout?.headSha || other.checkout?.headSha === workspace.checkout.headSha);
   const resolved = sameHead && merge?.baseRef && merge.mergeBaseBranch === ref && Number.isSafeInteger(merge.aheadCount) && merge.aheadCount! >= 0;
-  return { ref:ref.replace(/^refs\/remotes\//, ""), count:resolved ? merge!.aheadCount! : null, commits:resolved ? merge!.commits : [] };
+  return { ref:ref.replace(/^refs\/remotes\//, ""), count:resolved ? merge!.aheadCount! : null, commits:resolved ? merge!.commits : [], remoteBaseMissing:sameHead && !merge?.baseRef };
 }
 
 export async function readWorkspaceDiff(sdk:Reader, environmentId:string, baseBranch:string | undefined, signal:AbortSignal) {
@@ -81,7 +81,7 @@ export async function readWorkspaceDiff(sdk:Reader, environmentId:string, baseBr
     || result.value.workspace.branch.currentBranch !== workspace.branch.currentBranch
     || !!workspace.checkout?.headSha && result.value.workspace.checkout?.headSha !== workspace.checkout.headSha)) return null;
   const compare = (ref:string | null):Comparison => {
-    if (!ref) return { ref:null, count:null, commits:[] };
+    if (!ref) return { ref:null, count:null, commits:[], remoteBaseMissing:false };
     const result = results[refs.indexOf(ref)];
     return comparison(result?.status === "fulfilled" ? result.value : undefined, ref, workspace);
   };
@@ -94,6 +94,7 @@ export async function readWorkspaceDiff(sdk:Reader, environmentId:string, baseBr
     detail:{
       ...headDiffDetail(workspace), branch:name, baseRef:selected.ref, commits:selected.commits,
       commitKind:main ? "unpushed" as const : "pr" as const, commitCount:selected.count,
+      remoteBaseMissing:selected.remoteBaseMissing,
       unpushedRef:unpushed.ref, unpushedCount:unpushed.count,
     },
   };
