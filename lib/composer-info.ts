@@ -424,12 +424,16 @@ export function injectComposerInfo(document: Document): () => void {
       const list = item.node.querySelector("ul");
       return list ? String(list.children.length) : item.node.querySelector(".tabular-nums")?.textContent?.trim() ?? "!";
     };
+    const queueCount = (item: InfoItem) => (item.node.querySelector(
+      'header [data-queued-messages-count] > span:not([data-queued-messages-previous-count])',
+    ) ?? item.node.querySelector('header span.tabular-nums:not([data-queued-messages-count])'))?.textContent?.trim() ?? "";
     const catalog = () => infoKinds.filter(kind => listed.includes(kind.key)).flatMap<InfoItem | { key:InfoKind; label:string }>(kind => {
       const available = items.filter(item => item.key === kind.key);
       return available.length ? available : [{ key:kind.key, label:kind.label }];
     });
     const describe = (item: InfoItem) => {
       if (item.key === "annotations") return `${annotationCount(item)} staged`;
+      if (item.key === "queue" && queueCount(item)) return `${queueCount(item)} queued`;
       if (item.key === "diff" && readDiff()?.presentation) return readDiff()!.presentation!.label;
       const text = item.key === "diff" ? item.trigger?.textContent : item.trigger?.getAttribute("aria-label") ?? item.trigger?.textContent;
       return text?.trim().replace(/\s+/g, " ").slice(0, 200) || item.node.getAttribute("aria-label") || item.label;
@@ -518,7 +522,7 @@ export function injectComposerInfo(document: Document): () => void {
       let childCount = 0;
       text.textContent = summary && item.key === "diff" ? describe(item) : item.label;
       if (summary && item.key === "todos") text.textContent = item.trigger?.textContent?.trim().replace(/\s+/g, " ").slice(0, 30) || item.label;
-      if (summary && item.key === "queue") text.textContent = item.node.querySelector('span.tabular-nums')?.textContent?.trim() || item.label;
+      if (summary && item.key === "queue") text.textContent = queueCount(item) || item.label;
       if (summary && item.key === "annotations") text.textContent = annotationCount(item);
       const presentation = item.key === "diff" ? readDiff()?.presentation : null;
       const icon = (summary && presentation && presentation.mode !== "working" ? emptyIcon("diff") : null)

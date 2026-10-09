@@ -111,6 +111,44 @@ test("managed queue uses plain list rows and leaves standalone message bubbles i
   } finally { stopInfo(); stopQueue(); f.cleanup(); }
 });
 
+test("queue count changes update the same pill while the native toggle label stays fixed", async () => {
+  const f = fixture();
+  const stop = injectComposerInfo(f.document);
+  try {
+    const pill = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-trigger="queue"]')!;
+    const count = f.toggle.querySelector('.tabular-nums')!;
+    assert.equal(pill.textContent, '2');
+    for (const value of ['3', '1']) {
+      count.textContent = value; await f.tick();
+      assert.equal(pill.textContent, value, 'add/send/delete are reflected without another user interaction');
+      assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]'), pill);
+      assert.ok(pill.getAttribute('aria-label')!.includes(value), 'accessible count stays current');
+      assert.equal(f.toggle.getAttribute('aria-label'), 'Toggle queued messages');
+    }
+    f.click('[data-bb-chat-ui-info-trigger="queue"]'); await f.tick();
+    count.textContent = '4'; await f.tick();
+    assert.equal(pill.textContent, '4', 'an open popover also receives count updates');
+    assert.ok(f.queue.hasAttribute('data-bb-chat-ui-info-open'));
+  } finally { stop(); f.cleanup(); }
+});
+
+test("queue count reads the current value without the hidden native roll-out number", async () => {
+  const f = fixture();
+  const count = f.toggle.querySelector('.tabular-nums')!;
+  count.setAttribute('data-queued-messages-count', '');
+  count.innerHTML = '<span aria-hidden="true" data-queued-messages-previous-count>2</span><span>3</span>';
+  f.toggle.insertAdjacentHTML('afterbegin', '<span class="tabular-nums">· 30s</span>');
+  const stop = injectComposerInfo(f.document);
+  try {
+    const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]')!;
+    assert.equal(pill.textContent, '3');
+    count.lastElementChild!.textContent = '4'; await f.tick();
+    assert.equal(pill.textContent, '4');
+    count.firstElementChild!.remove(); await f.tick();
+    assert.equal(pill.textContent, '4', 'finishing the native animation never changes the displayed count');
+  } finally { stop(); f.cleanup(); }
+});
+
 test("native queue editing protects the draft and releasing it restores every information control", async () => {
   const f = fixture();
   const stopQueue = injectQueuedMessages(f.document);
