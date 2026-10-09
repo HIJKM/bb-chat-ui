@@ -66,6 +66,10 @@ export const composerInfoCss = `
 [${MARK}-diff-loading] span { animation:bb-info-loading 900ms ease-in-out infinite; }
 [${MARK}-diff-loading] span:nth-child(2) { animation-delay:120ms; }
 [${MARK}-diff-loading] span:nth-child(3) { animation-delay:240ms; }
+[${MARK}-trigger="diff"] [${MARK}-diff-number] { display:inline-block; position:relative; height:18px; line-height:18px; overflow:hidden; vertical-align:bottom; font-variant-numeric:tabular-nums; }
+[${MARK}-diff-current] { display:block; animation:bb-info-count-in 180ms cubic-bezier(.2,.8,.2,1); }
+[${MARK}-diff-previous] { position:absolute; inset:0; pointer-events:none; animation:bb-info-count-out 180ms cubic-bezier(.2,.8,.2,1) forwards; }
+[${MARK}-diff-previous]::before { content:attr(${MARK}-diff-value); }
 [${MARK}-all] { position:absolute; right:0; width:32px; padding:0; }
 [${MARK}-bar][${MARK}-jump] { padding-right:80px; }
 [${MARK}-bar][${MARK}-jump] [${MARK}-all] { right:40px; }
@@ -183,7 +187,10 @@ ${DETAIL}.agentation-staging-shell li::before { content:""; flex-shrink:0; width
 @keyframes bb-info-droplet { 0% { transform:translateY(8px) scale(.82,.72); } 35% { transform:translateY(-4px) scale(.94,1.16); } 65% { transform:translateY(0) scale(1.1,.94); } 82% { transform:translateY(-1px) scale(.985,1.015); } 100% { transform:none; } }
 @keyframes bb-info-breathe { 50% { opacity:.4; } }
 @keyframes bb-info-loading { 0%,80%,100% { opacity:.35; transform:none; } 40% { opacity:1; transform:translateY(-2px); } }
+@keyframes bb-info-count-in { from { translate:0 100%; opacity:0; } to { translate:0 0; opacity:1; } }
+@keyframes bb-info-count-out { from { translate:0 0; opacity:1; } to { translate:0 -100%; opacity:0; } }
 @media (prefers-reduced-motion:reduce) { [${MARK}-bar] *, [${MARK}-stack] [${UNIT}][${OPEN}] { animation:none !important; transition:none !important; } }
+@media (prefers-reduced-motion:reduce) { [${MARK}-diff-previous] { display:none; } }
 `;
 
 interface InfoItem { key: InfoKind; node: HTMLElement; trigger: HTMLElement | null; label: string; }
@@ -436,10 +443,16 @@ export function injectComposerInfo(document: Document): () => void {
       const source = stack.querySelector(`[${HEAD_DIFF_MARK}]`);
       return !!source && source.getAttribute(`${HEAD_DIFF_MARK}-state`) !== "unavailable" && !readDiff();
     };
+    const diffNumber = (value:string, key:string) => {
+      const number = document.createElement("span");
+      number.setAttribute(`${MARK}-diff-number`, key); number.setAttribute(`${MARK}-diff-value`, value);
+      number.textContent = value;
+      return number;
+    };
     const commitCount = (count:number) => {
       const chip = document.createElement("span"); chip.setAttribute(`${MARK}-commit-count`, "");
       chip.setAttribute("role", "img"); chip.setAttribute("aria-label", `커밋 ${count}개`);
-      chip.append(commitIcon(document), String(count));
+      chip.append(commitIcon(document), diffNumber(String(count), "commits"));
       return chip;
     };
     const annotationCount = (item: InfoItem) => {
@@ -579,6 +592,9 @@ export function injectComposerInfo(document: Document): () => void {
       }
     };
     const decorate = (button: HTMLElement, item: InfoItem, summary: boolean) => {
+      const previousNumbers = new Map(Array.from(button.querySelectorAll(`[${MARK}-diff-number]`))
+        .map(number => [number.getAttribute(`${MARK}-diff-number`), number.getAttribute(`${MARK}-diff-value`)]));
+      const roll = summary && item.key === "diff" && button.isConnected && !button.hidden && !bar.hidden && appeared.has("diff") && !reduced();
       button.removeAttribute("aria-busy");
       if (summary && item.key === "diff" && awaitingDiff()) {
         const icon = emptyIcon("diff")?.cloneNode(true) as Element | undefined;
@@ -661,12 +677,17 @@ export function injectComposerInfo(document: Document): () => void {
             text.textContent = presentation.branchLabel;
             text.append(" · ", commitCount(count));
           }
+          const ahead = text.textContent?.match(/^↑(\d+)$/);
+          if (ahead) text.replaceChildren("↑", diffNumber(ahead[1], "commits"));
           const parts = text.textContent?.match(/^(\+\d+)\s*([-−]\d+)\s*·?\s*(.*)$/);
           if (parts) {
             text.replaceChildren();
-            const added = document.createElement("span"); added.className = "text-diff-added"; added.textContent = parts[1];
-            const removed = document.createElement("span"); removed.className = "text-diff-removed"; removed.textContent = parts[2];
-            text.append(added, " ", removed, ` · ${parts[3]}`);
+            const added = document.createElement("span"); added.className = "text-diff-added"; added.append("+", diffNumber(parts[1].slice(1), "added"));
+            const removed = document.createElement("span"); removed.className = "text-diff-removed"; removed.append(parts[2][0], diffNumber(parts[2].slice(1), "removed"));
+            const files = parts[3].match(/^(\d+)(\s+files?)$/);
+            text.append(added, " ", removed, " · ");
+            if (files) text.append(diffNumber(files[1], "files"), files[2]);
+            else text.append(parts[3]);
           }
         }
         button.append(text);
@@ -682,6 +703,16 @@ export function injectComposerInfo(document: Document): () => void {
       }
       button.title = `${item.label} · ${describe(item)}${childCount ? ` · ${childCount}개` : ""}${presentation?.branch ? ` · ${presentation.branch}` : item.key === "diff" && item.trigger?.title ? ` · ${item.trigger.title}` : ""}`;
       button.setAttribute("aria-label", button.title);
+      if (roll) for (const number of Array.from(button.querySelectorAll(`[${MARK}-diff-number]`))) {
+        const before = previousNumbers.get(number.getAttribute(`${MARK}-diff-number`));
+        const value = number.getAttribute(`${MARK}-diff-value`)!;
+        if (before == null || before === value) continue;
+        const previous = document.createElement("span"); previous.setAttribute(`${MARK}-diff-value`, before);
+        previous.setAttribute(`${MARK}-diff-previous`, ""); previous.setAttribute("aria-hidden", "true");
+        const current = document.createElement("span"); current.textContent = value; current.setAttribute(`${MARK}-diff-current`, "");
+        current.addEventListener("animationend", () => number.replaceChildren(value), { once:true });
+        number.replaceChildren(current, previous);
+      }
     };
     const close = (restoreFocus = false, force = false) => {
       if (!force && editing()) return false;

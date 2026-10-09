@@ -1248,3 +1248,59 @@ test("Diff lists with five or fewer rows have no collapse control", () => {
     assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-diff-commit]:not([hidden])').length,5);
   } finally { stop(); f.dom.window.close(); }
 });
+
+test("Diff numeric updates roll only changed values while exposing the new count immediately", async () => {
+  for (const reduced of [false,true]) {
+    const f = fixture();
+    Object.defineProperty(f.dom.window,'matchMedia',{ value:() => ({ matches:reduced }) });
+    const stop = injectComposerInfo(f.document);
+    const pill = () => f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!;
+    const number = (key:string) => pill().querySelector(`[data-bb-chat-ui-info-diff-number="${key}"]`)!;
+    assert.equal(pill().querySelector('[data-bb-chat-ui-info-diff-previous]'),null,'first display does not roll');
+    f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent = '+38 −4 · 12 files';
+    await f.tick();
+    assert.equal(number('added').getAttribute('data-bb-chat-ui-info-diff-value'),'38');
+    assert.equal(number('files').getAttribute('data-bb-chat-ui-info-diff-value'),'12');
+    assert.equal(pill().getAttribute('aria-label')?.includes('+38 −4 · 12 files'),true);
+    assert.equal(number('removed').querySelector('[data-bb-chat-ui-info-diff-previous]'),null,'unchanged digits stay still');
+    assert.equal(pill().querySelectorAll('[data-bb-chat-ui-info-diff-previous]').length,reduced ? 0 : 2);
+    if (!reduced) {
+      assert.equal(number('added').querySelector('[data-bb-chat-ui-info-diff-previous]')?.getAttribute('aria-hidden'),'true');
+      f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent = '+7 −4 · 12 files'; await f.tick();
+      assert.equal(number('added').querySelector('[data-bb-chat-ui-info-diff-previous]')?.getAttribute('data-bb-chat-ui-info-diff-value'),'38','rapid updates use the last real value');
+      const current = number('added').querySelector('[data-bb-chat-ui-info-diff-current]')!;
+      current.dispatchEvent(new f.dom.window.Event('animationend'));
+      assert.equal(number('added').textContent,'7','finished transitions remove the old display');
+    }
+    stop(); f.dom.window.close();
+  }
+});
+
+test("Diff roulette supports PR and main commit counts without rolling digits in branch names", async () => {
+  for (const mode of ['branch','unpushed']) {
+    const f = fixture();
+    const source = f.document.createElement('span');
+    let count = 3;
+    const publish = () => source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({
+      insertions:0,deletions:0,files:0,
+      presentation:{ mode,visible:true,branch:mode === 'branch' ? 'chat-2026' : 'main',branchLabel:'chat-2026',label:mode === 'branch' ? `chat-2026 · ${count} commits` : `↑${count}` },
+      detail:{ commitCount:count },
+    }));
+    publish(); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+    const stop = injectComposerInfo(f.document);
+    const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!;
+    assert.equal(pill.querySelectorAll('[data-bb-chat-ui-info-diff-number]').length,1);
+    count = 8; publish(); await f.tick();
+    const number = pill.querySelector('[data-bb-chat-ui-info-diff-number="commits"]')!;
+    assert.equal(number.textContent,'8','old digits do not contaminate the real displayed text');
+    assert.equal(number.querySelector('[data-bb-chat-ui-info-diff-previous]')?.getAttribute('data-bb-chat-ui-info-diff-value'),'3');
+    if (mode === 'branch') assert.equal(pill.querySelector('[data-bb-chat-ui-info-commit-count]')?.getAttribute('aria-label'),'커밋 8개');
+    else assert.equal(pill.textContent,'↑8');
+    const current = number.querySelector('[data-bb-chat-ui-info-diff-current]');
+    f.document.querySelector('[aria-label="Goal"]')!.append(' updated'); await f.tick();
+    assert.equal(number.querySelector('[data-bb-chat-ui-info-diff-current]'),current,'unrelated data preserves the current transition');
+    stop();
+    assert.equal(pill.isConnected,false,'unloading removes the transitioning pill');
+    f.dom.window.close();
+  }
+});
