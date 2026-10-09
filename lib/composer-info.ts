@@ -70,6 +70,7 @@ export const composerInfoCss = `
 [${MARK}-diff-current] { display:block; animation:bb-info-count-in 180ms cubic-bezier(.2,.8,.2,1); }
 [${MARK}-diff-previous] { position:absolute; inset:0; pointer-events:none; animation:bb-info-count-out 180ms cubic-bezier(.2,.8,.2,1) forwards; }
 [${MARK}-diff-previous]::before { content:attr(${MARK}-diff-value); }
+[${MARK}-queue-drop] { position:absolute; width:12px; height:12px; border-radius:50%; pointer-events:none; z-index:54; background:color-mix(in oklab,var(--bb-chat-ui-info-face) 80%,var(--foreground) 20%); backdrop-filter:blur(14px) saturate(1.25); box-shadow:inset 0 1px 3px var(--bb-chat-ui-info-edge),0 2px 8px -2px var(--bb-chat-ui-info-shadow); }
 [${MARK}-all] { position:absolute; right:0; width:32px; padding:0; }
 [${MARK}-bar][${MARK}-jump] { padding-right:80px; }
 [${MARK}-bar][${MARK}-jump] [${MARK}-all] { right:40px; }
@@ -302,6 +303,15 @@ export function injectComposerInfo(document: Document): () => void {
     let lastTrigger: HTMLElement | null = null;
     let signature = "";
     let childStates = new Map<string, ChildState>();
+    let queueSnapshot:{ count:number; ids:Set<string> } | null = null;
+    const queueAnimations = new Set<Animation>();
+    const queueDrops = new Set<HTMLElement>();
+    const cancelQueueMotion = () => {
+      for (const animation of queueAnimations) animation.cancel();
+      queueAnimations.clear();
+      for (const drop of queueDrops) drop.remove();
+      queueDrops.clear();
+    };
     let diffSupplement: HTMLElement | null = null;
     const panelActions = new Map<HTMLElement, HTMLButtonElement>();
     const panelHeadings = new Set<HTMLElement>();
@@ -495,6 +505,41 @@ export function injectComposerInfo(document: Document): () => void {
         if (/^\d+$/.test(count)) return count;
       }
       return "";
+    };
+    const queueAddition = (delay:number) => {
+      const pill = buttons.get("queue");
+      const target = pill && !pill.hidden ? pill : orb;
+      if (bar.hidden || reduced() || !target.animate) return;
+      const shell = stack.closest("[data-promptbox-shell]");
+      const origin = shell?.querySelector('[data-promptbox-submit-action][type="submit"]')
+        ?? shell?.querySelector('[data-follow-up-composer], textarea');
+      if (!origin) return;
+      const start = origin.getBoundingClientRect(), end = target.getBoundingClientRect(), anchor = bar.getBoundingClientRect();
+      const x = start.right - 12, y = start.top + start.height / 2;
+      const dx = end.left + end.width / 2 - x, dy = end.top + end.height / 2 - y;
+      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      const drop = document.createElement("span");
+      drop.setAttribute(`${MARK}-queue-drop`, ""); drop.setAttribute("aria-hidden", "true");
+      drop.style.left = `${x - anchor.left - 6}px`; drop.style.top = `${y - anchor.top - 6}px`;
+      bar.append(drop); queueDrops.add(drop);
+      const flight = drop.animate([
+        { transform:"scale(.35)", opacity:0, offset:0 },
+        { transform:"translateY(-4px) scale(.9,1.1)", opacity:1, offset:.18 },
+        { transform:`translate(${dx * .5}px,${dy * .5 - 14}px) rotate(${angle}deg) scale(1.45,.7)`, opacity:1, offset:.55 },
+        { transform:`translate(${dx}px,${dy}px) scale(.2)`, opacity:0, offset:1 },
+      ], { duration:300, delay, easing:"cubic-bezier(.2,.8,.2,1)", fill:"both" });
+      queueAnimations.add(flight);
+      const remove = () => { drop.remove(); queueDrops.delete(drop); queueAnimations.delete(flight); };
+      flight.oncancel = remove;
+      flight.onfinish = () => {
+        remove();
+        if (!target.isConnected || bar.hidden || reduced()) return;
+        const absorb = target.animate([
+          { transform:"scale(1.02,.96)" }, { transform:"scale(1.08)", offset:.45 }, { transform:"none" },
+        ], { duration:150, easing:"cubic-bezier(.36,0,.18,1)" });
+        queueAnimations.add(absorb);
+        absorb.onfinish = absorb.oncancel = () => { queueAnimations.delete(absorb); };
+      };
     };
     const catalog = () => infoKinds.filter(kind => listed.includes(kind.key)).flatMap<InfoItem | { key:InfoKind; label:string }>(kind => {
       const available = items.filter(item => item.key === kind.key);
@@ -898,6 +943,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (!source) return;
       const nextThreadId = source.getAttribute(`${MARK}-thread`);
       if (nextThreadId !== threadId) {
+        cancelQueueMotion(); queueSnapshot = null;
         cancelDiffExit();
         close(false, true);
         for (const animation of entryAnimations) animation.cancel();
@@ -1036,6 +1082,17 @@ export function injectComposerInfo(document: Document): () => void {
         orb.title = `전체 정보 · ${count}개`;
       }
       fit();
+      const queue = items.find(item => item.key === "queue");
+      const ids = new Set(queue ? Array.from(queue.node.querySelectorAll('[data-queued-message-id]')).map(row => row.getAttribute('data-queued-message-id')!) : []);
+      const countText = queue ? queueCount(queue) || queue.trigger?.textContent?.trim() || "" : "0";
+      const count = /^\d+$/.test(countText) ? Number(countText) : ids.size;
+      const previousQueue = queueSnapshot;
+      const added = !previousQueue ? 0 : count > previousQueue.count ? count - previousQueue.count
+        : count === previousQueue.count && ids.size > 0 && ids.size === previousQueue.ids.size
+          ? [...ids].filter(id => !previousQueue.ids.has(id)).length : 0;
+      queueSnapshot = { count, ids };
+      if (!listed.includes("queue") || bar.hidden) cancelQueueMotion();
+      else for (let index = 0; index < added; index++) queueAddition(index * 45);
       if (widthChange && !widthChange.button.hidden) {
         const { button, from } = widthChange;
         const width = button.offsetWidth || button.getBoundingClientRect().width;
@@ -1059,6 +1116,7 @@ export function injectComposerInfo(document: Document): () => void {
       updateScrollHints();
     };
     return { sync, bar, close, editing, resize, cleanup() {
+      cancelQueueMotion();
       cancelDiffExit();
       close(false, true);
       for (const animation of entryAnimations) animation.cancel();
@@ -1095,7 +1153,7 @@ export function injectComposerInfo(document: Document): () => void {
   }
   const schedule = () => { if (!frame && !disposed) frame = view.requestAnimationFrame(sync); };
   const observer = new view.MutationObserver(schedule);
-  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-children`, "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
+  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-children`, "data-queued-message-id", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     for (const [stack, state] of states) if (stack.contains(event.target as Node) || event.target === document) state.close(true);

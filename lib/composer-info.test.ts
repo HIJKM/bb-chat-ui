@@ -1350,3 +1350,65 @@ test("a loading Diff with no result fades away, staying inert and cancelling whe
     f.dom.window.close();
   }
 });
+
+test("every queued addition sends a droplet, including equal-count replacement and catalog-only queues", async () => {
+  const f = fixture();
+  const settings = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  settings.setAttribute('data-bb-chat-ui-info-settings','{"showQueue":"상단 표시"}');
+  const queue = f.document.querySelector('section[aria-label="Queued messages"]')!;
+  queue.querySelector('header button')!.innerHTML = '<span data-queued-messages-count>2</span>';
+  const count = queue.querySelector('[data-queued-messages-count]')!;
+  const rows = queue.querySelector('#queue')!;
+  const add = (id:string) => { const row = f.document.createElement('div'); row.setAttribute('data-queued-message-id',id); rows.append(row); return row; };
+  const a = add('a'); const b = add('b');
+  const records:{ node:HTMLElement; options:KeyframeAnimationOptions; animation:Animation; cancelled:boolean }[] = [];
+  f.dom.window.HTMLElement.prototype.animate = function(_frames,options) {
+    const record = { node:this,options:options as KeyframeAnimationOptions,animation:null as unknown as Animation,cancelled:false };
+    record.animation = { cancel:() => { record.cancelled=true; } } as Animation; records.push(record); return record.animation;
+  };
+  const stop = injectComposerInfo(f.document);
+  const flights = () => records.filter(record => record.node.hasAttribute('data-bb-chat-ui-info-queue-drop'));
+  assert.equal(flights().length,0,'existing queue content is not a new send');
+  add('c'); count.textContent='3'; await f.tick();
+  assert.equal(flights().length,1);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]')?.textContent,'3','count updates without waiting for the flight');
+  add('d'); count.textContent='4'; await f.tick();
+  assert.equal(flights().length,2,'the second send also flies while the first animation is running');
+  a.remove(); count.textContent='3'; await f.tick(); assert.equal(flights().length,2,'removal is not an addition');
+  b.setAttribute('data-queued-message-id','replacement'); await f.tick();
+  assert.equal(flights().length,3,'a new message is detected even when the count stays the same');
+  const finish = flights()[2].animation.onfinish as (() => void) | null; finish?.();
+  assert.equal(flights()[2].node.isConnected,false);
+  assert.equal(records.find(record => record.options.duration===150)?.node,f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]'),'the receiving pill absorbs the droplet');
+  settings.setAttribute('data-bb-chat-ui-info-settings','{"showQueue":"목록에만 표시"}'); await f.tick();
+  add('e'); count.textContent='4'; await f.tick();
+  assert.equal(flights().length,4);
+  const finishOrb = flights()[3].animation.onfinish as (() => void) | null; finishOrb?.();
+  assert.equal(records.filter(record => record.options.duration===150).at(-1)?.node,f.document.querySelector('[data-bb-chat-ui-info-all]'));
+  settings.setAttribute('data-bb-chat-ui-info-thread','other-thread'); await f.tick();
+  assert.equal(flights().length,4,'thread changes reset the baseline');
+  assert.ok(flights().filter(record => record.node.isConnected).length===0,'scope changes remove flying droplets');
+  assert.ok(flights().slice(0,2).every(record=>record.cancelled));
+  add('f'); count.textContent='5'; await f.tick(); assert.equal(flights().length,5);
+  count.textContent='6'; await f.tick(); assert.equal(flights().length,6,'a collapsed list can update its count before rendering the new row');
+  add('late-row'); await f.tick(); assert.equal(flights().length,6,'later detail rendering does not repeat the send');
+  stop(); assert.equal(f.document.querySelector('[data-bb-chat-ui-info-queue-drop]'),null);
+  assert.equal(flights().at(-1)?.cancelled,true);
+  f.dom.window.close();
+});
+
+test("queued addition motion respects reduced motion and disabled queue settings", async () => {
+  for (const reduced of [true,false]) {
+    const f=fixture();
+    Object.defineProperty(f.dom.window,'matchMedia',{value:()=>({matches:reduced})});
+    f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings',JSON.stringify({showQueue:reduced?'상단 표시':'끄기'}));
+    const header=f.document.querySelector('section[aria-label="Queued messages"] header button')!;
+    header.innerHTML='<span data-queued-messages-count>1</span>';
+    let flights=0;
+    f.dom.window.HTMLElement.prototype.animate=function() { if(this.hasAttribute('data-bb-chat-ui-info-queue-drop')) flights++; return {cancel(){}} as Animation; };
+    const stop=injectComposerInfo(f.document);
+    header.querySelector('span')!.textContent='2'; await f.tick();
+    assert.equal(flights,0);
+    stop();f.dom.window.close();
+  }
+});
