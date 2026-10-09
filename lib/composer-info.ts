@@ -54,6 +54,9 @@ export const composerInfoCss = `
 [${MARK}-menu] header button { width:24px; height:24px; padding:0; border-radius:50%; }
 [${MARK}-panel-source] { display:none !important; }
 [${MARK}-panel-heading] { display:flex; align-items:center; gap:6px; }
+[${MARK}-title-heading] { display:flex; align-items:center; gap:7px; }
+[${MARK}-title-icon], [${MARK}-title-icon] > :is(svg, [data-icon-root]) { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:14px; height:14px; }
+[${MARK}-title-source] { display:none !important; }
 [${MARK}-stack] [${MARK}-collapse] { display:none !important; }
 ${DETAIL} > h3[${MARK}-close-heading] { display:flex; align-items:center; min-height:28px; margin:0 0 8px; font-size:12px; font-weight:600; }
 /* Native cards already have a gutter on layout wrappers; the popover supplies it once. */
@@ -186,7 +189,6 @@ ${DETAIL}.agentation-staging-shell { display:grid !important; grid-template-area
 ${DETAIL}.agentation-staging-shell > div:first-child { display:contents !important; }
 ${DETAIL}.agentation-staging-shell > div:first-child > div:first-child { grid-area:heading; display:flex; align-items:center; gap:7px; width:100%; min-height:28px; padding-bottom:8px; }
 ${DETAIL}.agentation-staging-shell > div:first-child > div:first-child > [data-icon="ChatFeedback"] { display:none !important; }
-${DETAIL}.agentation-staging-shell > div:first-child > div:first-child::before { content:""; flex-shrink:0; width:14px; height:14px; background:currentColor; mask:var(--bb-chat-ui-feedback-icon) center/contain no-repeat; }
 ${DETAIL}.agentation-staging-shell > div:first-child > div:first-child p { flex:1; margin:0; font-size:12px; font-weight:600; }
 ${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"] { width:24px; height:24px; margin-left:auto; background:transparent; border-radius:50%; }
 ${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"] svg,
@@ -570,6 +572,42 @@ export function injectComposerInfo(document: Document): () => void {
     };
     const labelOf = (key: InfoKind) => infoKinds.find(kind => kind.key === key)!.label;
     const emptyIcon = (key: InfoKind) => stack.querySelector(`[${MARK}-icon="${key}"] svg, [${MARK}-icon="${key}"] [data-icon-root]`);
+    let titleHeading: HTMLElement | null = null;
+    let titleIcon: HTMLElement | null = null;
+    let titleArtwork = "";
+    const titleSources = new Set<Element>();
+    const clearTitleIcon = () => {
+      titleIcon?.remove(); titleHeading?.removeAttribute(`${MARK}-title-heading`);
+      for (const source of titleSources) source.removeAttribute(`${MARK}-title-source`);
+      titleSources.clear(); titleHeading = titleIcon = null; titleArtwork = "";
+    };
+    const syncTitleIcon = () => {
+      const item = items.find(item => item.node === activeNode && item.key === active);
+      const heading = active && active !== "all" ? menu?.querySelector<HTMLElement>("header")
+        ?? (activeNode?.matches(".agentation-staging-shell")
+          ? activeNode.querySelector<HTMLElement>(":scope > div:first-child > div:first-child")
+          : activeNode?.querySelector<HTMLElement>(`[${MARK}-close-heading], [${MARK}-panel-heading], h3, h4, header`)) : null;
+      if (heading !== titleHeading || titleIcon && titleIcon.parentElement !== heading) clearTitleIcon();
+      if (!heading || !active || active === "all") return;
+      titleHeading = heading;
+      heading.setAttribute(`${MARK}-title-heading`, active);
+      const nativeIcons = Array.from(heading.querySelectorAll("svg, [data-icon-root]"))
+        .filter(icon => !icon.closest(`[${MARK}-title-icon], [${MARK}-panel-action], [${MARK}-dismiss], [${MARK}-close]`)
+          && (!icon.closest("button, a") || icon.closest("button, a") === item?.trigger));
+      const artwork = emptyIcon(active) ?? nativeIcons[0];
+      if (artwork) {
+        titleIcon ??= document.createElement("span");
+        titleIcon.setAttribute(`${MARK}-title-icon`, active); titleIcon.setAttribute("aria-hidden", "true");
+        if (titleArtwork !== artwork.outerHTML) {
+          titleArtwork = artwork.outerHTML;
+          const copy = artwork.cloneNode(true) as Element;
+          copy.removeAttribute("id"); copy.removeAttribute(`${MARK}-title-source`);
+          titleIcon.replaceChildren(copy);
+        }
+        if (heading.firstElementChild !== titleIcon) heading.prepend(titleIcon);
+        for (const icon of nativeIcons) { icon.setAttribute(`${MARK}-title-source`, ""); titleSources.add(icon); }
+      }
+    };
     const childIcon = (id:string) => Array.from(stack.querySelectorAll(`[${MARK}-child-icon]`))
       .find(node => node.getAttribute(`${MARK}-child-icon`) === id)?.firstElementChild;
     const readDiff = ():Partial<WorkspaceDiffSnapshot> | null => {
@@ -908,6 +946,7 @@ export function injectComposerInfo(document: Document): () => void {
     const close = (restoreFocus = false, force = false) => {
       cancelHover();
       if (!force && editing()) return false;
+      clearTitleIcon();
       hoverPreview = false;
       const item = items.find(item => item.node === activeNode && item.key === active);
       activeNode?.removeAttribute(OPEN);
@@ -1006,6 +1045,7 @@ export function injectComposerInfo(document: Document): () => void {
         }
         menu.append(header, caption, grid);
         bar.append(menu);
+        syncTitleIcon();
         orb.setAttribute("aria-controls", menu.id);
         orb.setAttribute("aria-expanded", "true");
         updateScrollHints();
@@ -1051,6 +1091,7 @@ export function injectComposerInfo(document: Document): () => void {
         }
         buttons.get(key)?.setAttribute("aria-expanded", "true");
         bar.append(menu);
+        syncTitleIcon();
         orb.setAttribute("aria-controls", menu.id);
         orb.setAttribute("aria-expanded", "true");
         updateScrollHints();
@@ -1061,6 +1102,7 @@ export function injectComposerInfo(document: Document): () => void {
       item.node.setAttribute(OPEN, "");
       if (item.trigger?.getAttribute("aria-expanded") === "false") item.trigger.click();
       syncNativeControls();
+      syncTitleIcon();
       buttons.get(key)?.setAttribute("aria-expanded", "true");
       updateScrollHints();
     };
@@ -1234,6 +1276,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (request !== stack.hasAttribute(`${MARK}-request`)) stack.toggleAttribute(`${MARK}-request`, request);
       if (request || activeNode && !items.some(item => item.node === activeNode)) close(false, true);
       syncNativeControls();
+      syncTitleIcon();
       if (active === "status" && menu?.hasAttribute(`${MARK}-archived-detail`)) {
         const item = items.find(item => item.node === activeNode && item.key === "status");
         if (item) renderArchiveRestore(menu.querySelector("div")!, item);
@@ -1374,6 +1417,7 @@ export function injectComposerInfo(document: Document): () => void {
       updateScrollHints();
     };
     return { sync, bar, close, editing, resize, cleanup() {
+      clearTitleIcon();
       cancelQueueMotion();
       cancelExit(); positions.clear(); moves.clear();
       close(false, true);

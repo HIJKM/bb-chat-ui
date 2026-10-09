@@ -40,6 +40,69 @@ function pointer(f: ReturnType<typeof fixture>, type: 'pointerover' | 'pointerou
   target.dispatchEvent(event);
 }
 
+test("every empty detail has its family icon before the title while the full catalog has none", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const source = stack.querySelector('[data-bb-chat-ui-info-settings]')!;
+  for (const node of [...stack.children]) if (!node.contains(source)) node.remove();
+  for (const kind of infoKinds) source.insertAdjacentHTML('beforeend', `<span data-bb-chat-ui-info-icon="${kind.key}"><svg data-family="${kind.key}" /></span>`);
+  const stop = injectComposerInfo(f.document);
+  try {
+    for (const kind of infoKinds) {
+      f.click('[data-bb-chat-ui-info-all]');
+      assert.equal(f.document.querySelector('[data-bb-chat-ui-info-menu] header [data-bb-chat-ui-info-title-icon]'), null);
+      f.click(`[data-bb-chat-ui-info-choice="${kind.key}"]`);
+      const heading = f.document.querySelector('[data-bb-chat-ui-info-menu] header')!;
+      assert.ok(heading.firstElementChild?.matches(`[data-bb-chat-ui-info-title-icon="${kind.key}"]`), kind.key);
+      assert.ok(heading.firstElementChild?.querySelector(`[data-family="${kind.key}"]`));
+      assert.equal(heading.firstElementChild?.getAttribute('aria-hidden'), 'true');
+      const css = f.dom.window.getComputedStyle(heading.firstElementChild!);
+      assert.equal(css.width, '14px'); assert.equal(css.height, '14px');
+      f.click('[data-bb-chat-ui-info-close]');
+    }
+    f.click('[data-bb-chat-ui-info-all]'); f.click('[data-bb-chat-ui-info-choice="plan"]');
+    source.querySelector('[data-bb-chat-ui-info-icon="plan"]')!.innerHTML = '<svg data-family="plan-updated" />';
+    await f.tick();
+    assert.ok(f.document.querySelector('header [data-bb-chat-ui-info-title-icon="plan"] [data-family="plan-updated"]'), 'late SDK artwork updates an open title');
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("native and custom card titles use one family icon without changing native actions", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const source = stack.querySelector('[data-bb-chat-ui-info-settings]')!;
+  for (const kind of infoKinds) source.insertAdjacentHTML('beforeend', `<span data-bb-chat-ui-info-icon="${kind.key}"><svg data-family="${kind.key}" /></span>`);
+  const goal = stack.querySelector('section[aria-label="Goal"]')!;
+  goal.querySelector('button[aria-expanded]')!.insertAdjacentHTML('afterbegin', '<svg data-native-goal />');
+  const clear = goal.querySelector('[aria-label="Clear active Goal"]')!;
+  clear.innerHTML = '<svg data-clear-icon />Clear';
+  let cleared = 0; clear.addEventListener('click', () => cleared++);
+  stack.insertAdjacentHTML('beforeend', '<section data-bb-chat-ui-info-kind="children"><h3><svg data-native-child />Child Threads<button data-bb-chat-ui-info-dismiss>×</button></h3><div>Child</div></section><div class="agentation-staging-shell"><div><div><svg data-icon="ChatFeedback" /><p>Annotations</p><button aria-expanded="true" aria-label="Collapse staged annotations">×</button></div><div><button>Send all</button></div></div><div class="grid"><div><div><ul><li>Feedback</li></ul></div></div></div></div>');
+  const nativeGoal = goal.querySelector('[data-native-goal]')!;
+  const nativeParent = nativeGoal.parentElement;
+  const stop = injectComposerInfo(f.document);
+  try {
+    for (const key of ['goal','children','annotations','queue','diff']) {
+      f.click('[data-bb-chat-ui-info-all]'); f.click(`[data-bb-chat-ui-info-choice="${key}"]`);
+      await f.tick();
+      const heading = f.document.querySelector(`[data-bb-chat-ui-info-title-heading="${key}"]`)!;
+      assert.ok(heading, key);
+      assert.ok(heading.firstElementChild?.matches(`[data-bb-chat-ui-info-title-icon="${key}"]`), key);
+      assert.equal(heading.querySelectorAll('[data-bb-chat-ui-info-title-icon]').length, 1);
+      if (key === 'goal') {
+        assert.equal(f.dom.window.getComputedStyle(nativeGoal).display, 'none');
+        assert.equal(nativeGoal.parentElement, nativeParent);
+        assert.notEqual(f.dom.window.getComputedStyle(clear.querySelector('svg')!).display, 'none', 'the Goal action glyph stays visible');
+        (clear as HTMLButtonElement).click(); assert.equal(cleared, 1);
+      }
+    }
+  } finally { stop(); }
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-title-icon]'), null);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-title-heading]'), null);
+  assert.notEqual(f.dom.window.getComputedStyle(nativeGoal).display, 'none');
+  f.dom.window.close();
+});
+
 test("queue and list cards share the same horizontal content gutter as their headers", () => {
   const f=fixture();
   const style=f.document.createElement('style'); style.textContent=queuedMessagesCss; f.document.head.append(style);
