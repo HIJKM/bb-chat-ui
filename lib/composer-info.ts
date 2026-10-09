@@ -48,7 +48,7 @@ export const composerInfoCss = `
 [${MARK}-stack] [${MARK}-collapse] { display:none !important; }
 ${DETAIL} [${MARK}-close-heading] { box-sizing:border-box; padding-right:34px !important; }
 ${DETAIL} > h3[${MARK}-close-heading] { min-height:28px; margin:0 0 8px; font-size:12px; }
-${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:10px; right:12px; display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; padding:0 !important; border-radius:50% !important; color:var(--subtle-foreground); font-size:16px; cursor:pointer; }
+${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:10px; right:12px; color:var(--subtle-foreground); cursor:pointer; }
 [${MARK}-panel-action], [${MARK}-action="diff"] { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; padding:0 !important; border-radius:50% !important; color:var(--subtle-foreground); }
 [${MARK}-panel-action] svg, [${MARK}-action="diff"] svg { width:14px; height:14px; }
 [${MARK}-trigger]:hover, [${MARK}-all]:hover { transform:translateY(-1px); }
@@ -155,7 +155,7 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-kind="children"] { padding:12px 14px 14px; border-radius:18px !important; }
 [${MARK}-kind="children"] h3 { display:flex; align-items:center; gap:7px; min-height:28px; margin:0 0 8px; }
 [${MARK}-kind="children"] h3 [data-icon-root] { width:14px; height:14px; }
-[${MARK}-kind="children"] [${MARK}-dismiss] { margin-left:auto; width:24px; height:24px; padding:0; border-radius:50%; border:0; background:transparent; color:var(--subtle-foreground); font-size:16px; }
+[${MARK}-kind="children"] [${MARK}-dismiss] { margin-left:auto; border:0; background:transparent; color:var(--subtle-foreground); }
 ${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row] { display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box; padding:8px; min-width:0; border-radius:10px; text-align:left; cursor:pointer; background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; transition:background-color 150ms ease-out; }
 ${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row]:hover, ${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row]:focus-visible { background:color-mix(in oklab,var(--foreground) 6%,transparent) !important; }
 [${MARK}-child-row] + [${MARK}-child-row] { border-top:1px solid var(--border-hairline,var(--border)); }
@@ -173,7 +173,7 @@ ${DETAIL}.agentation-staging-shell > div:first-child > div:first-child p { flex:
 ${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"] { width:24px; height:24px; margin-left:auto; background:transparent; border-radius:50%; }
 ${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"] svg,
 ${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"] [data-icon-root] { display:none; }
-${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"]::after { content:"×"; font-size:16px; color:var(--subtle-foreground); }
+${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"]::after { content:"×"; font:inherit; color:var(--subtle-foreground); }
 ${DETAIL}.agentation-staging-shell > div:first-child > div:last-child { grid-area:actions; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; margin-top:8px; }
 ${DETAIL}.agentation-staging-shell > div:first-child > div:last-child > button { font-size:11px; min-height:28px; border:1px solid var(--border); border-radius:7px; padding:5px 9px; background:var(--bb-chat-ui-info-face); color:var(--foreground); }
 ${DETAIL}.agentation-staging-shell > div:first-child > div:last-child > button:first-child { order:2; }
@@ -191,6 +191,7 @@ ${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span:nth-chil
 ${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span:nth-child(3) { display:none; }
 ${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span:nth-child(4) { grid-area:comment; font-size:12px; font-weight:400; white-space:normal; overflow-wrap:anywhere; }
 ${DETAIL}.agentation-staging-shell li::before { content:""; flex-shrink:0; width:14px; height:14px; background:var(--subtle-foreground); mask:var(--bb-chat-ui-feedback-icon) center/contain no-repeat; }
+${DETAIL} [${MARK}-dismiss], [${MARK}-menu] [${MARK}-close], ${DETAIL}.agentation-staging-shell button[aria-label="Collapse staged annotations"] { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; padding:0 !important; border-radius:50%; font-size:12px; font-weight:400; line-height:1; }
 @keyframes bb-info-enter { from { opacity:0; translate:0 8px; scale:.98; } to { opacity:1; translate:0 0; scale:1; } }
 @keyframes bb-info-droplet { 0% { transform:translateY(8px) scale(.82,.72); } 35% { transform:translateY(-4px) scale(.94,1.16); } 65% { transform:translateY(0) scale(1.1,.94); } 82% { transform:translateY(-1px) scale(.985,1.015); } 100% { transform:none; } }
 @keyframes bb-info-breathe { 50% { opacity:.4; } }
@@ -891,6 +892,7 @@ export function injectComposerInfo(document: Document): () => void {
         const dismiss = document.createElement("button");
         dismiss.type = "button";
         dismiss.textContent = "×";
+        dismiss.setAttribute(`${MARK}-close`, "");
         dismiss.setAttribute("aria-label", "전체 정보 닫기");
         dismiss.addEventListener("click", () => close(true));
         header.append(dismiss);
@@ -941,6 +943,7 @@ export function injectComposerInfo(document: Document): () => void {
         header.append(title);
         const dismiss = document.createElement("button");
         dismiss.type = "button"; dismiss.textContent = "×";
+        dismiss.setAttribute(`${MARK}-close`, "");
         dismiss.setAttribute("aria-label", `${labelOf(key)} 닫기`);
         dismiss.addEventListener("click", () => close(true));
         header.append(dismiss);

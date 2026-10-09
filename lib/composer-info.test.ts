@@ -383,6 +383,31 @@ test("children use a bare latest-three avatar stack and prefer the designed SDK 
   stop(); f.dom.window.close();
 });
 
+test("Child Thread and other popover closes have the same button and glyph size", () => {
+  const f = fixture();
+  f.document.querySelector('[data-promptbox-shell] > .grid')!.insertAdjacentHTML('beforeend', '<section data-bb-chat-ui-info-kind="children" aria-label="Child Thread"><h3>Child Threads <button data-bb-chat-ui-info-dismiss="children">×</button></h3></section>');
+  const stop = injectComposerInfo(f.document);
+  const check = (button:Element) => {
+    const css = f.dom.window.getComputedStyle(button);
+    assert.equal(css.width,'24px'); assert.equal(css.height,'24px');
+    assert.equal(css.fontSize,'12px','close glyph uses the compact menu size');
+    assert.equal(css.fontWeight,'400','a heading must not make the close glyph bold');
+    assert.equal(css.lineHeight,'1'); assert.equal(css.padding,'0px');
+    assert.equal(css.display,'inline-flex'); assert.equal(css.alignItems,'center');
+    assert.equal(css.justifyContent,'center');
+  };
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="children"]');
+    check(f.document.querySelector('[data-bb-chat-ui-info-dismiss="children"]')!);
+    f.click('[data-bb-chat-ui-info-trigger="diff"]');
+    check(f.document.querySelector('[aria-label="Code Diff 닫기"]')!);
+    f.click('[data-bb-chat-ui-info-all]');
+    check(f.document.querySelector('[aria-label="전체 정보 닫기"]')!);
+    f.click('[data-bb-chat-ui-info-choice="goal"]');
+    check(f.document.querySelector('[data-bb-chat-ui-info-native-dismiss]')!);
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("child counts use up to three overlapping avatars followed by a separate overflow circle", async () => {
   const f = fixture();
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
