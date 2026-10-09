@@ -1841,6 +1841,9 @@ test("Diff lists show five rows and independently expand their remaining rows ac
       ['6 · Commit 6','5 · Commit 5','4 · Commit 4','3 · Commit 3','2 · Commit 2']);
     for (const kind of ['files','commits']) {
       assert.equal(toggle(kind).getAttribute('aria-expanded'),'false');
+      const css=f.dom.window.getComputedStyle(toggle(kind));
+      assert.equal(css.boxShadow,'none','more/collapse is a plain row without its own glass shadow');
+      assert.equal(css.backgroundColor,'rgba(0, 0, 0, 0)','more/collapse has no separate background');
       assert.ok(f.document.getElementById(toggle(kind).getAttribute('aria-controls')!));
     }
     assert.equal(toggle('files').textContent,'3개 더 보기');
