@@ -15,6 +15,7 @@ const REQUEST = ['tool-use-ask', 'plugin-request-banner', 'plan-review-request',
 const NATIVE = `section[aria-label], .agentation-staging-shell, [${MARK}-kind]`;
 const WORKFLOW_COLLAPSE = 'button[aria-label^="Collapse "][aria-label$=" workflows"][aria-controls]';
 const ARCHIVED = '[aria-label="Thread archived"], [aria-label="Thread is archived"], [aria-label="Archived thread"]';
+const UNAVAILABLE = ["Environment unavailable", "Machine removed", "Machine removal in progress", "Machine cleanup failed", "Workspace removed"].map(label => `[aria-label="${label}"]`).join(", ");
 const DETAIL = `${STACK}[${MARK}-stack] [${UNIT}][${OPEN}]:not([hidden])`;
 
 // The orb is always reachable. Fit measured pills into one row, with essentials first.
@@ -275,7 +276,7 @@ export function injectComposerInfo(document: Document): () => void {
     bar.append(pills, orb);
     stack.append(bar);
     let items: InfoItem[] = [];
-    let archived = false;
+    let readOnlyLabel: string | null = null;
     let listed = listedInfo();
     const owned = new Set<HTMLElement>();
     const wrappers = new Set<HTMLElement>();
@@ -761,7 +762,7 @@ export function injectComposerInfo(document: Document): () => void {
       const text = document.createElement("span");
       let childCount = 0;
       text.textContent = summary && item.key === "diff" ? describe(item) : item.label;
-      if (summary && item.key === "status" && archived) text.textContent = "Archived thread";
+      if (summary && item.key === "status" && readOnlyLabel) text.textContent = readOnlyLabel;
       if (summary && item.key === "todos") text.textContent = item.trigger?.textContent?.trim().replace(/\s+/g, " ").slice(0, 30) || item.label;
       if (summary && item.key === "queue") text.textContent = queueCount(item) || item.label;
       if (summary && item.key === "annotations") text.textContent = annotationCount(item);
@@ -855,7 +856,7 @@ export function injectComposerInfo(document: Document): () => void {
         }
       }
       button.title = `${item.label} · ${describe(item)}${childCount ? ` · ${childCount}개` : ""}${presentation?.branch ? ` · ${presentation.branch}` : item.key === "diff" && item.trigger?.title ? ` · ${item.trigger.title}` : ""}`;
-      if (summary && item.key === "status" && archived) button.title = "Archived thread";
+      if (summary && item.key === "status" && readOnlyLabel) button.title = readOnlyLabel;
       button.setAttribute("aria-label", button.title);
       if (roll) for (const number of Array.from(button.querySelectorAll(`[${MARK}-diff-number]`))) {
         const before = previousNumbers.get(number.getAttribute(`${MARK}-diff-number`));
@@ -884,21 +885,35 @@ export function injectComposerInfo(document: Document): () => void {
       if (restoreFocus) (lastTrigger?.isConnected ? lastTrigger : orb).focus();
       return true;
     };
-    const archiveAction = (item?:InfoItem) => item && Array.from(item.node.querySelectorAll<HTMLButtonElement>("button"))
-      .find(button => [button.getAttribute("aria-label"), button.textContent].some(text => /^Unarchiv(?:e|ing[.…]*)$/i.test(text?.trim() ?? "")));
+    const archiveAction = (item?:InfoItem) => {
+      const kind = readOnlyLabel === "Archived thread" ? "unarchive" : "environment";
+      const source = stack.querySelector<HTMLButtonElement>(`[${SOURCE}] [${MARK}-restore-source="${kind}"]`);
+      if (source) return source;
+      const label = kind === "unarchive" ? /^Unarchiv(?:e|ing[.…]*)$/i : /^(?:Restore workspace|Restoring[.…]*)$/i;
+      return item && Array.from(item.node.querySelectorAll<HTMLButtonElement>("button"))
+        .find(button => [button.getAttribute("aria-label"), button.textContent].some(text => label.test(text?.trim() ?? "")));
+    };
     const renderArchiveRestore = (container:HTMLElement, item:InfoItem) => {
       let button = container.querySelector<HTMLButtonElement>(`[${MARK}-unarchive]`);
       if (!button) {
         button = document.createElement("button"); button.type = "button";
-        button.setAttribute(`${MARK}-unarchive`, ""); button.setAttribute("aria-label", "Unarchive");
+        button.setAttribute(`${MARK}-unarchive`, "");
         button.addEventListener("click", () => archiveAction(items.find(item => item.node === activeNode && item.key === "status"))?.click());
         container.replaceChildren(button);
       }
       const source = archiveAction(item);
-      const text = source?.textContent?.trim() || "Unarchive";
+      const label = readOnlyLabel === "Archived thread" ? "Unarchive" : "Restore workspace";
+      if (button.getAttribute("aria-label") !== label) button.setAttribute("aria-label", label);
+      const text = source?.textContent?.trim() || label;
       if (button.textContent !== text) button.textContent = text;
       const disabled = !source || source.disabled || source.getAttribute("aria-disabled") === "true";
       if (button.disabled !== disabled) button.disabled = disabled;
+      const error = source?.getAttribute(`${MARK}-restore-error`);
+      let alert = container.querySelector<HTMLElement>('[role="alert"]');
+      if (error) {
+        if (!alert) { alert = document.createElement("p"); alert.setAttribute("role", "alert"); container.append(alert); }
+        if (alert.textContent !== error) alert.textContent = error;
+      } else alert?.remove();
     };
     const open = (key: InfoKind | "all", trigger: HTMLElement, selected?: InfoItem) => {
       if (editing() || stack.hasAttribute(`${MARK}-request`)) return;
@@ -955,7 +970,7 @@ export function injectComposerInfo(document: Document): () => void {
         return;
       }
       const item = selected ?? items.find(item => item.key === key);
-      const archiveDetail = key === "status" && archived;
+      const archiveDetail = key === "status" && readOnlyLabel !== null;
       if (!item || key === "diff" || archiveDetail) {
         active = key;
         activeNode = item?.node ?? null;
@@ -963,7 +978,7 @@ export function injectComposerInfo(document: Document): () => void {
         menu.id = `bb-composer-info-detail-${++serial}`;
         menu.setAttribute(`${MARK}-menu`, "");
         menu.setAttribute(item ? archiveDetail ? `${MARK}-archived-detail` : `${MARK}-diff` : `${MARK}-empty`, key);
-        const label = archiveDetail ? "Archived thread" : labelOf(key);
+        const label = archiveDetail ? readOnlyLabel! : labelOf(key);
         menu.setAttribute("aria-label", label);
         const header = document.createElement("header");
         const title = document.createElement("span"); title.textContent = label;
@@ -1017,7 +1032,7 @@ export function injectComposerInfo(document: Document): () => void {
       });
       for (const [key, exit] of exits) if (!buttons.has(key)) widths.push({ key, width:exit.node.offsetWidth });
       const width = stack.getBoundingClientRect().width;
-      const visible = new Set(archived ? ["status"] : fitComposerInfo(widths, width > 0 ? width - (bar.hasAttribute(`${MARK}-jump`) ? 40 : 0) : Number.POSITIVE_INFINITY));
+      const visible = new Set(readOnlyLabel ? ["status"] : fitComposerInfo(widths, width > 0 ? width - (bar.hasAttribute(`${MARK}-jump`) ? 40 : 0) : Number.POSITIVE_INFINITY));
       for (const [key, button] of buttons) {
         if (visible.has(key)) cancelExit(key);
         else if (previouslyVisible.has(button) && !exits.has(key)) leave(key, button);
@@ -1112,11 +1127,13 @@ export function injectComposerInfo(document: Document): () => void {
       const hasChildRows = found.some(item => item.key === "children" && item.node.hasAttribute(`${MARK}-kind`));
       const native = found.filter(item => !item.node.hasAttribute(`${MARK}-kind`) && !(hasChildRows && item.key === "children"));
       items = [...native, ...found.filter(item => item.node.hasAttribute(`${MARK}-kind`) && !native.some(other => other.key === item.key))];
-      const nextArchived = items.some(item => item.key === "status" && (item.node.matches(ARCHIVED) || item.node.querySelector(ARCHIVED)));
-      if (archived !== nextArchived) { archived = nextArchived; cancelQueueMotion(); cancelExit(); close(false, true); }
-      bar.toggleAttribute(`${MARK}-archived`, archived);
-      if (archived) bar.removeAttribute(`${MARK}-jump`);
-      orb.hidden = archived;
+      const status = items.find(item => item.key === "status");
+      const unavailable = status && (status.node.matches(UNAVAILABLE) ? status.node : status.node.querySelector(UNAVAILABLE));
+      const nextReadOnlyLabel = source.getAttribute(`${MARK}-read-only-label`) ?? (status && (status.node.matches(ARCHIVED) || status.node.querySelector(ARCHIVED)) ? "Archived thread" : unavailable?.getAttribute("aria-label") ?? null);
+      if (readOnlyLabel !== nextReadOnlyLabel) { readOnlyLabel = nextReadOnlyLabel; cancelQueueMotion(); cancelExit(); close(false, true); }
+      bar.toggleAttribute(`${MARK}-archived`, readOnlyLabel !== null);
+      if (readOnlyLabel) bar.removeAttribute(`${MARK}-jump`);
+      orb.hidden = readOnlyLabel !== null;
       syncPanelActions();
       if (!items.some(item => item.key === "diff")) {
         try {
@@ -1149,23 +1166,23 @@ export function injectComposerInfo(document: Document): () => void {
       let settings: Record<string, unknown> = {};
       try { settings = JSON.parse(source.getAttribute(SOURCE) || "{}"); } catch { /* Defaults work while settings load. */ }
       listed = listedInfo(settings);
-      if (archived && !listed.includes("status")) listed.push("status");
+      if (readOnlyLabel && !listed.includes("status")) listed.push("status");
       if (active && active !== "all" && !listed.includes(active)) close();
       if (!listed.length) close();
       bar.hidden = request || !listed.length && !editing();
       const diff = readDiff();
       const unavailableDiff = stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(`${HEAD_DIFF_MARK}-state`) === "unavailable";
-      const exposed: InfoKind[] = archived ? ["status"] : exposedInfo(settings).filter(key => key !== "diff" || !unavailableDiff && diff?.presentation?.visible !== false);
+      const exposed: InfoKind[] = readOnlyLabel ? ["status"] : exposedInfo(settings).filter(key => key !== "diff" || !unavailableDiff && diff?.presentation?.visible !== false);
       if (request || reduced() || bar.hidden) cancelExit();
       const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
-      const next = JSON.stringify([settings, archived, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
+      const next = JSON.stringify([settings, readOnlyLabel, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
       let widthChange: { button:HTMLButtonElement; from:number } | null = null;
       if (signature !== next) {
         if (signature) pulse();
         signature = next;
         for (const [key, button] of buttons) if (!exposed.includes(key) || !showEmpty && !items.some(item => item.key === key)) {
-          if (!archived) leave(key, button);
+          if (!readOnlyLabel) leave(key, button);
           widthAnimations.get(button)?.animation.cancel();
           button.remove(); buttons.delete(key);
         }
@@ -1187,7 +1204,7 @@ export function injectComposerInfo(document: Document): () => void {
           button.setAttribute("aria-expanded", String(active === key));
           button.toggleAttribute(`${MARK}-unavailable`, !item);
           const content = JSON.stringify([item ? describe(item) : null, item?.trigger?.title,
-            key === "status" ? archived : null,
+            key === "status" ? readOnlyLabel : null,
             emptyIcon(key)?.outerHTML ?? item?.trigger?.querySelector("svg, [data-icon-root]")?.outerHTML ?? item?.node.querySelector("svg, [data-icon-root]")?.outerHTML,
             key === "children" ? stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`) : null,
             key === "diff" ? [diff?.presentation, diff?.detail?.commitCount] : null]);
@@ -1248,7 +1265,7 @@ export function injectComposerInfo(document: Document): () => void {
           pendingRows:complete ? 0 : Math.max(0,(previousQueue?.pendingRows ?? 0) - rowCredit) + Math.max(0,countArrivals - rowArrivals),
           pendingCount:complete ? 0 : Math.max(0,(previousQueue?.pendingCount ?? 0) - countCredit) + Math.max(0,rowArrivals - countArrivals),
         };
-        if (archived || !listed.includes("queue") || bar.hidden) cancelQueueMotion();
+        if (readOnlyLabel || !listed.includes("queue") || bar.hidden) cancelQueueMotion();
         else for (let index = 0; index < added; index++) queueAddition(index * 45);
       } else {
         // Native rendering can briefly remove the whole queue. Keep its arrival
@@ -1321,7 +1338,7 @@ export function injectComposerInfo(document: Document): () => void {
   }
   const schedule = () => { if (!frame && !disposed) frame = view.requestAnimationFrame(sync); };
   const observer = new view.MutationObserver(schedule);
-  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-children`, "data-queued-message-id", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
+  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-children`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     for (const [stack, state] of states) if (stack.contains(event.target as Node) || event.target === document) state.close(true);

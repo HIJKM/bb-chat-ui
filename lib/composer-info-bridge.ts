@@ -1,14 +1,15 @@
-import { createElement, Fragment, useEffect, useState } from "react";
+import { createElement, Fragment, useEffect, useMemo, useState } from "react";
 import { experimental_Icon, UrlLink, useBbNavigate, useComposer, useSdk, useSettings } from "@get-bb/plugin-sdk/app";
 import { infoKinds } from "./composer-info-settings.ts";
 import { childInitial, childState } from "./composer-child.ts";
+import { createThreadRestorer, type RestoreState } from "./composer-restore.ts";
 
 type Sdk = ReturnType<typeof useSdk>;
 type Timeline = Awaited<ReturnType<Sdk["threads"]["timeline"]>>;
 type Children = Awaited<ReturnType<Sdk["threads"]["list"]>>;
 type Queue = Awaited<ReturnType<Sdk["threads"]["queuedMessages"]["list"]>>;
 type PullRequest = Awaited<ReturnType<Sdk["environments"]["pullRequest"]>>;
-interface Snapshot { threadId: string; timeline: Timeline; children: Children; queue: Queue; pullRequest: PullRequest | null; }
+interface Snapshot { threadId: string; timeline: Timeline; children: Children; queue: Queue; pullRequest: PullRequest | null; readOnly:{label:string|null; canRestore:boolean}; }
 const mark = "data-bb-chat-ui-info";
 
 export function ComposerInfoBridge() {
@@ -19,6 +20,8 @@ export function ComposerInfoBridge() {
   const threadId = scope.kind === "thread" ? scope.threadId : null;
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState(false);
+  const [restoreStates, setRestoreStates] = useState<Record<string, RestoreState>>({});
+  const restore = useMemo(() => createThreadRestorer(sdk.threads, state => setRestoreStates(previous => ({ ...previous, [state.threadId]:state }))), [sdk]);
   useEffect(() => {
     if (!threadId) return;
     const controller = new AbortController();
@@ -36,12 +39,17 @@ export function ComposerInfoBridge() {
         const readOnlyPromise = (async () => {
           const thread = await sdk.threads.get({ threadId, include:"environment", signal });
           const environment = "environment" in thread ? thread.environment : null;
-          if (thread.archivedAt === null && environment?.status !== "destroyed" && environment?.hostLifecycle !== "removed") return { queue:[] as Queue, pullRequest:null };
+          const lifecycle = environment?.hostLifecycle;
+          const label = thread.archivedAt !== null ? "Archived thread" : lifecycle === "removed" ? "Machine removed"
+            : lifecycle === "removing" ? "Machine removal in progress" : lifecycle === "cleanup-failed" ? "Machine cleanup failed"
+            : environment?.status === "destroyed" ? "Environment unavailable" : null;
+          const readOnly = { label, canRestore:thread.canRestoreEnvironment };
+          if (!label) return { queue:[] as Queue, pullRequest:null, readOnly };
           const results = await Promise.allSettled([
             sdk.threads.queuedMessages.list({ threadId, signal }),
             thread.environmentId ? sdk.environments.pullRequest({ environmentId:thread.environmentId, signal }) : Promise.resolve(null),
           ]);
-          return { queue:results[0].status === "fulfilled" ? results[0].value : [], pullRequest:results[1].status === "fulfilled" ? results[1].value : null };
+          return { queue:results[0].status === "fulfilled" ? results[0].value : [], pullRequest:results[1].status === "fulfilled" ? results[1].value : null, readOnly };
         })();
         const childrenPromise = (async () => {
           const children: Children = [];
@@ -82,6 +90,7 @@ export function ComposerInfoBridge() {
   }, [sdk, threadId]);
   if (!threadId) return null;
   const data = snapshot?.threadId === threadId ? snapshot : null;
+  const restoring = restoreStates[threadId];
   const timeline = data?.timeline;
   const children = data?.children ?? [];
   const pullRequest = data?.pullRequest?.outcome === "available" ? data.pullRequest.pullRequest : null;
@@ -94,9 +103,14 @@ export function ComposerInfoBridge() {
       hidden:true,
       [`${mark}-thread`]:threadId,
       [`${mark}-settings`]:JSON.stringify(values ?? {}),
+      [`${mark}-read-only-label`]:data?.readOnly.label ?? undefined,
       [`${mark}-children`]:JSON.stringify(children.map(child => ({ id:child.id, title:child.title ?? child.titleFallback ?? "Child Thread", state:childState(child.runtime.displayStatus, child.hasPendingInteraction) }))),
     }, ...infoKinds.map(kind => createElement("span", { key:kind.key, [`${mark}-icon`]:kind.key },
-      createElement(experimental_Icon, { name:kind.icon, "aria-hidden":true })))),
+      createElement(experimental_Icon, { name:kind.icon, "aria-hidden":true }))),
+      createElement("button", { type:"button", [`${mark}-restore-source`]:"unarchive", disabled:restoring?.pending === true,
+        [`${mark}-restore-error`]:restoring?.error ?? undefined, onClick:() => void restore(threadId, "unarchive") }, restoring?.pending ? "Unarchiving..." : "Unarchive"),
+      createElement("button", { type:"button", [`${mark}-restore-source`]:"environment", disabled:restoring?.pending === true || !data?.readOnly.canRestore,
+        [`${mark}-restore-error`]:restoring?.error ?? undefined, onClick:() => void restore(threadId, "environment") }, restoring?.pending ? "Restoring..." : !data ? "불러오는 중" : data.readOnly.canRestore ? "Restore workspace" : "복구 불가")),
     createElement("div", { [`${mark}-supplements`]:"" },
       timeline?.activePromptMode ? section("plan", "Plan", "ListTodo", createElement("p", null, timeline.activePromptMode.prompt)) : null,
       timeline?.goal ? section("goal", "Goal", "Target", createElement("div", null,

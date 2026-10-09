@@ -1018,7 +1018,7 @@ test("archived stack-only composer offers only restore and preserves its native 
   f.dom.window.close();
 });
 
-test("native Thread history identifies archive status without mistaking a missing workspace for archive", async () => {
+test("native Thread history shows one full-width state for archive and removed environments", async () => {
   const f=fixture();
   const stack=f.document.querySelector('[data-promptbox-shell] > .grid')!;
   const status=f.document.createElement('section'); status.setAttribute('aria-label','Thread history');
@@ -1030,9 +1030,59 @@ test("native Thread history identifies archive status without mistaking a missin
     assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null);
     status.innerHTML='<div role="status" aria-label="Workspace removed">Workspace removed</div><button>Restore workspace</button>';
     await f.tick();
-    assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'));
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null);
+    assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-all]')!.hidden,true);
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="status"]')?.textContent,'Workspace removed');
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("restore popovers use the SDK bridge when BB omits its native action", async () => {
+  for (const [label,kind,text] of [['Thread is archived','unarchive','Unarchive'],['Environment unavailable','environment','Restore workspace'],['Machine removed','environment','Restore workspace'],['Machine removal in progress','environment','Restore workspace'],['Machine cleanup failed','environment','Restore workspace']]) {
+    const f=fixture();
+    const stack=f.document.querySelector('[data-promptbox-shell] > .grid')!;
+    stack.insertAdjacentHTML('beforeend',`<section aria-label="Thread history"><button id="thread-prompt-banner-parent-thread-toggle" aria-expanded="false" aria-controls="omitted-action">Parent</button><div role="status" aria-label="${label}">${label}</div><div id="omitted-action" hidden>Parent details without a restore action</div></section>`);
+    const source=f.document.createElement('button'); source.setAttribute('data-bb-chat-ui-info-restore-source',kind); source.textContent=text;
+    f.document.querySelector('[data-bb-chat-ui-info-settings]')!.append(source);
+    let calls=0; source.addEventListener('click',()=>calls++);
+    const stop=injectComposerInfo(f.document);
+    try {
+      f.click('[data-bb-chat-ui-info-trigger="status"]');
+      const restore=f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-unarchive]')!;
+      assert.equal(restore.disabled,false,'the missing native button must not disable the SDK action');
+      assert.equal(restore.textContent,text);
+      assert.equal(f.document.querySelector('#thread-prompt-banner-parent-thread-toggle')!.getAttribute('aria-expanded'),'false','SDK restore does not expand the parent card');
+      restore.click(); assert.equal(calls,1);
+      source.disabled=true; source.textContent='Restoring...'; await f.tick();
+      assert.equal(restore.disabled,true);
+      source.setAttribute('data-bb-chat-ui-info-restore-error','Provider restore failed'); await f.tick();
+      assert.equal(f.document.querySelector('[role="alert"]')?.textContent,'Provider restore failed');
+      source.removeAttribute('data-bb-chat-ui-info-restore-error'); source.disabled=false; source.textContent=text; await f.tick();
+      assert.equal(f.document.querySelector('[role="alert"]'),null);
+      assert.equal(restore.disabled,false);
+      assert.equal(f.document.querySelector('[data-bb-chat-ui-info-archive-catalog]'),null);
+    } finally { stop(); f.dom.window.close(); }
+  }
+});
+
+test("SDK restoration capability overrides a stale native action and archive takes priority", async () => {
+  const f=fixture();
+  const stack=f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  stack.insertAdjacentHTML('beforeend','<section aria-label="Thread history"><div role="status" aria-label="Machine removed">Machine removed</div><button>Restore workspace</button></section>');
+  const source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  source.innerHTML='<button data-bb-chat-ui-info-restore-source="environment" disabled>복구 불가</button><button data-bb-chat-ui-info-restore-source="unarchive">Unarchive</button>';
+  let calls=0; source.querySelector('[data-bb-chat-ui-info-restore-source="unarchive"]')!.addEventListener('click',()=>calls++);
+  const stop=injectComposerInfo(f.document);
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="status"]');
+    const restore=f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-unarchive]')!;
+    assert.equal(restore.textContent,'복구 불가'); assert.equal(restore.disabled,true);
+    source.setAttribute('data-bb-chat-ui-info-read-only-label','Archived thread'); await f.tick();
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="status"]')!.textContent,'Archived thread');
+    f.click('[data-bb-chat-ui-info-trigger="status"]');
+    f.click('[aria-label="Unarchive"]'); assert.equal(calls,1);
+    source.removeAttribute('data-bb-chat-ui-info-read-only-label');
+    stack.querySelector('section[aria-label="Thread history"]')!.remove(); await f.tick();
     assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-all]')!.hidden,false);
-    assert.notEqual(f.document.querySelector('[data-bb-chat-ui-info-trigger="status"]')?.textContent,'Archived thread');
   } finally { stop(); f.dom.window.close(); }
 });
 
