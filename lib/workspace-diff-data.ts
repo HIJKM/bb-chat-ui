@@ -6,7 +6,7 @@ interface Workspace extends DetailedWorkspace {
   mergeBase?: (NonNullable<DetailedWorkspace["mergeBase"]> & { aheadCount?:number }) | null;
 }
 interface Reader {
-  status(args:{ environmentId:string; signal:AbortSignal; mergeBaseBranch?:string }):Promise<{ outcome:string; workspace?:Workspace }>;
+  status(args:{ environmentId:string; signal:AbortSignal; mergeBaseBranch?:string }):Promise<{ outcome:string; workspace?:Workspace; reason?:string; failure?:{ code:string } }>;
   pullRequest(args:{ environmentId:string; signal:AbortSignal }):Promise<{ outcome:string; pullRequest?:{ state:string; baseRefName:string; headRefName:string } }>;
 }
 interface Comparison { ref:string | null; count:number | null; commits:readonly DiffCommit[]; }
@@ -19,6 +19,11 @@ export interface DiffPresentation {
 }
 
 export type WorkspaceDiffSnapshot = NonNullable<Awaited<ReturnType<typeof readWorkspaceDiff>>>;
+
+function nonGit(result:Awaited<ReturnType<Reader["status"]>>):boolean {
+  return result.outcome === "not_applicable" && result.reason === "non_git_environment"
+    || result.outcome === "unavailable" && result.failure?.code === "not_git_repo";
+}
 
 export function branchName(ref:string):string {
   return ref.replace(/^refs\/heads\//, "").replace(/^(?:refs\/remotes\/)?origin\//, "");
@@ -49,12 +54,15 @@ function comparison(result:{ workspace?:Workspace } | undefined, ref:string, wor
 }
 
 export async function readWorkspaceDiff(sdk:Reader, environmentId:string, baseBranch:string | undefined, signal:AbortSignal) {
-  const [status, prResult] = await Promise.allSettled([
-    sdk.status({ environmentId, signal }), sdk.pullRequest({ environmentId, signal }),
-  ]);
+  const prQuery = Promise.allSettled([sdk.pullRequest({ environmentId, signal })]);
+  const [status] = await Promise.allSettled([sdk.status({ environmentId, signal })]);
   if (signal.aborted || status.status !== "fulfilled") return null;
+  // undefined confirms absence; null leaves a previous coherent snapshot intact.
+  if (nonGit(status.value)) return undefined;
   const workspace = status.value.workspace;
   if (!workspace || status.value.outcome !== "available") return null;
+  const [prResult] = await prQuery;
+  if (signal.aborted) return null;
   const name = workspace.branch.currentBranch ? branchName(workspace.branch.currentBranch) : null;
   const main = name === "main" || name === "master";
   const pr = prResult.status === "fulfilled" && prResult.value.outcome === "available" ? prResult.value.pullRequest : null;
@@ -65,6 +73,7 @@ export async function readWorkspaceDiff(sdk:Reader, environmentId:string, baseBr
   const refs = name ? [...new Set([prRef, pushRef!])] : [];
   const results = await Promise.allSettled(refs.map(mergeBaseBranch => sdk.status({ environmentId, signal, mergeBaseBranch })));
   if (signal.aborted) return null;
+  if (results.some(result => result.status === "fulfilled" && nonGit(result.value))) return undefined;
   // Do not publish a partial refresh as a branch-only/zero state. A missing
   // remote ref in an otherwise successful status remains genuinely unknown.
   if (results.some(result => result.status !== "fulfilled"

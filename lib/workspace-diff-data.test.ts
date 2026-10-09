@@ -148,3 +148,15 @@ test("a new commit during comparison is retried as one coherent snapshot", async
   } };
   assert.equal(await readWorkspaceDiff(sdk,'env_test',undefined,new AbortController().signal),null);
 });
+
+test("confirmed non-Git status finishes without waiting for an unrelated PR lookup", async () => {
+  let settled = false;
+  const sdk = {
+    async status() { return { outcome:"unavailable", failure:{ code:"not_git_repo" } }; },
+    pullRequest:() => new Promise<{ outcome:string }>(() => {}),
+  };
+  const result = readWorkspaceDiff(sdk,"env_test",undefined,new AbortController().signal).then(value => { settled = true; return value; });
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(settled,true,"non-Git detection must not wait for PR data");
+  assert.equal(await result,undefined,"confirmed absence differs from a retryable incomplete snapshot");
+});

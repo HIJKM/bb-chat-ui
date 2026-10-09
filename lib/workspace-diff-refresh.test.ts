@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { startWorkspaceDiffRefresh } from "./workspace-diff-refresh.ts";
+import type { readWorkspaceDiff } from "./workspace-diff-data.ts";
 
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
 function deferred<T>() {
@@ -8,18 +9,19 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done; });
   return { promise, resolve };
 }
-function fixture() {
+type StatusResponse = Awaited<ReturnType<Parameters<typeof readWorkspaceDiff>[0]["status"]>>;
+function fixture(initialStatus?:() => Promise<StatusResponse>) {
   let environmentId:string | null = 'env_main';
   let count = 3;
   let reads = 0;
   const handlers = new Map<string,(event:{ id:string; changes:string[] }) => void>();
   const output:string[] = [];
   let loadThread = async () => { reads++; return { environmentId }; };
-  let loadStatus = async (args:{ environmentId:string; mergeBaseBranch?:string }) => ({ outcome:'available', workspace:{
+  let loadStatus:(args:{ environmentId:string; mergeBaseBranch?:string }) => Promise<StatusResponse> = initialStatus ?? (async (args:{ environmentId:string; mergeBaseBranch?:string }) => ({ outcome:'available', workspace:{
     branch:{ currentBranch:args.environmentId === 'env_main' ? 'main' : 'feature/chat', defaultBranch:'main' },
     checkout:{ headSha:'head' }, workingTree:{ insertions:0, deletions:0, files:[] },
     mergeBase:{ insertions:0, deletions:0, files:[], commits:[], baseRef:'base', aheadCount:count, mergeBaseBranch:args.mergeBaseBranch ?? 'main' },
-  } });
+  } }));
   const sdk = {
     threads:{ get:() => loadThread() },
     environments:{ get:async () => ({ mergeBaseBranch:'main' }), status:(args:Parameters<typeof loadStatus>[0]) => loadStatus(args), pullRequest:async () => ({ outcome:'absent' }) },
@@ -87,4 +89,40 @@ test('in-flight results are discarded when the thread changes environments', asy
   f.stop();
   const before=f.output.length; f.emit('environment:changed','env_feature',['workspace-changed']); await f.refresh();
   assert.equal(f.output.length,before,'disposed controllers cannot publish');
+});
+
+test('confirmed non-Git environments finish initial loading and clear a previous Git snapshot', async () => {
+  for (const response of [
+    { outcome:'not_applicable', reason:'non_git_environment' },
+    { outcome:'unavailable', failure:{ code:'not_git_repo' } },
+  ] satisfies StatusResponse[]) {
+    const f = fixture(async () => response); await tick();
+    assert.deepEqual(f.labels(), ['<empty>']);
+    f.stop();
+    const previous = fixture(); await tick();
+    previous.setStatus(async () => response);
+    await previous.refresh();
+    assert.deepEqual(previous.labels(), ['↑3','<empty>']);
+    previous.stop();
+  }
+});
+
+test('an initial status error ends loading and the next refresh can recover', async () => {
+  const f = fixture(async () => { throw new Error('disconnected'); }); await tick();
+  assert.deepEqual(f.labels(), ['<empty>']);
+  f.setStatus(async args => ({ outcome:'available', workspace:{
+    branch:{ currentBranch:'main', defaultBranch:'main' }, checkout:{ headSha:'head' },
+    workingTree:{ insertions:0,deletions:0,files:[] },
+    mergeBase:{ insertions:0,deletions:0,files:[],commits:[],baseRef:'base',aheadCount:2,mergeBaseBranch:args.mergeBaseBranch ?? 'main' },
+  } }));
+  await f.refresh();
+  assert.deepEqual(f.labels(), ['<empty>','↑2']);
+  f.stop();
+});
+
+test('an unavailable initial workspace also finishes loading without fabricating Git information', async () => {
+  const f = fixture(async () => ({ outcome:'unavailable', failure:{ code:'permission_denied' } }));
+  await tick();
+  assert.deepEqual(f.labels(), ['<empty>']);
+  f.stop();
 });

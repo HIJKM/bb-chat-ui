@@ -12,6 +12,8 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
   let revision = 0;
   let fetching = false;
   let pending = false;
+  let published = false;
+  const update = (summary:string) => { published = true; publish(summary); };
   const refresh = async () => {
     if (signal.aborted) return;
     if (fetching) { pending = true; return; }
@@ -23,7 +25,7 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
         const thread = await sdk.threads.get({ threadId, signal });
         if (stale()) return;
         const id = thread.environmentId;
-        if (!id) { environmentId = null; publish(""); return; }
+        if (!id) { environmentId = null; update(""); return; }
         const environment = await sdk.environments.get({ environmentId:id, signal });
         if (stale()) return;
         environmentId = id;
@@ -32,10 +34,13 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
       }
       if (!environmentId) return;
       const result = await readWorkspaceDiff(sdk.environments, environmentId, mergeBaseBranch, signal);
-      // Refresh failures and mixed HEADs are not empty workspaces.
-      if (!stale() && result) publish(JSON.stringify(result));
+      if (!stale()) {
+        if (result) update(JSON.stringify(result));
+        else if (result === undefined || !published) update("");
+      }
     } catch {
       // Keep the last summary during a temporary disconnect.
+      if (!stale() && !published) update("");
     } finally {
       fetching = false;
       if (pending && !signal.aborted) { pending = false; void refresh(); }
