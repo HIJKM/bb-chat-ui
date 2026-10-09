@@ -773,6 +773,7 @@ export function injectComposerInfo(document: Document): () => void {
       const icon = (summary && presentation && presentation.mode !== "working" ? emptyIcon("diff") : null)
         ?? (item.key === "annotations" ? emptyIcon("annotations") : null)
         ?? (item.key === "queue" ? emptyIcon("queue") : null)
+        ?? (["plan", "status", "machine", "other"].includes(item.key) ? emptyIcon(item.key) : null)
         ?? (!summary ? emptyIcon(item.key) : null)
         ?? item.trigger?.querySelector("svg, [data-icon-root]") ?? item.node.querySelector("svg, [data-icon-root]") ?? emptyIcon(item.key);
       button.replaceChildren();
@@ -1180,7 +1181,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (request || reduced() || bar.hidden) cancelExit();
       const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
-      const next = JSON.stringify([settings, readOnlyLabel, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
+      const next = JSON.stringify([settings, readOnlyLabel, infoKinds.map(kind => emptyIcon(kind.key)?.outerHTML), items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
       let widthChange: { button:HTMLButtonElement; from:number } | null = null;
       if (signature !== next) {
         if (signature) pulse();

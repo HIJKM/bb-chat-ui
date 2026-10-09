@@ -23,6 +23,12 @@ function ComposerBridges() {
 }
 
 export default definePluginApp((app) => {
+  // Same pulse glyph as Thread Theme's Status view; register locally without depending on that plugin.
+  app.experimental_icons.register({
+    name:"bb-chat-ui-status",
+    component:({ className }) => createElement("svg", { viewBox:"0 0 24 24", className, fill:"none", stroke:"currentColor", strokeWidth:2, strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":true },
+      createElement("path", { d:"M22 12h-4l-3 9L9 3l-3 9H2" })),
+  });
   app.slots.settingsSection({
     id:"composer-info",
     title:"컴포저 위 정보",

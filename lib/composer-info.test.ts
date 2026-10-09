@@ -262,6 +262,26 @@ test("queue pill uses its Clock family icon instead of the hidden native disclos
   stop(); f.dom.window.close();
 });
 
+test("distinct family icons replace native duplicates in pills and the catalog, even when icons arrive late", async () => {
+  const f=fixture();
+  const stack=f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  stack.insertAdjacentHTML('beforeend','<section aria-label="Prompt mode"><button><svg data-native-icon="ListTodo" /></button>Plan</section><section aria-label="Thread history"><button><svg data-native-icon="MessageSquare" /></button>Status</section><section aria-label="Machine status"><button id="machine-status-toggle"><svg data-native-icon="Terminal" /></button>Machine</section>');
+  f.document.querySelector('.plugin-banner button')!.insertAdjacentHTML('afterbegin','<svg data-native-icon="AlertTriangle" />');
+  const source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  const stop=injectComposerInfo(f.document);
+  try {
+    for (const key of ['plan','status','machine','other']) source.insertAdjacentHTML('beforeend',`<span data-bb-chat-ui-info-icon="${key}"><svg data-family="${key}" /></span>`);
+    await f.tick();
+    for (const key of ['plan','status','machine','other']) {
+      const pill=f.document.querySelector(`[data-bb-chat-ui-info-trigger="${key}"]`)!;
+      assert.ok(pill.querySelector(`[data-family="${key}"]`),`${key}: the family artwork overrides the native duplicate`);
+      assert.equal(pill.querySelector('[data-native-icon]'),null);
+    }
+    f.click('[data-bb-chat-ui-info-all]');
+    for (const key of ['plan','status','machine','other']) assert.ok(f.document.querySelector(`[data-bb-chat-ui-info-choice="${key}"] [data-family="${key}"]`));
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("popover scroll hints follow available content, including nested scroll areas, and are cleaned up", async () => {
   const f = fixture();
   const stop = injectComposerInfo(f.document);

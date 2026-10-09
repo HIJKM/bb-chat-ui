@@ -46,6 +46,8 @@ Child Thread는 배경 없는 30px 색상 아바타 스택이다. 마지막 세 
 
 Agentation은 BB 브라우저 `Annotate elements` 버튼과 같은 SDK `MessageSquarePlus` (`BubbleChatAddIcon`)와 실제 staged 개수만 필에 표시한다. 빈 상태·전체 정보 목록·상세 제목과 행도 같은 glyph를 사용한다. SDK 아이콘이 늦게 준비되어도 개수 변경 없이 표시를 갱신한다. 원래 카드의 `ChatFeedback` 제목 아이콘은 관리되는 팝오버 안에서만 숨기며 원래 DOM을 유지한다. 상세는 피드백 본문과 위치·대상 정보를 두 줄로 나누고, 각 행 앞에 같은 아이콘을 둔다. 행 구분선은 없애고 최소 높이 52px, 여백 10px 8px, 둥근 모서리 10px와 행 간격 4px를 적용한다. hover와 내부 버튼의 키보드 포커스에는 Child Thread와 같은 테마 foreground 6% 배경을 표시한다. 전체 전송·삭제 버튼은 목록 아래에 둔다. 원래 Agentation DOM과 개별 멘션·전송·삭제, 확인 dialog, 오류 재시도 동작을 유지하며, 상단 X는 원래 접기 동작으로 상세를 닫는다.
 
+정보 계열의 아이콘 매핑은 서로 겹치지 않게 한다. Plan은 `FileText`, 할 일은 `ListTodo`, Parent는 `MessageSquare`, 스레드 상태는 Thread Theme의 Status와 같은 심박선 glyph를 로컬 `bb-chat-ui-status`로 등록해 사용한다. 실행 환경은 `Laptop`, 백그라운드 작업은 `Terminal`, 기타 정보는 `Info`, Model fallback은 `AlertTriangle`로 구분한다. 다른 플러그인의 등록이나 설정에 의존하지 않는다. Plan·스레드 상태·실행 환경·기타 정보의 pill에는 native 카드의 중복 아이콘보다 계열 아이콘을 우선하며, 빈 상태와 전체 정보 목록에도 같은 아이콘을 쓴다. 아이콘이 늦게 준비되어도 정보 값의 변경 없이 표시를 갱신한다.
+
 정보 줄의 모든 필·아바타 스택·전체 정보 원 버튼과 펼친 목록의 버튼은 사용자 클릭당 `impact-light` 햅틱을 한 번 낸다. 터치·마우스·키보드 활성화를 같은 click 경로에서 처리한다. 호스트 disclosure에 전달하는 합성 클릭과 pointerup은 추가 진동을 만들지 않는다. 빠르게 다른 정보를 선택해도 각 클릭을 처리하며, disabled 버튼과 `haptic` capability가 없는 셸에서는 울리지 않는다.
 
 기존 boolean 설정을 쓴 설치를 업그레이드할 때는 빌드·reload 전에 `bb plugin config bb-chat-ui --json`의 값을 보관하고, reload 후 같은 키에 `true → 상단 표시`, `false → 목록에만 표시`로 저장해 선택을 유지한다.

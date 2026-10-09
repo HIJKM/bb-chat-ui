@@ -1,7 +1,7 @@
 export const infoKinds = [
   { key: "diff", icon: "GitBranch", setting: "showDiff", label: "Code Diff", default: true },
   { key: "children", icon: "UserRound", setting: "showChildren", label: "Child Thread", default: true },
-  { key: "plan", icon: "ListTodo", setting: "showPlan", label: "Plan", default: true },
+  { key: "plan", icon: "FileText", setting: "showPlan", label: "Plan", default: true },
   { key: "goal", icon: "Target", setting: "showGoal", label: "Goal", default: true },
   { key: "todos", icon: "ListTodo", setting: "showTodos", label: "할 일", default: true },
   { key: "workflow", icon: "Workflow", setting: "showWorkflow", label: "Workflow", default: true },
@@ -10,10 +10,10 @@ export const infoKinds = [
   { key: "annotations", icon: "MessageSquarePlus", setting: "showAnnotations", label: "Agentation", default: true },
   { key: "pullRequest", icon: "GitPullRequest", setting: "showPullRequest", label: "Pull request", default: true },
   { key: "parent", icon: "MessageSquare", setting: "showParent", label: "Parent", default: true },
-  { key: "machine", icon: "Terminal", setting: "showMachine", label: "실행 환경", default: true },
+  { key: "machine", icon: "Laptop", setting: "showMachine", label: "실행 환경", default: true },
   { key: "fallback", icon: "AlertTriangle", setting: "showFallback", label: "Model fallback", default: true },
-  { key: "status", icon: "MessageSquare", setting: "showStatus", label: "스레드 상태", default: true },
-  { key: "other", icon: "AlertTriangle", setting: "showOther", label: "기타 플러그인 정보", default: true },
+  { key: "status", icon: "bb-chat-ui-status", setting: "showStatus", label: "스레드 상태", default: true },
+  { key: "other", icon: "Info", setting: "showOther", label: "기타 플러그인 정보", default: true },
 ] as const;
 
 export type InfoKind = typeof infoKinds[number]["key"];

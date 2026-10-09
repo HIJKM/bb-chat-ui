@@ -94,7 +94,7 @@ export function ComposerInfoBridge() {
   const timeline = data?.timeline;
   const children = data?.children ?? [];
   const pullRequest = data?.pullRequest?.outcome === "available" ? data.pullRequest.pullRequest : null;
-  const section = (kind: string, title: string, icon: "ListTodo" | "Target" | "UserRound" | "CircleAlert", content: ReturnType<typeof createElement>) => createElement("section", {
+  const section = (kind: string, title: string, icon: "FileText" | "ListTodo" | "Target" | "UserRound" | "CircleAlert", content: ReturnType<typeof createElement>) => createElement("section", {
     key:kind, [`${mark}-kind`]:kind, "aria-label":title,
   }, createElement("h3", null, createElement(experimental_Icon, { name:icon, "aria-hidden":true }), " ", title,
     kind === "children" ? createElement("button", { type:"button", [`${mark}-dismiss`]:kind, "aria-label":"Child Threads 닫기" }, "×") : null), content);
@@ -112,7 +112,7 @@ export function ComposerInfoBridge() {
       createElement("button", { type:"button", [`${mark}-restore-source`]:"environment", disabled:restoring?.pending === true || !data?.readOnly.canRestore,
         [`${mark}-restore-error`]:restoring?.error ?? undefined, onClick:() => void restore(threadId, "environment") }, restoring?.pending ? "Restoring..." : !data ? "불러오는 중" : data.readOnly.canRestore ? "Restore workspace" : "복구 불가")),
     createElement("div", { [`${mark}-supplements`]:"" },
-      timeline?.activePromptMode ? section("plan", "Plan", "ListTodo", createElement("p", null, timeline.activePromptMode.prompt)) : null,
+      timeline?.activePromptMode ? section("plan", "Plan", "FileText", createElement("p", null, timeline.activePromptMode.prompt)) : null,
       timeline?.goal ? section("goal", "Goal", "Target", createElement("div", null,
         createElement("p", null, timeline.goal.objective),
         createElement("p", { className:"text-subtle-foreground" }, `${timeline.goal.status} · ${timeline.goal.tokensUsed.toLocaleString()}${timeline.goal.tokenBudget == null ? "" : ` / ${timeline.goal.tokenBudget.toLocaleString()}`} tokens · ${Math.round(timeline.goal.timeUsedSeconds)}s`))) : null,
