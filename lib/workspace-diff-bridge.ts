@@ -29,6 +29,7 @@ export function WorkspaceDiffBridge() {
 
   if (!threadId) return null;
   const summary = snapshot?.threadId === threadId ? snapshot.summary : "";
-  return createElement("span", { hidden: true, [HEAD_DIFF_MARK]: summary },
+  const state = snapshot?.threadId !== threadId ? "loading" : summary ? "ready" : "unavailable";
+  return createElement("span", { hidden: true, [HEAD_DIFF_MARK]: summary, [`${HEAD_DIFF_MARK}-state`]:state },
     createElement(experimental_Icon, { name: "GitBranch", "aria-hidden": true }));
 }

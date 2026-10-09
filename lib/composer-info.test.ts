@@ -69,15 +69,19 @@ test("pills bubble once on first visible appearance, preserving avatar motion an
   assert.equal(pills()[0].frames[1].easing, 'cubic-bezier(.36,0,.18,1)', 'each segment slows to zero at the turn and the end');
   assert.match(composerInfoCss, /animation:bb-info-bubble 460ms cubic-bezier\(\.36,0,\.18,1\) backwards/);
   assert.match(composerInfoCss, /60% \{ transform:translateY\(-2px\) scale\(1\.1\); \} 100% \{ transform:none; \}/);
+  const firstAvatar=f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]');
   f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent = '+14 −4 · 3 files';
   await f.tick();
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]'),firstAvatar,'unrelated Diff arrival keeps the in-progress avatar bubble alive');
   source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'끄기', showQueue:'상단 표시' }));
   await f.tick();
   source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'상단 표시', showQueue:'상단 표시' }));
   await f.tick();
   f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
   assert.deepEqual(pills().map(entry => entry.key), ['diff', 'goal', 'queue'], 'refresh, re-enable and resize do not replay entry motion');
-  assert.ok(entries.filter(entry => entry.key === 'orb').every(entry => entry.options.duration === 360), 'activity reactions settle quickly too');
+  assert.equal(entries.filter(entry => entry.key === 'orb' && entry.options.duration === 460).length,1,'the all-information button enters once after the pills');
+  assert.equal(entries.find(entry => entry.key === 'orb')?.options.delay,270);
+  assert.ok(entries.filter(entry => entry.key === 'orb' && entry.options.duration !== 460).every(entry => entry.options.duration === 360), 'activity reactions settle quickly too');
   stop();
   assert.ok(pills().every(entry => entry.cancelled), 'in-progress entry animations are cancelled on unload');
   f.dom.window.close();
@@ -950,7 +954,7 @@ test("Code Diff pill shows one commit meaning and keeps unpushed counts inside i
   stop(); f.dom.window.close();
 });
 
-test("first entry waits for SDK Diff data instead of flashing the host Diff before the branch or hidden main", async () => {
+test("first entry shows an animated Diff placeholder, then reveals SDK data without flashing host counts", async () => {
   for (const showEmptyIcons of [false,true]) {
     const f = fixture();
     f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings',JSON.stringify({ showEmptyIcons }));
@@ -958,7 +962,11 @@ test("first entry waits for SDK Diff data instead of flashing the host Diff befo
     source.setAttribute('data-bb-chat-ui-head-diff','');
     f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
     const stop = injectComposerInfo(f.document);
-    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null,'no provisional host line counts or empty icons during initial loading');
+    const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!;
+    assert.ok(pill,'Diff enters before its slow first result');
+    assert.equal(pill.textContent,'...','no provisional host line counts during loading');
+    assert.equal(pill.getAttribute('aria-busy'),'true');
+    assert.equal(pill.querySelectorAll('[data-bb-chat-ui-info-diff-loading] span').length,3);
     f.click('[data-bb-chat-ui-info-all]');
     assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="diff"]'),'catalog remains available');
     f.click('[data-bb-chat-ui-info-all]');
@@ -967,17 +975,95 @@ test("first entry waits for SDK Diff data instead of flashing the host Diff befo
       detail:{ branch:'feature/chat',basis:'HEAD 대비 미커밋 변경',baseRef:'origin/main',files:[],commits:[],commitKind:'pr',commitCount:8 },
     }));
     await f.tick();
-    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent,'feature/c… · 8');
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),pill,'the same pill reveals its result');
+    assert.equal(pill.textContent,'feature/c… · 8');
+    assert.equal(pill.hasAttribute('aria-busy'),false);
     // A new thread's source is empty until its own first result arrives.
     source.setAttribute('data-bb-chat-ui-head-diff',''); await f.tick();
-    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null);
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent,'...');
     source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({ insertions:0,deletions:0,files:0,branch:null,
       presentation:{ mode:'unpushed',visible:false,branch:'main',branchLabel:'main',label:'main' },
     }));
     await f.tick();
-    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null,'clean main stays hidden from entry through first result');
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null,'confirmed clean main still hides the pill');
     stop(); f.dom.window.close();
   }
+});
+
+test("Diff loading widens into its result once and respects reduced motion and unavailable environments", async () => {
+  for (const reduced of [false,true]) {
+    const f = fixture();
+    Object.defineProperty(f.dom.window,'matchMedia',{value:()=>({matches:reduced})});
+    f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings','{"showEmptyIcons":true}');
+    const source = f.document.createElement('span'); source.setAttribute('data-bb-chat-ui-head-diff','');
+    f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+    const entries:{key:string|null;frames:Keyframe[];options:KeyframeAnimationOptions;cancelled:boolean}[]=[];
+    Object.defineProperty(f.dom.window.HTMLElement.prototype,'offsetWidth',{get() {
+      return this.hasAttribute('data-bb-chat-ui-info-trigger') ? this.hasAttribute('aria-busy') ? 64 : 180 : 0;
+    }});
+    f.dom.window.HTMLElement.prototype.animate=function(frames,options) {
+      const entry={key:this.getAttribute('data-bb-chat-ui-info-trigger'),frames:frames as Keyframe[],options:options as KeyframeAnimationOptions,cancelled:false}; entries.push(entry);
+      return {cancel:()=>{entry.cancelled=true;}} as Animation;
+    };
+    const stop=injectComposerInfo(f.document);
+    const pill=f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!;
+    source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({insertions:7,deletions:2,files:1,branch:'feature/chat',
+      presentation:{mode:'working',visible:true,branch:'feature/chat',label:'+7 −2 · 1 file'},
+    })); await f.tick();
+    const width=entries.filter(entry=>entry.key==='diff'&&entry.frames[0].width);
+    assert.equal(width.length,reduced?0:1);
+    if(!reduced) {
+      assert.deepEqual(width[0].frames.map(frame=>frame.width),['64px','180px']);
+      assert.equal(width[0].options.duration,320);
+      assert.equal(entries.filter(entry=>entry.key==='diff'&&entry.options.duration===460).length,1,'data arrival does not repeat the entry bubble');
+    }
+    assert.equal(pill.textContent,'+7 −2 · 1 file');
+    const refreshed=JSON.parse(source.getAttribute('data-bb-chat-ui-head-diff')!);
+    refreshed.detail={branch:'feature/chat',basis:'HEAD 대비 미커밋 변경',baseRef:'origin/main',files:[],commits:[]};
+    source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify(refreshed)); await f.tick();
+    if(!reduced) assert.equal(width[0].cancelled,false,'detail-only refresh does not interrupt the width transition');
+    source.setAttribute('data-bb-chat-ui-head-diff','');
+    source.setAttribute('data-bb-chat-ui-head-diff-state','unavailable'); await f.tick();
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null,'confirmed missing environment ends the placeholder even with empty icons enabled');
+    stop(); assert.ok(entries.filter(entry=>entry.options.duration!==360).every(entry=>entry.cancelled),'entry, width and content animations are cancelled on unload'); f.dom.window.close();
+  }
+});
+
+test("loading Diff exists without a native banner and obeys top, catalog-only and off settings", async () => {
+  const f=fixture();
+  f.document.querySelector('section[aria-label="Thread context before sending"]')!.remove();
+  const settings=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  const source=f.document.createElement('span'); source.setAttribute('data-bb-chat-ui-head-diff','');
+  f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  const stop=injectComposerInfo(f.document);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent,'...');
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff-content]')?.textContent,'불러오는 중');
+  settings.setAttribute('data-bb-chat-ui-info-settings','{"showDiff":"목록에만 표시"}'); await f.tick();
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'),null);
+  f.click('[data-bb-chat-ui-info-all]');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="diff"]'));
+  settings.setAttribute('data-bb-chat-ui-info-settings','{"showDiff":"끄기"}'); await f.tick();
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-choice="diff"]'),null);
+  stop(); f.dom.window.close();
+});
+
+test("entering another thread replays the sequence even when the composer DOM is reused", async () => {
+  const f=fixture();
+  const source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  source.setAttribute('data-bb-chat-ui-info-thread','thread-a');
+  const animated:string[]=[];
+  f.dom.window.HTMLElement.prototype.animate=function(_frames,options) {
+    if((options as KeyframeAnimationOptions).duration===460) animated.push(this.getAttribute('data-bb-chat-ui-info-trigger')??'all');
+    return {cancel(){}} as Animation;
+  };
+  const stop=injectComposerInfo(f.document);
+  assert.deepEqual(animated,['diff','all']);
+  source.setAttribute('data-bb-chat-ui-info-thread','thread-b'); await f.tick();
+  assert.deepEqual(animated,['diff','all','diff','all']);
+  f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+  assert.equal(animated.length,4,'resize does not restart the sequence');
+  stop(); f.dom.window.close();
 });
 
 test("clean main hides the pill even with empty icons enabled but remains in the catalog", async () => {

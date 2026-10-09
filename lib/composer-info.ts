@@ -61,6 +61,11 @@ export const composerInfoCss = `
 [${MARK}-diff-branch] code { min-width:0; overflow-wrap:anywhere; white-space:normal; }
 [${MARK}-diff-branch] svg, [${MARK}-diff-branch] [data-icon-root] { width:16px; height:16px; flex-shrink:0; }
 [${MARK}-trigger="diff"] { min-width:0; }
+[${MARK}-trigger="diff"][${MARK}-resizing] { overflow:hidden; }
+[${MARK}-diff-loading] { display:inline-flex; justify-content:center; width:20px; gap:2px; }
+[${MARK}-diff-loading] span { animation:bb-info-loading 900ms ease-in-out infinite; }
+[${MARK}-diff-loading] span:nth-child(2) { animation-delay:120ms; }
+[${MARK}-diff-loading] span:nth-child(3) { animation-delay:240ms; }
 [${MARK}-all] { position:absolute; right:0; width:32px; padding:0; }
 [${MARK}-bar][${MARK}-jump] { padding-right:80px; }
 [${MARK}-bar][${MARK}-jump] [${MARK}-all] { right:40px; }
@@ -177,6 +182,7 @@ ${DETAIL}.agentation-staging-shell li::before { content:""; flex-shrink:0; width
 @keyframes bb-info-enter { from { opacity:0; transform:translateY(8px) scale(.98); } to { opacity:1; transform:none; } }
 @keyframes bb-info-bubble { 0% { transform:translateY(8px) scale(.85); } 60% { transform:translateY(-2px) scale(1.1); } 100% { transform:none; } }
 @keyframes bb-info-breathe { 50% { opacity:.4; } }
+@keyframes bb-info-loading { 0%,80%,100% { opacity:.35; transform:none; } 40% { opacity:1; transform:translateY(-2px); } }
 @media (prefers-reduced-motion:reduce) { [${MARK}-bar] *, [${MARK}-stack] [${UNIT}][${OPEN}] { animation:none !important; transition:none !important; } }
 `;
 
@@ -251,8 +257,12 @@ export function injectComposerInfo(document: Document): () => void {
     const owned = new Set<HTMLElement>();
     const wrappers = new Set<HTMLElement>();
     const buttons = new Map<InfoKind, HTMLButtonElement>();
-    const appeared = new Set<InfoKind>();
+    const buttonContent = new WeakMap<HTMLElement, string>();
+    const appeared = new Set<InfoKind | "all">();
     const entryAnimations = new Set<Animation>();
+    const entering = new Set<HTMLElement>();
+    const widthAnimations = new Map<HTMLElement, { animation:Animation; width:number }>();
+    let threadId = stack.querySelector(`[${SOURCE}]`)?.getAttribute(`${MARK}-thread`) ?? null;
     let active: InfoKind | "all" | null = null;
     let activeNode: HTMLElement | null = null;
     let menu: HTMLElement | null = null;
@@ -405,7 +415,7 @@ export function injectComposerInfo(document: Document): () => void {
     const editing = () => stack.querySelector('[data-queued-message-inline-editor]') !== null;
     const reduced = () => view!.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const pulse = () => {
-      if (reduced()) return;
+      if (reduced() || entering.has(orb)) return;
       orb.animate?.([
         { transform:"scale(1)", offset:0, easing:"cubic-bezier(.36,0,.18,1)" },
         { transform:"scale(1.1)", offset:.6, easing:"cubic-bezier(.36,0,.18,1)" },
@@ -421,6 +431,10 @@ export function injectComposerInfo(document: Document): () => void {
     const readDiff = ():Partial<WorkspaceDiffSnapshot> | null => {
       try { return JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "null"); }
       catch { return null; }
+    };
+    const awaitingDiff = () => {
+      const source = stack.querySelector(`[${HEAD_DIFF_MARK}]`);
+      return !!source && source.getAttribute(`${HEAD_DIFF_MARK}-state`) !== "unavailable" && !readDiff();
     };
     const commitCount = (count:number) => {
       const chip = document.createElement("span"); chip.setAttribute(`${MARK}-commit-count`, "");
@@ -448,6 +462,7 @@ export function injectComposerInfo(document: Document): () => void {
       return available.length ? available : [{ key:kind.key, label:kind.label }];
     });
     const describe = (item: InfoItem) => {
+      if (item.key === "diff" && awaitingDiff()) return "불러오는 중";
       if (item.key === "annotations") return `${annotationCount(item)} staged`;
       if (item.key === "queue" && queueCount(item)) return `${queueCount(item)} queued`;
       if (item.key === "diff" && readDiff()?.presentation) return readDiff()!.presentation!.label;
@@ -564,6 +579,17 @@ export function injectComposerInfo(document: Document): () => void {
       }
     };
     const decorate = (button: HTMLElement, item: InfoItem, summary: boolean) => {
+      button.removeAttribute("aria-busy");
+      if (summary && item.key === "diff" && awaitingDiff()) {
+        const icon = emptyIcon("diff")?.cloneNode(true) as Element | undefined;
+        icon?.setAttribute("aria-hidden", "true");
+        const dots = document.createElement("span"); dots.setAttribute(`${MARK}-diff-loading`, ""); dots.setAttribute("aria-hidden", "true");
+        for (let i = 0; i < 3; i++) { const dot = document.createElement("span"); dot.textContent = "."; dots.append(dot); }
+        button.replaceChildren(...(icon ? [icon] : []), dots);
+        button.setAttribute("aria-busy", "true");
+        button.title = "Code Diff · 불러오는 중"; button.setAttribute("aria-label", button.title);
+        return;
+      }
       const text = document.createElement("span");
       let childCount = 0;
       text.textContent = summary && item.key === "diff" ? describe(item) : item.label;
@@ -775,14 +801,15 @@ export function injectComposerInfo(document: Document): () => void {
       const widths = [...buttons].map(([key, button]) => {
         button.hidden = false;
         // Entry transforms change visual bounds, but must not change which pills fit.
-        return { key, width:button.offsetWidth || button.getBoundingClientRect().width };
+        return { key, width:widthAnimations.get(button)?.width ?? (button.offsetWidth || button.getBoundingClientRect().width) };
       });
       const width = stack.getBoundingClientRect().width;
       const visible = new Set(fitComposerInfo(widths, width > 0 ? width - (bar.hasAttribute(`${MARK}-jump`) ? 40 : 0) : Number.POSITIVE_INFINITY));
       for (const [key, button] of buttons) button.hidden = !visible.has(key);
       if (bar.hidden) return;
       let entryDelay = 0;
-      for (const [key, button] of buttons) {
+      for (const button of [...Array.from(pills.children) as HTMLElement[], orb]) {
+        const key = button === orb ? "all" : button.getAttribute(`${MARK}-trigger`) as InfoKind;
         if (button.hidden || appeared.has(key)) continue;
         appeared.add(key);
         if (reduced()) continue;
@@ -799,8 +826,9 @@ export function injectComposerInfo(document: Document): () => void {
         ], { duration:460, delay:entryDelay, fill:"backwards" });
         entryDelay += 45;
         if (animation) {
+          entering.add(button);
           entryAnimations.add(animation);
-          animation.onfinish = animation.oncancel = () => entryAnimations.delete(animation);
+          animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); entering.delete(button); };
         }
       }
     };
@@ -809,6 +837,14 @@ export function injectComposerInfo(document: Document): () => void {
     const sync = () => {
       const source = stack.querySelector(`[${SOURCE}]`);
       if (!source) return;
+      const nextThreadId = source.getAttribute(`${MARK}-thread`);
+      if (nextThreadId !== threadId) {
+        close(false, true);
+        for (const animation of entryAnimations) animation.cancel();
+        entryAnimations.clear(); widthAnimations.clear(); entering.clear(); appeared.clear(); childStates.clear();
+        for (const button of buttons.values()) buttonContent.delete(button);
+        signature = ""; threadId = nextThreadId;
+      }
       const feedback = emptyIcon("annotations");
       if (feedback) {
         const mask = `url("data:image/svg+xml,${encodeURIComponent(new view!.XMLSerializer().serializeToString(feedback))}")`;
@@ -844,7 +880,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (!items.some(item => item.key === "diff")) {
         try {
           const summary = JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "null");
-          if (summary && Number.isFinite(summary.files) && Number.isFinite(summary.insertions) && Number.isFinite(summary.deletions)) {
+          if (awaitingDiff() || summary && Number.isFinite(summary.files) && Number.isFinite(summary.insertions) && Number.isFinite(summary.deletions)) {
             if (!diffSupplement) {
               diffSupplement = document.createElement("section");
               diffSupplement.setAttribute(UNIT, "");
@@ -854,9 +890,9 @@ export function injectComposerInfo(document: Document): () => void {
               bar.append(diffSupplement);
             }
             const button = diffSupplement.querySelector("button")!;
-            const text = summary.presentation?.label ?? `+${summary.insertions} −${summary.deletions} · ${summary.files} files`;
+            const text = awaitingDiff() ? "불러오는 중" : summary.presentation?.label ?? `+${summary.insertions} −${summary.deletions} · ${summary.files} files`;
             if (button.textContent !== text) button.textContent = text;
-            button.title = summary.branch ?? "Code Diff";
+            button.title = summary?.branch ?? "Code Diff";
             items.unshift({ key:"diff", node:diffSupplement, trigger:button, label:"Code Diff" });
           }
         } catch { /* A disconnected environment has no invented Diff tally. */ }
@@ -871,15 +907,19 @@ export function injectComposerInfo(document: Document): () => void {
       if (!listed.length) close();
       bar.hidden = request || !listed.length && !editing();
       const diff = readDiff();
-      const awaitingDiff = !!stack.querySelector(`[${HEAD_DIFF_MARK}]`) && !diff;
-      const exposed = exposedInfo(settings).filter(key => key !== "diff" || !awaitingDiff && diff?.presentation?.visible !== false);
+      const unavailableDiff = stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(`${HEAD_DIFF_MARK}-state`) === "unavailable";
+      const exposed = exposedInfo(settings).filter(key => key !== "diff" || !unavailableDiff && diff?.presentation?.visible !== false);
       const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
-      const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
+      const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
+      let widthChange: { button:HTMLButtonElement; from:number } | null = null;
       if (signature !== next) {
         if (signature) pulse();
         signature = next;
-        for (const [key, button] of buttons) if (!exposed.includes(key) || !showEmpty && !items.some(item => item.key === key)) { button.remove(); buttons.delete(key); }
+        for (const [key, button] of buttons) if (!exposed.includes(key) || !showEmpty && !items.some(item => item.key === key)) {
+          widthAnimations.get(button)?.animation.cancel();
+          button.remove(); buttons.delete(key);
+        }
         for (const key of exposed) {
           const item = items.find(item => item.key === key);
           if (!item && !showEmpty) continue;
@@ -891,17 +931,32 @@ export function injectComposerInfo(document: Document): () => void {
             button.addEventListener("click", () => open(key, button!));
             buttons.set(key, button);
           }
+          const previousText = button.textContent;
+          const previousWidth = button.offsetWidth || button.getBoundingClientRect().width;
+          const wasVisible = button.isConnected && !button.hidden && !bar.hidden && appeared.has(key);
           button.setAttribute("aria-expanded", String(active === key));
           button.toggleAttribute(`${MARK}-unavailable`, !item);
-          if (item) decorate(button, item, true);
-          else {
-            const icon = emptyIcon(key)?.cloneNode(true) as Element | undefined;
-            icon?.setAttribute("aria-hidden", "true");
-            button.replaceChildren(...(icon ? [icon] : []));
-            button.title = `${labelOf(key)} · 현재 없음`;
-            button.setAttribute("aria-label", button.title);
+          const content = JSON.stringify([item ? describe(item) : null, item?.trigger?.title,
+            emptyIcon(key)?.outerHTML ?? item?.trigger?.querySelector("svg, [data-icon-root]")?.outerHTML ?? item?.node.querySelector("svg, [data-icon-root]")?.outerHTML,
+            key === "children" ? stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`) : null,
+            key === "diff" ? [diff?.presentation, diff?.detail?.commitCount] : null]);
+          if (buttonContent.get(button) !== content) {
+            buttonContent.set(button, content);
+            if (item) decorate(button, item, true);
+            else {
+              button.removeAttribute("aria-busy");
+              const icon = emptyIcon(key)?.cloneNode(true) as Element | undefined;
+              icon?.setAttribute("aria-hidden", "true");
+              button.replaceChildren(...(icon ? [icon] : []));
+              button.title = `${labelOf(key)} · 현재 없음`;
+              button.setAttribute("aria-label", button.title);
+            }
           }
           pills.append(button);
+          if (key === "diff" && previousText !== button.textContent) {
+            widthAnimations.get(button)?.animation.cancel(); widthAnimations.delete(button);
+            if (wasVisible && previousWidth > 0 && !reduced()) widthChange = { button, from:previousWidth };
+          }
         }
         if (active === "all") { close(); open("all", orb); }
         else if (active === "diff" && menu?.hasAttribute(`${MARK}-diff`)) {
@@ -919,6 +974,26 @@ export function injectComposerInfo(document: Document): () => void {
         orb.title = `전체 정보 · ${count}개`;
       }
       fit();
+      if (widthChange && !widthChange.button.hidden) {
+        const { button, from } = widthChange;
+        const width = button.offsetWidth || button.getBoundingClientRect().width;
+        if (width > 0 && width !== from) {
+          const animation = button.animate?.([{ width:`${from}px` }, { width:`${width}px` }], { duration:320, easing:"cubic-bezier(.22,1,.36,1)" });
+          if (animation) {
+            button.setAttribute(`${MARK}-resizing`, "");
+            widthAnimations.set(button, { animation, width }); entryAnimations.add(animation);
+            animation.onfinish = animation.oncancel = () => {
+              entryAnimations.delete(animation);
+              if (widthAnimations.get(button)?.animation === animation) {
+                widthAnimations.delete(button); button.removeAttribute(`${MARK}-resizing`);
+              }
+            };
+            const text = button.querySelector<HTMLElement>(":scope > span");
+            const reveal = text?.animate?.([{ opacity:0, transform:"translateY(2px)" }, { opacity:1, transform:"none" }], { duration:240, easing:"ease-out" });
+            if (reveal) { entryAnimations.add(reveal); reveal.onfinish = reveal.oncancel = () => entryAnimations.delete(reveal); }
+          }
+        }
+      }
       updateScrollHints();
     };
     return { sync, bar, close, editing, resize, cleanup() {
@@ -957,7 +1032,7 @@ export function injectComposerInfo(document: Document): () => void {
   }
   const schedule = () => { if (!frame && !disposed) frame = view.requestAnimationFrame(sync); };
   const observer = new view.MutationObserver(schedule);
-  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${MARK}-children`, "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
+  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-children`, "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     for (const [stack, state] of states) if (stack.contains(event.target as Node) || event.target === document) state.close(true);

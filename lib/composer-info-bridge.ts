@@ -92,6 +92,7 @@ export function ComposerInfoBridge() {
   return createElement(Fragment, null,
     createElement("span", {
       hidden:true,
+      [`${mark}-thread`]:threadId,
       [`${mark}-settings`]:JSON.stringify(values ?? {}),
       [`${mark}-children`]:JSON.stringify(children.map(child => ({ id:child.id, title:child.title ?? child.titleFallback ?? "Child Thread", state:childState(child.runtime.displayStatus, child.hasPendingInteraction) }))),
     }, ...infoKinds.map(kind => createElement("span", { key:kind.key, [`${mark}-icon`]:kind.key },
