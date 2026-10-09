@@ -13,6 +13,7 @@ const OPEN = `${MARK}-open`;
 const SOURCE = `${MARK}-settings`;
 const REQUEST = ['tool-use-ask', 'plugin-request-banner', 'plan-review-request', 'approval-banner', 'user-question-banner', 'plan-review-banner'].map(id => `[data-testid="${id}"]`).join(", ");
 const NATIVE = `section[aria-label], .agentation-staging-shell, [${MARK}-kind]`;
+const WORKFLOW_COLLAPSE = 'button[aria-label^="Collapse "][aria-label$=" workflows"][aria-controls]';
 const DETAIL = `${STACK}[${MARK}-stack] [${UNIT}][${OPEN}]:not([hidden])`;
 
 // The orb is always reachable. Fit measured pills into one row, with essentials first.
@@ -44,6 +45,10 @@ export const composerInfoCss = `
 [${MARK}-menu] header button { width:24px; height:24px; padding:0; border-radius:50%; }
 [${MARK}-panel-source] { display:none !important; }
 [${MARK}-panel-heading] { display:flex; align-items:center; gap:6px; }
+[${MARK}-stack] [${MARK}-collapse] { display:none !important; }
+${DETAIL} [${MARK}-close-heading] { box-sizing:border-box; padding-right:34px !important; }
+${DETAIL} > h3[${MARK}-close-heading] { min-height:28px; margin:0 0 8px; font-size:12px; }
+${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:10px; right:12px; display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; padding:0 !important; border-radius:50% !important; color:var(--subtle-foreground); font-size:16px; cursor:pointer; }
 [${MARK}-panel-action], [${MARK}-action="diff"] { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; padding:0 !important; border-radius:50% !important; color:var(--subtle-foreground); }
 [${MARK}-panel-action] svg, [${MARK}-action="diff"] svg { width:14px; height:14px; }
 [${MARK}-trigger]:hover, [${MARK}-all]:hover { transform:translateY(-1px); }
@@ -324,6 +329,57 @@ export function injectComposerInfo(document: Document): () => void {
     const panelActions = new Map<HTMLElement, HTMLButtonElement>();
     const panelHeadings = new Set<HTMLElement>();
     const generatedHeadings = new Set<HTMLElement>();
+    const nativeDismisses = new Map<HTMLElement, HTMLButtonElement>();
+    const collapseRows = new Set<HTMLElement>();
+    const closeHeadings = new Set<HTMLElement>();
+    const generatedCloseHeadings = new Set<HTMLElement>();
+    const syncNativeControls = () => {
+      const currentRows = new Set<HTMLElement>();
+      for (const row of Array.from(stack.querySelectorAll<HTMLElement>(WORKFLOW_COLLAPSE))) {
+        row.setAttribute(`${MARK}-collapse`, ""); currentRows.add(row);
+      }
+      for (const item of items) {
+        const controls = item.trigger?.getAttribute("aria-controls");
+        if (!controls || item.key === "diff") continue;
+        for (const button of Array.from(item.node.querySelectorAll<HTMLElement>('button[aria-label^="Collapse "][aria-controls]'))) {
+          if (button === item.trigger || button.getAttribute("aria-controls") !== controls) continue;
+          // Only the disclosure for this card, never a list or phase inside it.
+          const row = button.parentElement?.children.length === 1 ? button.parentElement : button;
+          row.setAttribute(`${MARK}-collapse`, ""); currentRows.add(row);
+        }
+      }
+      for (const row of collapseRows) if (!currentRows.has(row)) row.removeAttribute(`${MARK}-collapse`);
+      collapseRows.clear(); currentRows.forEach(row => collapseRows.add(row));
+      for (const [node, button] of nativeDismisses) if (node !== activeNode || !node.hasAttribute(OPEN)) {
+        button.remove(); nativeDismisses.delete(node);
+      }
+      for (const heading of closeHeadings) if (!activeNode?.contains(heading)) {
+        heading.removeAttribute(`${MARK}-close-heading`); closeHeadings.delete(heading);
+        if (generatedCloseHeadings.delete(heading)) heading.remove();
+      }
+      const item = items.find(item => item.node === activeNode && item.key === active);
+      if (!item || !item.node.hasAttribute(OPEN) || item.key === "diff" || item.node.matches(".agentation-staging-shell") || item.node.querySelector(`[${MARK}-dismiss]:not([${MARK}-native-dismiss])`)) return;
+      let heading = item.node.querySelector<HTMLElement>(`[${MARK}-panel-heading], [${MARK}-close-heading]`);
+      if (!heading || heading.closest("button, a")) {
+        const parent = item.trigger?.parentElement;
+        heading = parent && parent !== item.node && !parent.closest("button, a") && !parent.hasAttribute("data-queued-messages-mode") ? parent : item.trigger;
+        if (!item.trigger) heading = item.node.querySelector<HTMLElement>("h3, h4, header");
+        if (heading?.hasAttribute("data-queued-messages-mode") || item.key === "queue") heading = null;
+      }
+      if (!heading) {
+        heading = document.createElement("h3"); heading.textContent = item.label;
+        item.node.prepend(heading); generatedCloseHeadings.add(heading);
+      }
+      heading.setAttribute(`${MARK}-close-heading`, ""); closeHeadings.add(heading);
+      let dismiss = nativeDismisses.get(item.node);
+      if (!dismiss) {
+        dismiss = document.createElement("button"); dismiss.type = "button"; dismiss.textContent = "×";
+        dismiss.setAttribute(`${MARK}-dismiss`, ""); dismiss.setAttribute(`${MARK}-native-dismiss`, "");
+        dismiss.setAttribute("aria-label", `${item.label} 닫기`); dismiss.title = `${item.label} 닫기`;
+        nativeDismisses.set(item.node, dismiss);
+      }
+      if (dismiss.parentElement !== item.node) item.node.append(dismiss);
+    };
     const panelAction = (label:string, run:() => void) => {
       const button = document.createElement("button");
       button.type = "button";
@@ -811,6 +867,7 @@ export function injectComposerInfo(document: Document): () => void {
       menu = null;
       active = null;
       activeNode = null;
+      syncNativeControls();
       updateScrollHints();
       orb.setAttribute("aria-expanded", "false");
       for (const button of buttons.values()) button.setAttribute("aria-expanded", "false");
@@ -912,6 +969,7 @@ export function injectComposerInfo(document: Document): () => void {
       activeNode = item.node;
       item.node.setAttribute(OPEN, "");
       if (item.trigger?.getAttribute("aria-expanded") === "false") item.trigger.click();
+      syncNativeControls();
       buttons.get(key)?.setAttribute("aria-expanded", "true");
       updateScrollHints();
     };
@@ -999,7 +1057,7 @@ export function injectComposerInfo(document: Document): () => void {
       const currentOwned = new Set<HTMLElement>();
       const currentWrappers = new Set<HTMLElement>();
       const walk = (node: HTMLElement) => {
-        if (node === bar || node.hidden || node.matches(REQUEST) || node.matches("section") && node.querySelector(REQUEST)) return;
+        if (node === bar || node.hidden || node.matches(`${REQUEST}, ${WORKFLOW_COLLAPSE}`) || node.matches("section") && node.querySelector(REQUEST)) return;
         if (node.matches(NATIVE)) {
           mark(node, UNIT, currentOwned);
           for (const key of kindsOf(node)) found.push({ key, node, trigger:nativeTrigger(node, key), label:labelOf(key) });
@@ -1044,6 +1102,7 @@ export function injectComposerInfo(document: Document): () => void {
       const request = stack.querySelector(REQUEST) !== null;
       if (request !== stack.hasAttribute(`${MARK}-request`)) stack.toggleAttribute(`${MARK}-request`, request);
       if (request || activeNode && !items.some(item => item.node === activeNode)) close(false, true);
+      syncNativeControls();
       let settings: Record<string, unknown> = {};
       try { settings = JSON.parse(source.getAttribute(SOURCE) || "{}"); } catch { /* Defaults work while settings load. */ }
       listed = listedInfo(settings);
@@ -1196,6 +1255,10 @@ export function injectComposerInfo(document: Document): () => void {
       for (const [source, action] of panelActions) { action.remove(); source.removeAttribute(`${MARK}-panel-source`); }
       for (const heading of panelHeadings) heading.removeAttribute(`${MARK}-panel-heading`);
       for (const heading of generatedHeadings) heading.remove();
+      for (const button of nativeDismisses.values()) button.remove();
+      for (const row of collapseRows) row.removeAttribute(`${MARK}-collapse`);
+      for (const heading of closeHeadings) heading.removeAttribute(`${MARK}-close-heading`);
+      for (const heading of generatedCloseHeadings) heading.remove();
       for (const node of owned) { node.removeAttribute(UNIT); node.removeAttribute(OPEN); }
       for (const node of wrappers) node.removeAttribute(WRAP);
     } };

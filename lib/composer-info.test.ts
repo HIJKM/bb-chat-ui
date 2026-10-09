@@ -33,6 +33,90 @@ function fixture() {
   return { dom, document, tick, click };
 }
 
+test("native popovers replace only their bottom collapse with a small close without ending Plan or Goal", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const cards: { kind:string; node:HTMLElement; toggle:HTMLButtonElement; collapse:HTMLButtonElement }[] = [];
+  let ended = 0;
+  for (const [kind, label] of [['plan','Prompt mode'], ['goal','Goal'], ['todos','To-do list'], ['workflow','Workflow'], ['background','Background commands'], ['machine','Machine status'], ['status','Thread history']]) {
+    stack.querySelector(`section[aria-label="${label}"]`)?.remove();
+    const node = f.document.createElement('section'); node.setAttribute('aria-label',label);
+    node.innerHTML = `<div role="group"><button ${kind === 'machine' ? 'id="machine-status-toggle"' : ''} aria-expanded="false" aria-controls="${kind}-body">${label}</button><button aria-label="${kind === 'plan' ? 'Exit plan mode' : 'Clear active Goal'}">End</button></div><div id="${kind}-body" hidden><h3>Body heading</h3><p>Details</p><button aria-label="Collapse internal list" aria-expanded="true" aria-controls="internal-${kind}">Internal fold</button><div id="internal-${kind}">Items</div><div class="px-1 pb-1"><button aria-label="Collapse ${label}" aria-expanded="true" aria-controls="${kind}-body">Collapse</button></div></div>`;
+    const toggle = node.querySelector<HTMLButtonElement>('button')!;
+    const collapse = node.querySelector<HTMLButtonElement>(`button[aria-label="Collapse ${label}"]`)!;
+    toggle.addEventListener('click', () => {
+      const expanded = toggle.getAttribute('aria-expanded') !== 'true';
+      toggle.setAttribute('aria-expanded',String(expanded));
+      node.querySelector<HTMLElement>(`#${kind}-body`)!.hidden = !expanded;
+    });
+    collapse.addEventListener('click', () => toggle.click());
+    node.querySelector('button[aria-label="Exit plan mode"], button[aria-label="Clear active Goal"]')!.addEventListener('click', () => ended++);
+    stack.append(node); cards.push({kind,node,toggle,collapse});
+  }
+  const stop = injectComposerInfo(f.document);
+  try {
+    for (const {kind,node,toggle,collapse} of cards) {
+      f.click('[data-bb-chat-ui-info-all]');
+      f.click(`[data-bb-chat-ui-info-choice="${kind}"]`);
+      await f.tick();
+      assert.equal(f.dom.window.getComputedStyle(collapse.parentElement!).display,'none',`${kind}: the standalone bottom handle takes no space`);
+      assert.notEqual(f.dom.window.getComputedStyle(node.querySelector('[aria-label="Collapse internal list"]')!).display,'none','internal list folds remain available');
+      const dismiss = node.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-native-dismiss]');
+      assert.ok(dismiss,`${kind}: a dedicated visual close is present`);
+      assert.equal(dismiss.textContent,'×');
+      assert.equal(node.querySelector('[data-bb-chat-ui-info-close-heading]'),toggle.parentElement,'reserve close space beside the actual title, not a heading in the body');
+      assert.equal(node.querySelectorAll('[data-bb-chat-ui-info-native-dismiss]').length,1);
+      dismiss.click();
+      assert.equal(toggle.getAttribute('aria-expanded'),'false');
+      assert.equal(node.hasAttribute('data-bb-chat-ui-info-open'),false);
+      assert.equal(ended,0,'closing the popover never ends Plan or clears Goal');
+    }
+    stop();
+    for (const {node,collapse} of cards) {
+      assert.equal(node.querySelector('[data-bb-chat-ui-info-native-dismiss]'),null);
+      assert.equal(collapse.hasAttribute('data-bb-chat-ui-info-collapse'),false);
+      assert.notEqual(f.dom.window.getComputedStyle(collapse.parentElement!).display,'none','unload restores native controls');
+    }
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("native close survives header replacement and keeps genuine actions on their original parents", async () => {
+  const f = fixture();
+  const node = f.document.querySelector<HTMLElement>('section[aria-label="Goal"]')!;
+  const originalAction = node.querySelector('[aria-label="Clear active Goal"]')!;
+  const originalParent = originalAction.parentElement;
+  const stop = injectComposerInfo(f.document);
+  try {
+    f.click('[data-bb-chat-ui-info-all]'); f.click('[data-bb-chat-ui-info-choice="goal"]'); await f.tick();
+    node.querySelector('[data-bb-chat-ui-info-native-dismiss]')!.remove();
+    node.querySelector('button[aria-expanded]')!.textContent = 'Updated Goal';
+    await f.tick();
+    assert.equal(node.querySelectorAll('[data-bb-chat-ui-info-native-dismiss]').length,1);
+    assert.equal(originalAction.parentElement,originalParent);
+    f.click('[data-bb-chat-ui-info-native-dismiss]');
+    assert.equal(node.hasAttribute('data-bb-chat-ui-info-open'),false);
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("the Workflow stack collapse is hidden without becoming another information entry", () => {
+  const f = fixture();
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const wrapper = f.document.createElement('div');
+  wrapper.innerHTML = '<div id="workflow-stack"><section aria-label="Workflow"><button aria-expanded="false" aria-controls="workflow-detail">Workflow A</button><div id="workflow-detail" hidden>Phase A</div></section></div><button aria-label="Collapse 2 workflows" aria-expanded="true" aria-controls="workflow-stack">Collapse stack</button>';
+  stack.append(wrapper);
+  const collapse = wrapper.querySelector('[aria-label="Collapse 2 workflows"]')!;
+  const stop = injectComposerInfo(f.document);
+  try {
+    assert.equal(f.dom.window.getComputedStyle(collapse).display,'none');
+    assert.equal(collapse.hasAttribute('data-bb-chat-ui-info-unit'),false,'a stack close is not plugin information');
+    f.click('[data-bb-chat-ui-info-all]');
+    assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-choice="workflow"]').length,1);
+    assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-choice="other"]').length,1,'only the actual plugin notice stays in the catalog');
+  } finally { stop(); }
+  assert.notEqual(f.dom.window.getComputedStyle(collapse).display,'none');
+  f.dom.window.close();
+});
+
 test("overflow reserves the all-information button and prefers Diff and children", () => {
   const items = [
     { key: "goal", width: 70 }, { key: "children", width: 75 },
