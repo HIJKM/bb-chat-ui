@@ -1,5 +1,6 @@
 const SEND_BUTTON = "[data-promptbox-submit-action][type='submit']";
 const JUMP_BUTTON = 'button[aria-label="Scroll to latest event"]';
+const QUESTION_CARD = ['tool-use-ask', 'plugin-request-banner', 'user-question-banner'].map(id => `[data-testid="${id}"]`).join(', ');
 const WAIT_MS = 80;
 const JUMP_GAP_MS = 400;
 
@@ -272,7 +273,7 @@ export function injectSendHaptic(document: Document): () => void {
 
   const onPointerUp = (event: PointerEvent) => {
     // Information controls use click for touch, mouse and keyboard alike.
-    if (composerInfoButtonFrom(event.target)) return;
+    if (composerInfoButtonFrom(event.target) || questionButtonFrom(event.target)) return;
     if (isFileDiffBlockToggle(event.target)) {
       pulseDiffToggle();
       return;
@@ -296,6 +297,13 @@ export function injectSendHaptic(document: Document): () => void {
   };
 
   const onJumpClick = (event: MouseEvent) => {
+    const question = questionButtonFrom(event.target);
+    if (question) {
+      if (event.isTrusted && !question.hasAttribute('disabled') && question.getAttribute('aria-disabled') !== 'true') {
+        postHaptic(readHapticBridge(view), 'selection');
+      }
+      return;
+    }
     const info = composerInfoButtonFrom(event.target);
     if (info) {
       // Disclosures also forward synthetic clicks to the original host controls.
@@ -404,6 +412,11 @@ function asElement(target: EventTarget | null): Element | null {
 function composerInfoButtonFrom(target: EventTarget | null): Element | null {
   const button = asElement(target)?.closest("button");
   return button?.closest("[data-bb-chat-ui-info-bar], [data-bb-chat-ui-info-unit]") ? button : null;
+}
+
+function questionButtonFrom(target: EventTarget | null): Element | null {
+  const button = asElement(target)?.closest('button');
+  return button?.closest(QUESTION_CARD)?.closest('[data-bb-chat-ui-info-stack]') ? button : null;
 }
 
 function jumpButtonFrom(target: EventTarget | null): HTMLButtonElement | null {
