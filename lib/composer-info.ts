@@ -706,6 +706,7 @@ export function injectComposerInfo(document: Document): () => void {
       container.append(files);
       foldRows(files, "files");
       if (detail.commitKind || detail.commits.length) {
+        if (detail.files.length) container.append(document.createElement("hr"));
         const heading = document.createElement("h4"); heading.textContent = "커밋"; container.append(heading);
         const label = document.createElement("p");
         label.setAttribute(`${MARK}-diff-meta`, "commits");

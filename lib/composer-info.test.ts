@@ -1532,6 +1532,10 @@ test("Diff popover puts changed files before the commit heading and connected ra
   assert.equal(files.querySelector('h4')?.textContent,'변경 파일 · 7');
   const commitHeading=[...popup.querySelectorAll('h4')].find(heading=>heading.textContent==='커밋');
   assert.ok(commitHeading,'commits have their own short heading separate from comparison metadata');
+  const sectionSeparator = popup.querySelectorAll('hr')[1];
+  assert.ok(sectionSeparator,'changed files and commits have a separate divider');
+  assert.ok(files.compareDocumentPosition(sectionSeparator) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(sectionSeparator.compareDocumentPosition(commitHeading) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
   assert.ok(files.compareDocumentPosition(commitHeading) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
   assert.ok(commitHeading.compareDocumentPosition(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
   assert.ok(files.compareDocumentPosition(rail) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
@@ -1552,9 +1556,19 @@ test("Diff popover puts changed files before the commit heading and connected ra
   source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify(updated)); await f.tick();
   const refreshedFiles = popup.querySelector('[data-bb-chat-ui-info-diff-files]')!;
   assert.equal(refreshedFiles.querySelectorAll('[data-bb-chat-ui-info-diff-file]').length, 6);
-  assert.equal(popup.querySelectorAll('hr').length,1,'refresh replaces rather than duplicates the separator');
+  assert.equal(popup.querySelectorAll('hr').length,2,'refresh replaces rather than duplicates both separators');
   assert.equal([...popup.querySelectorAll('h4')].filter(heading=>heading.textContent==='커밋').length,1);
   assert.ok(refreshedFiles.compareDocumentPosition(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'open popover refresh keeps changed files above commits');
+  updated.detail.files = [];
+  source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify(updated)); await f.tick();
+  assert.equal(popup.querySelectorAll('hr').length,1,'commits alone need only the metadata divider');
+  updated.detail.files = [{path:'only.ts',status:'M',insertions:1,deletions:0}];
+  updated.detail.commits = [];
+  source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify(updated)); await f.tick();
+  assert.equal(popup.querySelectorAll('hr').length,1,'changed files alone need only the metadata divider');
+  updated.detail.files = [];
+  source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify(updated)); await f.tick();
+  assert.equal(popup.querySelectorAll('hr').length,0,'empty sections leave no dividers');
   stop(); f.dom.window.close();
 });
 
