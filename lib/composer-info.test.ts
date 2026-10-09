@@ -981,13 +981,13 @@ test("queue editing blocks detail replacement and dismissal until editing finish
   f.dom.window.close();
 });
 
-test("archived stack-only composer retains supplementary data and native restore actions", async () => {
+test("archived stack-only composer offers only restore and preserves its native action", async () => {
   const f = fixture();
   f.document.querySelector('[data-follow-up-composer-anchor]')!.remove();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
   const status = f.document.createElement("section");
   status.setAttribute("aria-label", "Thread archived");
-  status.innerHTML = '<button>Unarchive</button>';
+  status.innerHTML = '<p>Parent thread and archived metadata</p><button>Unarchive</button>';
   stack.append(status);
   let restored = 0;
   status.querySelector('button')!.addEventListener('click', () => restored++);
@@ -997,11 +997,20 @@ test("archived stack-only composer retains supplementary data and native restore
   const pill = f.click('[data-bb-chat-ui-info-trigger="status"]');
   assert.equal(pill.textContent,'Archived thread');
   assert.equal(f.dom.window.getComputedStyle(pill).width,'100%');
-  f.click('[aria-label="Thread archived"] button');
+  const popover=f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-archived-detail]')!;
+  assert.ok(popover);
+  assert.equal(popover.querySelectorAll('button').length,2,'only close and restore are present');
+  assert.equal(popover.textContent?.includes('Parent thread'),false);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-archive-catalog]'),null);
+  f.click('[data-bb-chat-ui-info-unarchive]');
   assert.equal(restored, 1);
-  assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-open]').length, 1);
-  f.click('[data-bb-chat-ui-info-archive-catalog]');
-  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="goal"]'),'other information remains available inside the archived popover');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-open]'),null,'the native context card stays hidden');
+  const nativeAction=status.querySelector<HTMLButtonElement>('button')!;
+  nativeAction.disabled=true; nativeAction.textContent='Unarchiving...'; await f.tick();
+  assert.equal(popover.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-unarchive]')!.disabled,true);
+  assert.equal(popover.querySelector('[data-bb-chat-ui-info-unarchive]')!.textContent,'Unarchiving...');
+  f.click('[data-bb-chat-ui-info-unarchive]');
+  assert.equal(restored,1,'the pending state prevents another restore');
   status.remove(); await f.tick();
   assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-all]')!.hidden,false);
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="goal"]'),'unarchiving restores the normal information row');
@@ -1024,6 +1033,33 @@ test("native Thread history identifies archive status without mistaking a missin
     assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]'));
     assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-all]')!.hidden,false);
     assert.notEqual(f.document.querySelector('[data-bb-chat-ui-info-trigger="status"]')?.textContent,'Archived thread');
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("archived restore uses a lazily mounted parent-context action without exposing parent information", async () => {
+  const f=fixture();
+  const status=f.document.createElement('section'); status.setAttribute('aria-label','Thread history');
+  status.innerHTML='<button id="thread-prompt-banner-parent-thread-toggle" aria-expanded="false" aria-controls="parent-body">Parent thread</button><div role="status" aria-label="Thread is archived">Thread is archived</div><div id="parent-body" hidden></div>';
+  let restored=0;
+  status.querySelector('button')!.addEventListener('click',()=>{
+    const toggle=status.querySelector('button')!;
+    const expanded=toggle.getAttribute('aria-expanded') !== 'true';
+    toggle.setAttribute('aria-expanded',String(expanded));
+    const body=status.querySelector<HTMLElement>('#parent-body')!; body.hidden=!expanded;
+    if (expanded && !body.children.length) {
+      body.innerHTML='<p>Private parent details</p><button>Unarchive</button>';
+      body.querySelector('button')!.addEventListener('click',()=>restored++);
+    }
+  });
+  f.document.querySelector('[data-promptbox-shell] > .grid')!.append(status);
+  const stop=injectComposerInfo(f.document);
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="status"]'); await f.tick();
+    const popup=f.document.querySelector('[data-bb-chat-ui-info-archived-detail]')!;
+    assert.equal(popup.textContent?.includes('Private parent details'),false);
+    f.click('[data-bb-chat-ui-info-unarchive]'); assert.equal(restored,1);
+    f.click('[aria-label="Archived thread 닫기"]');
+    assert.equal(status.querySelector('button')!.getAttribute('aria-expanded'),'false','closing restores the hidden native disclosure');
   } finally { stop(); f.dom.window.close(); }
 });
 
