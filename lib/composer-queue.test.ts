@@ -9,7 +9,7 @@ function fixture(expanded = false) {
     <span hidden data-bb-chat-ui-info-settings='{"showQueue":"상단 표시"}'></span>
     <section aria-label="Thread context before sending"><button id="thread-prompt-banner-git-toggle">+1 −0 · 1 file</button></section>
     <section aria-label="Queued messages"><header data-queued-messages-mode="${expanded ? 'drawer' : 'collapsed'}"><button aria-label="Toggle queued messages" aria-expanded="${expanded}" aria-controls="queue-frame">Queue <span class="tabular-nums">2</span></button></header>
-      <div id="queue-frame" data-queued-messages-scroll-frame ${expanded ? '' : 'inert aria-hidden="true"'}><div data-queued-messages-scroll><ul><li data-queued-message-row>Draft <button data-edit>Edit</button><button data-send>Send</button></li></ul></div></div>
+      <div id="queue-frame" data-queued-messages-scroll-frame ${expanded ? '' : 'inert aria-hidden="true"'}><div data-queued-messages-scroll><ul><li data-queued-message-row><div class="flex"><div class="min-w-0"><div class="truncate">Draft</div></div><div data-queued-message-actions><button data-edit>Edit</button><button data-send>Send</button></div></div></li></ul></div></div>
       <div data-collapse ${expanded ? '' : 'hidden'}><button aria-label="Collapse queued messages" aria-controls="queue-frame">Collapse</button></div>
     </section>
   </div><div data-follow-up-composer-anchor><textarea>composer draft</textarea></div></div></div></div></body></html>`, { pretendToBeVisual:true });
@@ -76,6 +76,39 @@ test("managed queue has one entry point and stays usable alongside the legacy qu
       }
     } finally { stops.reverse().forEach(stop => stop()); f.cleanup(); }
   }
+});
+
+test("managed queue uses plain list rows and leaves standalone message bubbles intact", async () => {
+  const f = fixture();
+  const row = f.queue.querySelector<HTMLElement>('[data-queued-message-row]')!;
+  const text = row.querySelector<HTMLElement>('.min-w-0')!;
+  const actions = row.querySelector<HTMLElement>('[data-queued-message-actions]')!;
+  const send = actions.querySelector('[data-send]');
+  const stopQueue = injectQueuedMessages(f.document);
+  const stopInfo = injectComposerInfo(f.document);
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="queue"]'); await f.tick();
+    const style = (node: Element) => f.dom.window.getComputedStyle(node);
+    assert.equal(style(row.querySelector('.flex')!).flexDirection, 'row', 'text precedes the actions');
+    assert.equal(style(text).flex, '1 1 0%');
+    assert.equal(style(text).maxWidth, 'none', 'message text uses the available row width');
+    assert.equal(style(text).padding, '0px');
+    assert.equal(style(text).borderWidth, '0px');
+    assert.equal(style(text).backgroundColor, 'rgba(0, 0, 0, 0)');
+    assert.equal(style(actions).backgroundColor, 'rgba(0, 0, 0, 0)');
+    for (const dark of [false, true]) {
+      f.document.documentElement.classList.toggle('dark', dark);
+      assert.equal(style(text).boxShadow, 'none');
+      assert.equal(style(actions).boxShadow, 'none');
+    }
+    assert.equal(style(text.querySelector('.truncate')!).fontSize, '12px');
+    assert.equal(actions.querySelector('[data-send]'), send, 'native actions remain on their original nodes');
+    f.click('[data-send]'); assert.equal(f.sent(), 1);
+    stopInfo();
+    assert.equal(style(row.querySelector('.flex')!).flexDirection, 'row-reverse');
+    assert.equal(style(text).maxWidth, '70%', 'standalone queues retain their previous message layout');
+    assert.notEqual(style(text).boxShadow, 'none');
+  } finally { stopInfo(); stopQueue(); f.cleanup(); }
 });
 
 test("native queue editing protects the draft and releasing it restores every information control", async () => {

@@ -1,6 +1,7 @@
 const STYLE_ID = "bb-chat-ui-queued-messages";
 const QUEUE = 'section[aria-label="Queued messages"]';
 const LEGACY_QUEUE = `${QUEUE}:not([data-bb-chat-ui-info-unit])`;
+const MANAGED_QUEUE = `${QUEUE}[data-bb-chat-ui-info-unit]`;
 const LABEL_ATTR = "data-bb-chat-ui-queue-label";
 const COLLAPSE_LABEL = "Collapse queued messages";
 const AGENTATION = ".agentation-staging-shell";
@@ -202,6 +203,41 @@ ${QUEUE} [data-queued-message-actions] button[aria-label^="Steer"] {
 }
 ${QUEUE} [data-queued-message-actions] button[aria-label^="Edit"] {
   order: 3;
+}
+${MANAGED_QUEUE} [data-queued-message-row] {
+  padding: 8px 0 !important;
+}
+${MANAGED_QUEUE} [data-queued-message-row]:not(:last-child) {
+  border-bottom: 1px solid color-mix(in oklab, var(--border-seam) 55%, transparent) !important;
+}
+${MANAGED_QUEUE} [data-queued-message-row] > .flex {
+  flex-direction: row;
+}
+${MANAGED_QUEUE} [data-queued-message-row] > .flex > .min-w-0 {
+  flex: 1 1 0%;
+  max-width: none;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+${MANAGED_QUEUE} [data-queued-message-row] .truncate:not(.prompt-mention-pill, .prompt-mention-pill *) {
+  font-size: 0.75rem !important;
+  line-height: 1.5 !important;
+}
+${MANAGED_QUEUE} [data-queued-message-actions] {
+  flex: none;
+  background: transparent !important;
+}
+${MANAGED_QUEUE} [data-queued-message-row] > .flex > .min-w-0,
+${MANAGED_QUEUE} [data-queued-message-actions],
+.dark ${MANAGED_QUEUE} [data-queued-message-row] > .flex > .min-w-0,
+.dark ${MANAGED_QUEUE} [data-queued-message-actions] {
+  box-shadow: none !important;
 }
 `;
 
