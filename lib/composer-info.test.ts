@@ -708,3 +708,35 @@ test("dirty Code Diff keeps only HEAD line stats above composer and reports unkn
   assert.equal(popup.querySelectorAll('[data-bb-chat-ui-info-diff-file]').length, 1);
   stop(); f.dom.window.close();
 });
+
+test("Diff popover puts a connected commit rail before file rows with semantic status icons", () => {
+  const f = fixture();
+  const source = f.document.createElement('span');
+  const statuses = ['M','A','D','R','C','U','??'];
+  source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify({ insertions:7, deletions:2, files:7, branch:'feature/chat', detail:{
+    branch:'feature/chat', basis:'HEAD 대비 미커밋 변경', baseRef:'origin/main',
+    files:statuses.map(status => ({ path:`${status.replace('??','new')}.ts`, status, insertions:1, deletions:0 })),
+    commits:[1,2,3].map(n => ({ sha:`abc1234${n}`, shortSha:`abc123${n}`, subject:`Commit ${n}` })),
+  } }));
+  f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  const stop = injectComposerInfo(f.document);
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  const popup = f.document.querySelector('[data-bb-chat-ui-info-diff]')!;
+  const rail = popup.querySelector('[data-bb-chat-ui-info-diff-commits]');
+  const files = popup.querySelector('[data-bb-chat-ui-info-diff-files]');
+  assert.ok(rail); assert.ok(files);
+  assert.ok(rail.compareDocumentPosition(files) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.equal(rail.querySelectorAll('[data-bb-chat-ui-info-diff-commit]').length, 3);
+  assert.equal(rail.querySelectorAll('[data-bb-chat-ui-info-diff-graph] svg circle').length, 3);
+  for (const [index,row] of [...files.querySelectorAll('[data-bb-chat-ui-info-diff-file]')].entries()) {
+    const icon = row.firstElementChild;
+    assert.equal(icon?.tagName.toLowerCase(), 'svg');
+    assert.equal(icon?.getAttribute('data-bb-chat-ui-info-file-status'), statuses[index]);
+    assert.ok(icon?.getAttribute('aria-label'));
+    assert.equal(icon?.getAttribute('aria-hidden'), null);
+    assert.ok(row.textContent?.includes('+1'), 'file statistics stay readable after the status icon');
+  }
+  assert.ok(files.querySelector('[data-bb-chat-ui-info-file-status="A"]')?.classList.contains('text-diff-added'));
+  assert.ok(files.querySelector('[data-bb-chat-ui-info-file-status="D"]')?.classList.contains('text-diff-removed'));
+  stop(); f.dom.window.close();
+});

@@ -1,7 +1,7 @@
 import { exposedInfo, infoKinds, listedInfo, type InfoKind } from "./composer-info-settings.ts";
 import { HEAD_DIFF_MARK, openChangesPanel, type HeadDiffDetail } from "./workspace-diff-pill.ts";
 import type { WorkspaceDiffSnapshot } from "./workspace-diff-data.ts";
-import { commitIcon } from "./composer-diff-icons.ts";
+import { commitIcon, fileStatusIcon } from "./composer-diff-icons.ts";
 import { childInitial, type ChildState, type ChildSummary } from "./composer-child.ts";
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
 
@@ -97,7 +97,15 @@ export const composerInfoCss = `
 [${MARK}-scroll-hint="bottom"] { border-radius:0 0 18px 18px; background:linear-gradient(to top,var(--bb-chat-ui-info-face),transparent); mask-image:linear-gradient(to top,black,transparent); -webkit-mask-image:linear-gradient(to top,black,transparent); }
 [${MARK}-diff] p { white-space:pre-wrap; }
 [${MARK}-diff-content] { display:block !important; }
-[${MARK}-diff-file], [${MARK}-diff-commit] { display:flex; align-items:center; gap:8px; padding:7px 0; border-top:1px solid var(--border-hairline,var(--border)); font-size:12px; min-width:0; }
+[${MARK}-diff-file], [${MARK}-diff-commit] { display:flex; align-items:center; gap:8px; padding:7px 0; font-size:12px; min-width:0; }
+[${MARK}-diff-file] > svg { width:16px; height:16px; flex-shrink:0; }
+[${MARK}-diff-commit] { padding:0; min-height:32px; }
+[${MARK}-diff-graph] { position:relative; align-self:stretch; width:16px; flex-shrink:0; color:var(--subtle-foreground); }
+[${MARK}-diff-graph]::before, [${MARK}-diff-graph]::after { content:""; position:absolute; left:7.5px; width:1px; background:color-mix(in oklab,var(--subtle-foreground) 40%,transparent); }
+[${MARK}-diff-graph]::before { top:0; bottom:calc(50% + 4px); }
+[${MARK}-diff-graph]::after { top:calc(50% + 4px); bottom:0; }
+[${MARK}-diff-commit]:first-child [${MARK}-diff-graph]::before, [${MARK}-diff-commit]:last-child [${MARK}-diff-graph]::after { display:none; }
+[${MARK}-diff-graph] svg { position:absolute; width:12px; height:12px; left:2px; top:calc(50% - 6px); fill:none; stroke:currentColor; stroke-width:1.5; }
 [${MARK}-diff-file] code, [${MARK}-diff-commit] code { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:11px/1.6 var(--font-mono,monospace); }
 [${MARK}-diff-file] > span { flex-shrink:0; font-size:11px; }
 [${MARK}-diff-content] h4 { font-size:10px; font-weight:400; color:var(--subtle-foreground); margin:9px 0 3px; }
@@ -333,10 +341,14 @@ export function injectComposerInfo(document: Document): () => void {
       const basis = document.createElement("p");
       basis.textContent = `${detail.basis} · +${snapshot?.insertions ?? 0} −${snapshot?.deletions ?? 0} · ${detail.files.length} files`;
       container.append(basis);
+      const files = document.createElement("div"); files.setAttribute(`${MARK}-diff-files`, "");
+      if (detail.files.length) {
+        const heading = document.createElement("h4"); heading.textContent = `변경 파일 · ${detail.files.length}`; files.append(heading);
+      }
       for (const file of detail.files) {
         const row = document.createElement("div"); row.setAttribute(`${MARK}-diff-file`, "");
         const path = document.createElement("code"); path.textContent = file.path; path.title = file.path;
-        const status = document.createElement("span"); status.textContent = file.status; status.className = "text-subtle-foreground";
+        const status = fileStatusIcon(document, file.status);
         const stats = document.createElement("span");
         if (file.insertions === null && file.deletions === null) stats.textContent = "통계 없음";
         else {
@@ -344,7 +356,7 @@ export function injectComposerInfo(document: Document): () => void {
           const removed = document.createElement("span"); removed.className = "text-diff-removed"; removed.textContent = file.deletions === null ? "—" : `−${file.deletions}`;
           stats.append(added, " ", removed);
         }
-        row.append(path, status, stats); container.append(row);
+        row.append(status, path, stats); files.append(row);
       }
       if (detail.commitKind || detail.commits.length) {
         const label = document.createElement("h4");
@@ -352,12 +364,19 @@ export function injectComposerInfo(document: Document): () => void {
           ? `${detail.commitKind === "pr" ? "PR 후보" : "미푸시"} · ${detail.commitCount === null ? "확인 불가" : `${detail.commitCount} commits`} · ${detail.baseRef ?? "기준 없음"} 대비`
           : `브랜치 커밋 · ${detail.baseRef ?? "Merge base"} 대비`;
         container.append(label);
+        const commits = document.createElement("div"); commits.setAttribute(`${MARK}-diff-commits`, "");
         for (const commit of detail.commits) {
           const row = document.createElement("div"); row.setAttribute(`${MARK}-diff-commit`, "");
+          const graph = document.createElement("span"); graph.setAttribute(`${MARK}-diff-graph`, ""); graph.setAttribute("aria-hidden", "true");
+          const dot = document.createElementNS("http://www.w3.org/2000/svg", "svg"); dot.setAttribute("viewBox", "0 0 24 24");
+          const circle = document.createElementNS(dot.namespaceURI, "circle");
+          circle.setAttribute("cx", "12"); circle.setAttribute("cy", "12"); circle.setAttribute("r", "7"); dot.append(circle); graph.append(dot);
           const text = document.createElement("code"); text.textContent = `${commit.shortSha} · ${commit.subject}`; text.title = `${commit.sha} · ${commit.subject}`;
-          row.append(text); container.append(row);
+          row.append(graph, text); commits.append(row);
         }
+        container.append(commits);
       }
+      container.append(files);
       if (detail.commitKind === "pr") {
         const push = document.createElement("p");
         push.textContent = `미푸시 · ${detail.unpushedCount == null ? "확인 불가 · 원격 브랜치 미게시 또는 기준 없음" : `${detail.unpushedCount} commits`} · ${detail.unpushedRef ?? "기준 없음"} 대비`;
