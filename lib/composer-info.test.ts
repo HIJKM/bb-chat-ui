@@ -839,3 +839,28 @@ test("Diff popover puts a connected commit rail before file rows with semantic s
   assert.ok(files.querySelector('[data-bb-chat-ui-info-file-status="D"]')?.classList.contains('text-diff-removed'));
   stop(); f.dom.window.close();
 });
+
+test("Diff popover orders commits by latest authored time, stably, and sorts refreshed lists", async () => {
+  const f = fixture();
+  const source = f.document.createElement('span');
+  const commits = [
+    { sha:'old-sha',shortSha:'old',subject:'Older',authoredAt:100 },
+    { sha:'new-sha',shortSha:'new',subject:'Latest',authoredAt:300 },
+    { sha:'middle-sha',shortSha:'middle',subject:'Middle',authoredAt:200 },
+    { sha:'tie-sha',shortSha:'tie',subject:'Same time',authoredAt:300 },
+  ];
+  const snapshot = { insertions:0,deletions:0,files:0,branch:'feature/chat',detail:{
+    branch:'feature/chat',basis:'HEAD 대비 미커밋 변경',baseRef:'origin/main',files:[],commits,
+  } };
+  const publish = () => source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify(snapshot));
+  publish(); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  const stop = injectComposerInfo(f.document);
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  const rows = () => [...f.document.querySelectorAll('[data-bb-chat-ui-info-diff-commit] code')].map(row=>row.textContent);
+  assert.deepEqual(rows(),['new · Latest','tie · Same time','middle · Middle','old · Older']);
+  assert.deepEqual(commits.map(c=>c.shortSha),['old','new','middle','tie'],'source order is not mutated');
+  commits.push({sha:'fresh-sha',shortSha:'fresh',subject:'Just committed',authoredAt:400});
+  publish(); await f.tick();
+  assert.deepEqual(rows(),['fresh · Just committed','new · Latest','tie · Same time','middle · Middle','old · Older']);
+  stop(); f.dom.window.close();
+});

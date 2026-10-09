@@ -408,7 +408,7 @@ export function injectComposerInfo(document: Document): () => void {
           : `브랜치 커밋 · ${detail.baseRef ?? "Merge base"} 대비`;
         container.append(label);
         const commits = document.createElement("div"); commits.setAttribute(`${MARK}-diff-commits`, "");
-        for (const commit of detail.commits) {
+        for (const commit of [...detail.commits].sort((a,b) => (b.authoredAt ?? 0) - (a.authoredAt ?? 0))) {
           const row = document.createElement("div"); row.setAttribute(`${MARK}-diff-commit`, "");
           const graph = document.createElement("span"); graph.setAttribute(`${MARK}-diff-graph`, ""); graph.setAttribute("aria-hidden", "true");
           const dot = document.createElementNS("http://www.w3.org/2000/svg", "svg"); dot.setAttribute("viewBox", "0 0 24 24");
