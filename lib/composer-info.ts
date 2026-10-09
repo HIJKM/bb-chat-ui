@@ -56,7 +56,7 @@ export const composerInfoCss = `
 [${MARK}-stack] [${MARK}-collapse] { display:none !important; }
 ${DETAIL} [${MARK}-close-heading] { box-sizing:border-box; padding-right:34px !important; }
 ${DETAIL} > h3[${MARK}-close-heading] { display:flex; align-items:center; min-height:28px; margin:0 0 8px; font-size:12px; font-weight:600; }
-${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:18px; right:16px; color:var(--subtle-foreground); cursor:pointer; }
+${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:18px; right:24px; color:var(--subtle-foreground); cursor:pointer; }
 [${MARK}-panel-action], [${MARK}-action="diff"] { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; padding:0 !important; border-radius:50% !important; color:var(--subtle-foreground); }
 [${MARK}-panel-action] svg, [${MARK}-action="diff"] svg { width:14px; height:14px; }
 [${MARK}-trigger]:hover, [${MARK}-all]:hover { transform:translateY(-1px); }
@@ -110,7 +110,7 @@ ${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:18px; right:16px; co
 [${MARK}-avatar-dot] svg { width:8px; height:8px; color:var(--bb-chat-ui-glass-base,var(--background)); }
 [${MARK}-avatar] [${MARK}-provider-icon], [${MARK}-avatar] [${MARK}-provider-icon] > :is(svg, span, img) { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; flex-shrink:0; }
 [${MARK}-avatar][data-new] { animation:bb-info-droplet 460ms cubic-bezier(.36,0,.18,1) backwards; }
-[${MARK}-menu], ${DETAIL} { position:absolute !important; display:block !important; left:0 !important; right:0 !important; top:auto !important; bottom:40px !important; transform:none !important; box-sizing:border-box; width:100% !important; max-width:none !important; min-height:0 !important; height:auto !important; max-height:min(50dvh,26rem) !important; overflow:auto !important; margin:0 !important; padding:16px !important; order:0 !important; border:0 !important; border-radius:18px !important; background:var(--bb-chat-ui-info-face) !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); color:var(--foreground); box-shadow:0 12px 32px -14px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; z-index:52; transform-origin:center bottom; animation:bb-info-enter 260ms cubic-bezier(.22,1,.36,1); }
+[${MARK}-menu], ${DETAIL} { position:absolute !important; display:block !important; left:0 !important; right:0 !important; top:auto !important; bottom:40px !important; transform:none !important; box-sizing:border-box; width:100% !important; max-width:none !important; min-height:0 !important; height:auto !important; max-height:min(50dvh,26rem) !important; overflow:auto !important; margin:0 !important; padding:16px 24px !important; order:0 !important; border:0 !important; border-radius:18px !important; background:var(--bb-chat-ui-info-face) !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); color:var(--foreground); box-shadow:0 12px 32px -14px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; z-index:52; transform-origin:center bottom; animation:bb-info-enter 260ms cubic-bezier(.22,1,.36,1); }
 [${MARK}-menu], ${DETAIL} { overscroll-behavior:contain !important; }
 [${MARK}-menu] header { display:flex; align-items:center; gap:6px; font-size:12px; padding-bottom:8px; }
 [${MARK}-menu] header button:last-child { margin-left:auto; }
@@ -151,7 +151,7 @@ ${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:18px; right:16px; co
 ${DETAIL}[aria-label="Queued messages"] { --bb-chat-ui-queue-height:min(36dvh,16rem); display:flex !important; flex-direction:column; max-height:var(--bb-chat-ui-queue-height) !important; overflow:hidden !important; gap:0 !important; }
 ${DETAIL}[aria-label="Queued messages"] > * { min-height:0; }
 ${DETAIL} [data-queued-messages-scroll-frame] { position:static !important; display:grid !important; grid-template-rows:minmax(0,1fr); flex:0 1 auto !important; width:100% !important; height:auto !important; min-height:0 !important; max-height:var(--bb-chat-ui-queue-height); overflow:hidden !important; }
-${DETAIL} [data-queued-messages-scroll] { height:auto !important; min-height:0 !important; max-height:var(--bb-chat-ui-queue-height); padding:8px; overflow-y:auto !important; overflow-x:hidden !important; overscroll-behavior:contain; }
+${DETAIL} [data-queued-messages-scroll] { height:auto !important; min-height:0 !important; max-height:var(--bb-chat-ui-queue-height); padding:8px 0; overflow-y:auto !important; overflow-x:hidden !important; overscroll-behavior:contain; }
 ${DETAIL} header[data-queued-messages-mode] { display:none !important; }
 ${DETAIL}[aria-label="Queued messages"] > div:has(> button[aria-label="Collapse queued messages"]) { display:none !important; }
 ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] { display:none !important; }

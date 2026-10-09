@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import { injectComposerInfo, fitComposerInfo, composerInfoCss } from "./composer-info.ts";
 import { infoKinds } from "./composer-info-settings.ts";
+import { queuedMessagesCss } from "./queued-messages.ts";
 
 function fixture() {
   const dom = new JSDOM(`<html><head></head><body><div data-scroll-footer><div class="chat-prompt-box"><div data-promptbox-shell><div class="grid">
@@ -38,6 +39,30 @@ function pointer(f: ReturnType<typeof fixture>, type: 'pointerover' | 'pointerou
   Object.defineProperty(event, 'pointerType', { value:pointerType });
   target.dispatchEvent(event);
 }
+
+test("queue and list cards share the same horizontal content gutter as their headers", () => {
+  const f=fixture();
+  const style=f.document.createElement('style'); style.textContent=queuedMessagesCss; f.document.head.append(style);
+  f.document.querySelector('[data-promptbox-shell] > .grid')!.insertAdjacentHTML('beforeend', '<section data-bb-chat-ui-info-kind="children"><h3>Child Threads</h3><div><button data-bb-chat-ui-info-child-row><span data-bb-chat-ui-info-avatar>Child</span></button></div></section><div class="agentation-staging-shell"><div><div><p>Annotations</p><button aria-label="Collapse staged annotations">Close</button></div><div></div></div><div class="grid"><div><div><ul><li>Feedback</li></ul></div></div></div></div>');
+  f.document.querySelector('[data-queued-messages-scroll-frame]')!.innerHTML='<div data-queued-messages-scroll><div data-queued-message-row>Message</div></div>';
+  const stop=injectComposerInfo(f.document);
+  const gutters:number[]=[];
+  try {
+    for (const [key,rowSelector] of [['children','[data-bb-chat-ui-info-child-row]'],['annotations','li'],['queue','[data-queued-message-row]']]) {
+      f.click('[data-bb-chat-ui-info-all]'); f.click(`[data-bb-chat-ui-info-choice="${key}"]`);
+      const card=f.document.querySelector('[data-bb-chat-ui-info-open]')!;
+      const outer=f.dom.window.getComputedStyle(card);
+      const row=f.dom.window.getComputedStyle(card.querySelector(rowSelector)!);
+      const inset=(value:string)=>parseFloat(value)||0;
+      const scroll=card.querySelector('[data-queued-messages-scroll]');
+      const gutter=inset(outer.paddingLeft)+inset(row.marginLeft)+inset(row.paddingLeft)+(scroll?inset(f.dom.window.getComputedStyle(scroll).paddingLeft):0);
+      assert.equal(gutter,inset(outer.paddingLeft),`${key}: body starts at the same inset as its header`);
+      assert.equal(outer.paddingLeft,outer.paddingRight,'left and right card gutters match');
+      gutters.push(gutter);
+    }
+    assert.equal(new Set(gutters).size,1,'the queue does not get an extra horizontal gutter');
+  } finally {stop(); f.dom.window.close();}
+});
 
 test("desktop hover previews wait for intent, bridge the popover gap, and pin on click", async () => {
   const f=fixture();
