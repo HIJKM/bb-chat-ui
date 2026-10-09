@@ -1,6 +1,7 @@
 import { exposedInfo, infoKinds, listedInfo, type InfoKind } from "./composer-info-settings.ts";
 import { HEAD_DIFF_MARK, openChangesPanel, type HeadDiffDetail } from "./workspace-diff-pill.ts";
 import type { WorkspaceDiffSnapshot } from "./workspace-diff-data.ts";
+import { commitIcon } from "./composer-diff-icons.ts";
 import { childInitial, type ChildState, type ChildSummary } from "./composer-child.ts";
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
 
@@ -48,6 +49,9 @@ export const composerInfoCss = `
 [${MARK}-trigger][${MARK}-unavailable] { width:32px; min-height:32px; padding:0; border-radius:50%; color:var(--subtle-foreground); background:var(--bb-chat-ui-info-face) !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; }
 [${MARK}-trigger] > span:not([${MARK}-avatars]) { overflow:hidden; text-overflow:ellipsis; }
 [${MARK}-trigger] svg { width:16px; height:16px; flex-shrink:0; }
+[${MARK}-diff-summary], [${MARK}-commit-count] { display:inline-flex; align-items:center; min-width:0; }
+[${MARK}-commit-count] { flex-shrink:0; gap:4px; white-space:nowrap; }
+[${MARK}-commit-count] svg { width:14px; height:14px; }
 [${MARK}-trigger] [data-bb-chat-ui-branch] { display:inline-flex; flex-shrink:0; color:var(--color-purple-500,#a855f7); }
 [${MARK}-diff-content] [${MARK}-diff-branch] { display:flex; align-items:center; gap:6px; color:var(--color-purple-500,#a855f7); }
 [${MARK}-diff-branch] code { min-width:0; overflow-wrap:anywhere; white-space:normal; }
@@ -287,6 +291,12 @@ export function injectComposerInfo(document: Document): () => void {
       try { return JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "null"); }
       catch { return null; }
     };
+    const commitCount = (count:number) => {
+      const chip = document.createElement("span"); chip.setAttribute(`${MARK}-commit-count`, "");
+      chip.setAttribute("role", "img"); chip.setAttribute("aria-label", `커밋 ${count}개`);
+      chip.append(commitIcon(document), String(count));
+      return chip;
+    };
     const annotationCount = (item: InfoItem) => {
       const list = item.node.querySelector("ul");
       return list ? String(list.children.length) : item.node.querySelector(".tabular-nums")?.textContent?.trim() ?? "!";
@@ -420,6 +430,12 @@ export function injectComposerInfo(document: Document): () => void {
           button.append(clone);
         }
         if (summary && item.key === "diff") {
+          const count = readDiff()?.detail?.commitCount;
+          if (presentation?.mode === "branch" && count != null && count > 0) {
+            text.setAttribute(`${MARK}-diff-summary`, "");
+            text.textContent = presentation.branchLabel;
+            text.append(" · ", commitCount(count));
+          }
           const parts = text.textContent?.match(/^(\+\d+)\s*([-−]\d+)\s*·?\s*(.*)$/);
           if (parts) {
             text.replaceChildren();

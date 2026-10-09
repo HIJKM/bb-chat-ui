@@ -644,7 +644,9 @@ test("Code Diff pill shows one commit meaning and keeps unpushed counts inside i
   publish(); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
   const stop = injectComposerInfo(f.document);
   const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!;
-  assert.equal(pill.textContent, 'feature/a-very-… · 8 commits');
+  assert.equal(pill.textContent, 'feature/a-very-… · 8');
+  assert.ok(pill.querySelector('[data-bb-chat-ui-info-commit-count] svg'));
+  assert.equal(pill.querySelector('[data-bb-chat-ui-info-commit-count]')?.getAttribute('aria-label'), '커밋 8개');
   assert.equal(pill.textContent?.includes('↑'), false);
   assert.ok(pill.getAttribute('aria-label')?.includes(name));
   f.click('[data-bb-chat-ui-info-trigger="diff"]');
@@ -659,7 +661,7 @@ test("Code Diff pill shows one commit meaning and keeps unpushed counts inside i
   publish(); await f.tick();
   assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff]'), popup);
   assert.ok(popup.textContent?.includes('미푸시 · 0 commits'));
-  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent, 'feature/a-very-… · 8 commits');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent, 'feature/a-very-… · 8');
   stop(); f.dom.window.close();
 });
 
