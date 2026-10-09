@@ -106,7 +106,7 @@ ${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] > :is(svg, [data-i
 [${MARK}-queue-drop] { position:fixed; width:12px; height:12px; border-radius:50%; pointer-events:none; z-index:54; background:color-mix(in oklab,var(--bb-chat-ui-info-face) 60%,var(--foreground) 40%); backdrop-filter:blur(14px) saturate(1.25); box-shadow:inset 0 1px 3px var(--bb-chat-ui-info-edge),0 2px 8px -2px var(--bb-chat-ui-info-shadow); }
 [${MARK}-all] { position:relative; width:32px; padding:0; }
 [${MARK}-bar][${MARK}-jump] { padding-right:40px; }
-[${MARK}-orb] { display:block; width:24px; height:24px; overflow:visible; pointer-events:none; color:var(--foreground); }
+[${MARK}-orb] { display:block; width:28px; height:28px; overflow:visible; pointer-events:none; color:var(--foreground); }
 [${MARK}-orb] circle { fill:currentColor; }
 [${MARK}-badge] { position:absolute; right:-3px; top:-4px; font-size:9px; min-width:14px; line-height:14px; padding:0 3px; border-radius:999px; background:var(--bb-chat-ui-info-face); color:var(--subtle-foreground); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)); }
 [${MARK}-avatar], [${MARK}-badge] { backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); }

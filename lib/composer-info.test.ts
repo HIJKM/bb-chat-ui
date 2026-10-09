@@ -531,7 +531,7 @@ test("the particle orb reacts briefly to information and disclosure events, stay
     try {
       const orb=f.document.querySelector<SVGSVGElement>('[data-bb-chat-ui-info-orb]')!;
       const css=f.dom.window.getComputedStyle(orb);
-      assert.equal(css.width,'24px'); assert.equal(css.height,'24px');
+      assert.equal(css.width,'28px'); assert.equal(css.height,'28px');
       assert.equal(orb.querySelectorAll('circle').length,32,'the sphere uses fewer, more spaced-out projected points');
       assert.ok(new Set([...orb.querySelectorAll('circle')].map(point=>point.getAttribute('opacity'))).size > 1,'depth changes point brightness');
       assert.equal(orb.querySelectorAll('img, image').length,0,'no downloaded asset is bundled');
