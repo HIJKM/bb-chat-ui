@@ -75,6 +75,40 @@ test("children use a bare latest-three avatar stack and prefer the designed SDK 
   stop(); f.dom.window.close();
 });
 
+test("child counts use up to three overlapping avatars followed by a separate overflow circle", async () => {
+  const f = fixture();
+  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  const children = Array.from({ length:6 }, (_, index) => ({ id:`child-${index}`, title:`Review ${index}`, state:'run' }));
+  source.setAttribute('data-bb-chat-ui-info-children', JSON.stringify(children.slice(0, 1)));
+  const stop = injectComposerInfo(f.document);
+  for (const count of [1, 2, 3, 4, 6]) {
+    source.setAttribute('data-bb-chat-ui-info-children', JSON.stringify(children.slice(0, count)));
+    await f.tick();
+    const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="children"]')!;
+    const stack = pill.querySelector('[data-bb-chat-ui-info-avatars]')!;
+    const avatars = Array.from(stack.querySelectorAll('[data-bb-chat-ui-info-avatar]'));
+    assert.equal(avatars.length, Math.min(count, 3));
+    assert.equal(pill.children.length, 1, 'the count is represented entirely by the avatar stack');
+    assert.deepEqual(avatars.map(node => node.getAttribute('data-child')), children.slice(Math.max(0, count - 3), count).map(child => child.id));
+    for (let index = 1; index < avatars.length; index++) {
+      assert.ok(Number(f.dom.window.getComputedStyle(avatars[index]).zIndex) > Number(f.dom.window.getComputedStyle(avatars[index - 1]).zIndex), 'newer circles overlap from left to right');
+    }
+    const more = stack.querySelector('[data-bb-chat-ui-info-avatar-more]');
+    if (count <= 3) assert.equal(more, null, 'one to three children have no additional numeric label');
+    else {
+      assert.ok(more);
+      assert.equal(more.textContent, `+${count - 3}`);
+      assert.equal(stack.lastElementChild, more);
+      const style = f.dom.window.getComputedStyle(more);
+      assert.equal(style.width, '30px');
+      assert.equal(style.height, '30px');
+      assert.equal(style.borderRadius, '50%');
+      assert.ok(Number(style.zIndex) > Number(f.dom.window.getComputedStyle(avatars.at(-1)!).zIndex));
+    }
+  }
+  stop(); f.dom.window.close();
+});
+
 test("Agentation shows icon and count, retains native actions, and closes with the native dismissal", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;

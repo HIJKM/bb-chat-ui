@@ -58,14 +58,14 @@ export const composerInfoCss = `
 [${MARK}-avatar], [${MARK}-badge] { backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); }
 [${MARK}-trigger="children"] { padding:0 7px 0 0; min-height:34px; border-radius:0; background:transparent !important; backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:none !important; }
 [${MARK}-trigger="children"]:hover { transform:none; }
-[${MARK}-avatars] { display:flex; align-items:center; }
-[${MARK}-avatar] { position:relative; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:30px; height:30px; margin-left:-8px; border-radius:50%; background:var(--bb-chat-ui-info-face); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)),inset 0 1px 3px var(--bb-chat-ui-info-edge); font-size:10px; font-weight:600; line-height:1; transition:transform 400ms cubic-bezier(.2,.9,.22,1.25); }
+[${MARK}-avatars] { display:flex; align-items:center; isolation:isolate; }
+[${MARK}-avatar], [${MARK}-avatar-more] { position:relative; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:30px; height:30px; margin-left:-8px; border-radius:50%; background:var(--bb-chat-ui-info-face); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)),inset 0 1px 3px var(--bb-chat-ui-info-edge); font-size:10px; font-weight:600; line-height:1; transition:transform 400ms cubic-bezier(.2,.9,.22,1.25); }
 [${MARK}-avatar]:first-child { margin-left:0; }
 [${MARK}-avatar]:nth-child(3n+1) { background:color-mix(in oklch,var(--bb-chat-ui-info-face) 76%,oklch(.75 .13 250) 24%); }
 [${MARK}-avatar]:nth-child(3n+2) { background:color-mix(in oklch,var(--bb-chat-ui-info-face) 78%,oklch(.75 .1 155) 22%); }
 [${MARK}-avatar]:nth-child(3n) { background:color-mix(in oklch,var(--bb-chat-ui-info-face) 78%,oklch(.78 .09 60) 22%); }
-[${MARK}-trigger="children"]:hover [${MARK}-avatar] { transform:translateY(-2px); margin-right:1px; }
-[${MARK}-avatar-more] { font-size:10px; padding-left:7px; color:var(--subtle-foreground); }
+[${MARK}-trigger="children"]:hover [${MARK}-avatar], [${MARK}-trigger="children"]:hover [${MARK}-avatar-more] { transform:translateY(-2px); margin-right:1px; }
+[${MARK}-avatar-more] { color:var(--subtle-foreground); backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); }
 [${MARK}-avatar-dot] { position:absolute; right:0; bottom:0; width:6px; height:6px; border-radius:50%; background:var(--success-text,#80b995); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)); }
 [${MARK}-avatar][data-state="run"] [${MARK}-avatar-dot] { animation:bb-info-breathe 2.6s ease-in-out infinite; }
 [${MARK}-avatar][data-state="wait"] [${MARK}-avatar-dot] { background:var(--warning-text,#cfb577); }
@@ -283,6 +283,7 @@ export function injectComposerInfo(document: Document): () => void {
     };
     const decorate = (button: HTMLElement, item: InfoItem, summary: boolean) => {
       const text = document.createElement("span");
+      let childCount = 0;
       text.textContent = summary && item.key === "diff" ? describe(item) : item.label;
       if (summary && item.key === "todos") text.textContent = item.trigger?.textContent?.trim().replace(/\s+/g, " ").slice(0, 30) || item.label;
       if (summary && item.key === "queue") text.textContent = item.node.querySelector('span.tabular-nums')?.textContent?.trim() || item.label;
@@ -296,6 +297,7 @@ export function injectComposerInfo(document: Document): () => void {
         let children: ChildSummary[] = [];
         try { children = JSON.parse(stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`) ?? "[]"); } catch { /* Host card remains usable. */ }
         if (!children.length) children = [{ id:"native", title:describe(item).replace(/^.*?:\s*/, ""), state:describe(item).startsWith("Active child") ? "run" : "wait" }];
+        childCount = children.length;
         const stateOf = (child: ChildSummary): ChildState => child.state ?? (child.running ? "run" : "done");
         const nextStates = new Map(children.map(child => [child.id, stateOf(child)]));
         for (const [index, child] of children.slice(-3).entries()) {
@@ -305,7 +307,7 @@ export function injectComposerInfo(document: Document): () => void {
           avatar.textContent = childInitial(child.title);
           avatar.setAttribute("data-child", child.id);
           avatar.setAttribute("data-state", stateOf(child));
-          avatar.style.zIndex = String(4 - index);
+          avatar.style.zIndex = String(index + 1);
           const dot = document.createElement("span"); dot.setAttribute(`${MARK}-avatar-dot`, "");
           if (stateOf(child) === "done") {
             const check = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -317,9 +319,13 @@ export function injectComposerInfo(document: Document): () => void {
           else if (childStates.get(child.id) !== "done" && stateOf(child) === "done" && !reduced()) avatar.animate?.([{ transform:"scale(1)" }, { transform:"scale(1.1)" }, { transform:"scale(1)" }], { duration:450, easing:"cubic-bezier(.22,1,.36,1)" });
           avatars.append(avatar);
         }
-        text.textContent = children.length > 3 ? `+${children.length - 3}` : String(children.length);
-        text.setAttribute(`${MARK}-avatar-more`, "");
-        button.append(avatars, text);
+        if (children.length > 3) {
+          text.textContent = `+${children.length - 3}`;
+          text.setAttribute(`${MARK}-avatar-more`, "");
+          text.style.zIndex = "4";
+          avatars.append(text);
+        }
+        button.append(avatars);
         childStates = nextStates;
       } else {
         if (icon) {
@@ -343,7 +349,7 @@ export function injectComposerInfo(document: Document): () => void {
           if (branch) button.append(branch.cloneNode(true));
         }
       }
-      button.title = `${item.label} · ${describe(item)}${item.key === "diff" && item.trigger?.title ? ` · ${item.trigger.title}` : ""}`;
+      button.title = `${item.label} · ${describe(item)}${childCount ? ` · ${childCount}개` : ""}${item.key === "diff" && item.trigger?.title ? ` · ${item.trigger.title}` : ""}`;
       button.setAttribute("aria-label", button.title);
     };
     const close = (restoreFocus = false, force = false) => {
