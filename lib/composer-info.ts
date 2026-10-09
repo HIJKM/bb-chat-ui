@@ -67,6 +67,14 @@ ${NATIVE_DETAIL} > div[class~="p-1"], ${NATIVE_DETAIL} > div[class~="p-1"] > div
 ${DETAIL}[aria-label="To-do list"] ul[class~="px-2.5"] > li[class~="px-2"] { margin-left:-8px; margin-right:-8px; width:calc(100% + 16px); box-sizing:border-box; }
 ${DETAIL} [${MARK}-close-heading] { box-sizing:border-box; padding-right:34px !important; }
 ${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:18px; right:24px; color:var(--subtle-foreground); cursor:pointer; }
+${DETAIL}[aria-label="Goal"] { display:flex !important; flex-direction:column; outline:0 !important; }
+${DETAIL}[aria-label="Goal"] > [aria-label="Goal controls"] { order:2; display:flex; justify-content:flex-end; margin-top:8px; padding:0 !important; border:0 !important; background:transparent !important; box-shadow:none !important; }
+${DETAIL}[aria-label="Goal"] > button[aria-expanded][aria-controls],
+${DETAIL}[aria-label="Goal"] > [aria-label="Goal controls"] > button[aria-expanded] { display:none !important; }
+${DETAIL}[aria-label="Goal"] > #thread-goal-card-body { order:1; border:0 !important; background:transparent !important; box-shadow:none !important; }
+${DETAIL}[aria-label="Goal"] > #thread-goal-card-body > div { background:transparent !important; box-shadow:none !important; }
+${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] { order:2; flex:none; width:auto; min-height:28px; padding:5px 9px; border-radius:8px; font-size:11px; line-height:18px; }
+${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] > :is(svg, [data-icon-root]) { display:none !important; }
 [${MARK}-panel-action], [${MARK}-action="diff"] { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; padding:0 !important; border-radius:50% !important; color:var(--subtle-foreground); }
 [${MARK}-panel-action] svg, [${MARK}-action="diff"] svg { width:14px; height:14px; }
 [${MARK}-trigger]:hover, [${MARK}-all]:hover { transform:translateY(-1px); }
@@ -364,6 +372,7 @@ export function injectComposerInfo(document: Document): () => void {
     const collapseRows = new Set<HTMLElement>();
     const closeHeadings = new Set<HTMLElement>();
     const generatedCloseHeadings = new Set<HTMLElement>();
+    const goalClearLabels = new Map<HTMLElement, HTMLElement>();
     const syncNativeControls = () => {
       const currentRows = new Set<HTMLElement>();
       for (const row of Array.from(stack.querySelectorAll<HTMLElement>(WORKFLOW_COLLAPSE))) {
@@ -389,13 +398,26 @@ export function injectComposerInfo(document: Document): () => void {
         if (generatedCloseHeadings.delete(heading)) heading.remove();
       }
       const item = items.find(item => item.node === activeNode && item.key === active);
+      for (const [button, label] of goalClearLabels) if (item?.key !== "goal" || !item.node.hasAttribute(OPEN) || !item.node.contains(button)) {
+        label.remove(); goalClearLabels.delete(button);
+      }
       if (!item || !item.node.hasAttribute(OPEN) || item.key === "diff" || item.node.matches(".agentation-staging-shell") || item.node.querySelector(`[${MARK}-dismiss]:not([${MARK}-native-dismiss])`)) return;
+      if (item.key === "goal") {
+        const button = item.node.querySelector<HTMLElement>('[aria-label="Clear active Goal"]');
+        if (button) {
+          let label = goalClearLabels.get(button);
+          if (!label) { label = document.createElement("span"); label.setAttribute(`${MARK}-goal-clear-label`, ""); goalClearLabels.set(button, label); }
+          const text = button.hasAttribute("disabled") ? "해제 중…" : "Goal 해제";
+          if (label.textContent !== text) label.textContent = text;
+          if (label.parentElement !== button) button.append(label);
+        }
+      }
       let heading = item.node.querySelector<HTMLElement>(`[${MARK}-panel-heading], [${MARK}-close-heading]`);
       if (!heading || heading.closest("button, a")) {
         const parent = item.trigger?.parentElement;
         heading = parent && parent !== item.node && !parent.closest("button, a") && !parent.hasAttribute("data-queued-messages-mode") ? parent : item.trigger;
         if (!item.trigger) heading = item.node.querySelector<HTMLElement>("h3, h4, header");
-        if (heading?.hasAttribute("data-queued-messages-mode") || item.key === "queue" || item.key === "parent") heading = null;
+        if (heading?.hasAttribute("data-queued-messages-mode") || item.key === "queue" || item.key === "parent" || item.key === "goal") heading = null;
       }
       if (!heading) {
         heading = document.createElement("h3"); heading.textContent = item.label;

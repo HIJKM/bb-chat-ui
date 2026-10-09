@@ -90,9 +90,9 @@ test("native and custom card titles use one family icon without changing native 
       assert.ok(heading.firstElementChild?.matches(`[data-bb-chat-ui-info-title-icon="${key}"]`), key);
       assert.equal(heading.querySelectorAll('[data-bb-chat-ui-info-title-icon]').length, 1);
       if (key === 'goal') {
-        assert.equal(f.dom.window.getComputedStyle(nativeGoal).display, 'none');
+        assert.equal(f.dom.window.getComputedStyle(nativeParent!).display, 'none');
         assert.equal(nativeGoal.parentElement, nativeParent);
-        assert.notEqual(f.dom.window.getComputedStyle(clear.querySelector('svg')!).display, 'none', 'the Goal action glyph stays visible');
+        assert.ok(clear.querySelector('[data-bb-chat-ui-info-goal-clear-label]'), 'Goal removal stays a separate named action');
         (clear as HTMLButtonElement).click(); assert.equal(cleared, 1);
       }
     }
@@ -100,6 +100,60 @@ test("native and custom card titles use one family icon without changing native 
   assert.equal(f.document.querySelector('[data-bb-chat-ui-info-title-icon]'), null);
   assert.equal(f.document.querySelector('[data-bb-chat-ui-info-title-heading]'), null);
   assert.notEqual(f.dom.window.getComputedStyle(nativeGoal).display, 'none');
+  f.dom.window.close();
+});
+
+test("Goal uses a plain body, one standard title and close button, and a separate native removal action", async () => {
+  const f=fixture();
+  const goal=f.document.querySelector<HTMLElement>('section[aria-label="Goal"]')!;
+  const source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  source.insertAdjacentHTML('beforeend','<span data-bb-chat-ui-info-icon="goal"><svg data-family="goal" /></span>');
+  const nativeStyle=f.document.createElement('style');
+  nativeStyle.textContent='[aria-label="Goal controls"] { background:red; box-shadow:0 0 0 1px blue; border:1px solid blue; } #thread-goal-card-body { border-top:1px solid blue; } #thread-goal-card-body > div { background:red; }';
+  f.document.head.append(nativeStyle);
+  goal.innerHTML='<div role="group" aria-label="Goal controls"><button id="thread-goal-card-toggle" aria-expanded="false" aria-controls="thread-goal-card-body" aria-label="Goal"><svg data-native-title /><span>Goal</span></button><button aria-label="Clear active Goal"><svg data-native-clear /></button></div><section id="thread-goal-card-body" hidden><div class="overflow-hidden bg-popover"><div class="space-y-2 px-3 pb-2.5 pt-2"><p>Build a small demo</p><div>100 tokens · 12s</div></div><div><button aria-label="Collapse Goal" aria-controls="thread-goal-card-body">Collapse</button></div></div></section>';
+  const toggle=goal.querySelector<HTMLButtonElement>('#thread-goal-card-toggle')!;
+  const clear=goal.querySelector<HTMLButtonElement>('[aria-label="Clear active Goal"]')!;
+  const clearParent=clear.parentElement;
+  const body=goal.querySelector<HTMLElement>('#thread-goal-card-body')!;
+  let removed=0;
+  clear.addEventListener('click',()=>removed++);
+  toggle.addEventListener('click',()=>{const expanded=toggle.getAttribute('aria-expanded')!=='true';toggle.setAttribute('aria-expanded',String(expanded));body.hidden=!expanded;});
+  const stop=injectComposerInfo(f.document);
+  const style=(node:Element)=>f.dom.window.getComputedStyle(node);
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="goal"]');
+    const title=goal.querySelector('h3[data-bb-chat-ui-info-close-heading]')!;
+    assert.ok(title,'a regular popup title replaces the native split controls strip');
+    assert.equal(title.textContent,'Goal');
+    assert.ok(title.firstElementChild?.matches('[data-bb-chat-ui-info-title-icon="goal"]'));
+    assert.equal(style(toggle).display,'none');
+    assert.equal(style(clearParent!).backgroundColor,'rgba(0, 0, 0, 0)');
+    assert.equal(style(clearParent!).boxShadow,'none');
+    assert.equal(style(body).borderTopWidth,'0px');
+    assert.equal(style(body.firstElementChild!).backgroundColor,'rgba(0, 0, 0, 0)');
+    assert.equal(style(clearParent!).order,'2','removal sits after the body instead of beside the title');
+    assert.equal(style(body).order,'1');
+    assert.equal(clear.textContent,'Goal 해제');
+    assert.equal(style(clear.querySelector('svg')!).display,'none','removal no longer looks like another popup close button');
+    assert.equal(clear.parentElement,clearParent);
+    assert.equal(goal.querySelectorAll('[aria-label="Goal 닫기"]').length,1);
+    f.click('[aria-label="Goal 닫기"]');
+    assert.equal(removed,0,'closing the popup does not remove the Goal');
+    assert.equal(clear.querySelector('[data-bb-chat-ui-info-goal-clear-label]'),null,'closing restores native removal chrome');
+    f.click('[data-bb-chat-ui-info-trigger="goal"]');
+    clear.innerHTML='<svg data-native-clear />'; await f.tick();
+    assert.equal(clear.textContent,'Goal 해제','native icon rerender restores the visible action label');
+    clear.disabled=true; await f.tick();
+    assert.equal(clear.textContent,'해제 중…');
+    clear.disabled=false; await f.tick();
+    clear.click(); assert.equal(removed,1,'the original removal handler remains intact');
+  } finally {stop();}
+  assert.equal(goal.querySelector('[data-bb-chat-ui-info-goal-clear-label]'),null);
+  assert.equal(goal.querySelector('h3'),null);
+  assert.notEqual(style(toggle).display,'none');
+  assert.equal(style(clearParent!).backgroundColor,'rgb(255, 0, 0)');
+  assert.equal(style(body.firstElementChild!).backgroundColor,'rgb(255, 0, 0)');
   f.dom.window.close();
 });
 
@@ -306,7 +360,12 @@ test("native popovers replace only their bottom collapse with a small close with
       const dismiss = node.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-native-dismiss]');
       assert.ok(dismiss,`${kind}: a dedicated visual close is present`);
       assert.equal(dismiss.textContent,'×');
-      assert.equal(node.querySelector('[data-bb-chat-ui-info-close-heading]'),toggle.parentElement,'reserve close space beside the actual title, not a heading in the body');
+      const title=node.querySelector('[data-bb-chat-ui-info-close-heading]');
+      if (kind==='goal') {
+        assert.ok(title?.matches('h3'));
+        assert.equal(title?.parentElement,node,'Goal uses its own standard popup title');
+        assert.equal(title?.textContent,'Goal');
+      } else assert.equal(title,toggle.parentElement,'reserve close space beside the actual title, not a heading in the body');
       assert.equal(node.querySelectorAll('[data-bb-chat-ui-info-native-dismiss]').length,1);
       dismiss.click();
       assert.equal(toggle.getAttribute('aria-expanded'),'false');
