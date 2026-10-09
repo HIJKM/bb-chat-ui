@@ -92,7 +92,7 @@ test("managed queue uses plain list rows and leaves standalone message bubbles i
     assert.equal(style(row.querySelector('.flex')!).flexDirection, 'row', 'text precedes the actions');
     assert.equal(style(text).flex, '1 1 0%');
     assert.equal(style(text).maxWidth, 'none', 'message text uses the available row width');
-    assert.equal(style(text).padding, '0px');
+    assert.equal(style(text).padding, '7px 0px');
     assert.equal(style(text).borderWidth, '0px');
     assert.equal(style(text).backgroundColor, 'rgba(0, 0, 0, 0)');
     assert.equal(style(actions).backgroundColor, 'rgba(0, 0, 0, 0)');
@@ -109,6 +109,33 @@ test("managed queue uses plain list rows and leaves standalone message bubbles i
     assert.equal(style(text).maxWidth, '70%', 'standalone queues retain their previous message layout');
     assert.notEqual(style(text).boxShadow, 'none');
   } finally { stopInfo(); stopQueue(); f.cleanup(); }
+});
+
+test("queue actions stay beside the first line in compact rows with appropriate hit targets", async () => {
+  for (const small of [true,false]) {
+    const f=fixture();
+    f.document.body.insertAdjacentHTML('beforeend',`<span hidden data-bb-chat-ui-hit-target="${small?'small':'large'}"></span>`);
+    const row=f.queue.querySelector('[data-queued-message-row]')!;
+    const text=row.querySelector('.min-w-0')!;
+    text.querySelector('.truncate')!.textContent='A longer queued message that wraps across multiple lines.';
+    const actions=row.querySelector('[data-queued-message-actions]')!;
+    const original=actions.parentElement;
+    const stopQueue=injectQueuedMessages(f.document); const stopInfo=injectComposerInfo(f.document);
+    try {
+      f.click('[data-bb-chat-ui-info-trigger="queue"]'); await f.tick();
+      const style=(node:Element)=>f.dom.window.getComputedStyle(node);
+      assert.equal(style(row).padding,'4px 0px','rows no longer carry eight pixels above and below');
+      assert.equal(style(row.querySelector('.flex')!).alignItems,'flex-start','actions are aligned to the first line, not the entire message');
+      assert.equal(style(actions).alignSelf,'flex-start');
+      assert.equal(style(actions.querySelector('button')!).height,small?'24px':'32px','mobile retains a larger touch target');
+      assert.equal(style(text).padding,small?'3px 0px':'7px 0px','the first 18px text line is centered beside the action');
+      assert.equal(style(f.queue.querySelector('[data-queued-messages-scroll]')!).padding,'4px 0px','the list has compact vertical spacing');
+      assert.equal(style(f.queue).getPropertyValue('--bb-chat-ui-queue-height'),'min(30dvh,12rem)');
+      assert.equal(actions.parentElement,original,'native action controls retain their parent');
+      f.click('[data-send]'); assert.equal(f.sent(),1);
+      f.click('[data-edit]'); await f.tick(); assert.equal(f.queue.querySelector('textarea')!.value,'unsaved queue draft');
+    } finally { stopInfo(); stopQueue(); f.cleanup(); }
+  }
 });
 
 test("queue count changes update the same pill while the native toggle label stays fixed", async () => {

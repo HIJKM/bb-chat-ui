@@ -1,3 +1,5 @@
+import { SMALL_HIT_TARGET } from "./device-chrome.ts";
+
 const STYLE_ID = "bb-chat-ui-queued-messages";
 const QUEUE = 'section[aria-label="Queued messages"]';
 const LEGACY_QUEUE = `${QUEUE}:not([data-bb-chat-ui-info-unit])`;
@@ -205,19 +207,20 @@ ${QUEUE} [data-queued-message-actions] button[aria-label^="Edit"] {
   order: 3;
 }
 ${MANAGED_QUEUE} [data-queued-message-row] {
-  padding: 8px 0 !important;
+  padding: 4px 0 !important;
 }
 ${MANAGED_QUEUE} [data-queued-message-row]:not(:last-child) {
   border-bottom: 1px solid color-mix(in oklab, var(--border-seam) 55%, transparent) !important;
 }
 ${MANAGED_QUEUE} [data-queued-message-row] > .flex {
   flex-direction: row;
+  align-items: flex-start !important;
 }
 ${MANAGED_QUEUE} [data-queued-message-row] > .flex > .min-w-0 {
   flex: 1 1 0%;
   max-width: none;
   min-width: 0;
-  padding: 0;
+  padding: 7px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -231,7 +234,22 @@ ${MANAGED_QUEUE} [data-queued-message-row] .truncate:not(.prompt-mention-pill, .
 }
 ${MANAGED_QUEUE} [data-queued-message-actions] {
   flex: none;
+  align-self: flex-start !important;
   background: transparent !important;
+}
+${MANAGED_QUEUE} [data-queued-message-actions] button {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 !important;
+}
+${SMALL_HIT_TARGET} ${MANAGED_QUEUE} [data-queued-message-row] > .flex > .min-w-0 {
+  padding: 3px 0;
+}
+${SMALL_HIT_TARGET} ${MANAGED_QUEUE} [data-queued-message-actions] button {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
 }
 ${MANAGED_QUEUE} [data-queued-message-actions]::before {
   content: none !important;
