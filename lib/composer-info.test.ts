@@ -1304,3 +1304,49 @@ test("Diff roulette supports PR and main commit counts without rolling digits in
     f.dom.window.close();
   }
 });
+
+test("a loading Diff with no result fades away, staying inert and cancelling when data returns", async () => {
+  for (const result of ['non-git','clean-main']) for (const reduced of [false,true]) {
+    const f = fixture();
+    Object.defineProperty(f.dom.window,'matchMedia',{ value:() => ({ matches:reduced }) });
+    const source = f.document.createElement('span'); source.setAttribute('data-bb-chat-ui-head-diff','');
+    f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+    const exits:{ node:HTMLElement; frames:Keyframe[]; options:KeyframeAnimationOptions; animation:Animation; cancelled:boolean }[] = [];
+    f.dom.window.HTMLElement.prototype.animate = function(frames,options) {
+      const entry = { node:this,frames:frames as Keyframe[],options:options as KeyframeAnimationOptions,animation:null as unknown as Animation,cancelled:false };
+      entry.animation = { cancel:() => { entry.cancelled=true; } } as Animation;
+      if (this.hasAttribute('data-bb-chat-ui-info-exiting')) exits.push(entry);
+      return entry.animation;
+    };
+    const stop = injectComposerInfo(f.document);
+    assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"][aria-busy]'));
+    if (result === 'non-git') source.setAttribute('data-bb-chat-ui-head-diff-state','unavailable');
+    else source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({insertions:0,deletions:0,files:0,presentation:{mode:'unpushed',visible:false,branch:'main',label:'main'}}));
+    await f.tick();
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]:not([data-bb-chat-ui-info-exiting])'),null);
+    assert.equal(exits.length,reduced ? 0 : 1);
+    if (!reduced) {
+      assert.equal(exits[0].options.duration,200);
+      assert.equal(exits[0].frames.at(-1)?.opacity,0);
+      assert.equal(exits[0].node.getAttribute('aria-hidden'),'true');
+      assert.equal(exits[0].node.hasAttribute('disabled'),true);
+      source.setAttribute('data-bb-chat-ui-head-diff-state','ready');
+      source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({insertions:2,deletions:0,files:1,presentation:{mode:'working',visible:true,branch:'main',label:'+2 −0 · 1 file'}}));
+      await f.tick();
+      assert.equal(exits[0].cancelled,true);
+      assert.equal(exits[0].node.isConnected,false,'returning data cannot leave a second ghost pill');
+      assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-trigger="diff"]').length,1);
+      source.setAttribute('data-bb-chat-ui-head-diff',''); source.setAttribute('data-bb-chat-ui-head-diff-state','loading'); await f.tick();
+      source.setAttribute('data-bb-chat-ui-head-diff-state','unavailable'); await f.tick();
+      assert.equal(exits.length,2);
+      if (result === 'clean-main') {
+        const finish = exits[1].animation.onfinish as (() => void) | null;
+        finish?.();
+        assert.equal(exits[1].node.isConnected,false,'completion removes the visual placeholder');
+      }
+    }
+    stop(); assert.equal(f.document.querySelector('[data-bb-chat-ui-info-exiting]'),null);
+    if (!reduced && result === 'non-git') assert.equal(exits[1].cancelled,true,'unload cancels an unfinished exit');
+    f.dom.window.close();
+  }
+});

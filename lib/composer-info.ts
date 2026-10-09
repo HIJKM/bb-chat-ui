@@ -269,6 +269,32 @@ export function injectComposerInfo(document: Document): () => void {
     const entryAnimations = new Set<Animation>();
     const entering = new Set<HTMLElement>();
     const widthAnimations = new Map<HTMLElement, { animation:Animation; width:number }>();
+    let diffExit:{ node:HTMLElement; animation:Animation } | null = null;
+    const cancelDiffExit = () => {
+      const exit = diffExit; diffExit = null;
+      if (!exit) return;
+      exit.animation.cancel(); entryAnimations.delete(exit.animation); exit.node.remove();
+    };
+    const leaveLoadingDiff = (button:HTMLButtonElement) => {
+      if (reduced() || button.hidden || bar.hidden || !button.animate) return;
+      cancelDiffExit();
+      const rect = button.getBoundingClientRect();
+      const anchor = bar.getBoundingClientRect();
+      const ghost = button.cloneNode(true) as HTMLButtonElement;
+      ghost.setAttribute(`${MARK}-exiting`, ""); ghost.setAttribute("aria-hidden", "true");
+      ghost.removeAttribute("aria-busy"); ghost.removeAttribute("aria-controls"); ghost.disabled = true;
+      Object.assign(ghost.style, { position:"absolute", left:`${rect.left - anchor.left}px`, top:`${rect.top - anchor.top}px`, width:`${button.offsetWidth || rect.width}px`, pointerEvents:"none" });
+      pills.append(ghost);
+      const animation = ghost.animate([
+        { opacity:1, transform:"none" },
+        { opacity:0, transform:"translateY(4px) scale(.88)" },
+      ], { duration:200, easing:"cubic-bezier(.22,1,.36,1)", fill:"forwards" });
+      diffExit = { node:ghost, animation }; entryAnimations.add(animation);
+      animation.onfinish = animation.oncancel = () => {
+        ghost.remove(); entryAnimations.delete(animation);
+        if (diffExit?.animation === animation) diffExit = null;
+      };
+    };
     let threadId = stack.querySelector(`[${SOURCE}]`)?.getAttribute(`${MARK}-thread`) ?? null;
     let active: InfoKind | "all" | null = null;
     let activeNode: HTMLElement | null = null;
@@ -872,6 +898,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (!source) return;
       const nextThreadId = source.getAttribute(`${MARK}-thread`);
       if (nextThreadId !== threadId) {
+        cancelDiffExit();
         close(false, true);
         for (const animation of entryAnimations) animation.cancel();
         entryAnimations.clear(); widthAnimations.clear(); entering.clear(); appeared.clear(); childStates.clear();
@@ -942,6 +969,7 @@ export function injectComposerInfo(document: Document): () => void {
       const diff = readDiff();
       const unavailableDiff = stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(`${HEAD_DIFF_MARK}-state`) === "unavailable";
       const exposed = exposedInfo(settings).filter(key => key !== "diff" || !unavailableDiff && diff?.presentation?.visible !== false);
+      if (request || !exposedInfo(settings).includes("diff") || !unavailableDiff && diff?.presentation?.visible !== false) cancelDiffExit();
       const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
       const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
@@ -951,6 +979,7 @@ export function injectComposerInfo(document: Document): () => void {
         signature = next;
         for (const [key, button] of buttons) if (!exposed.includes(key) || !showEmpty && !items.some(item => item.key === key)) {
           widthAnimations.get(button)?.animation.cancel();
+          if (key === "diff" && button.hasAttribute("aria-busy") && exposedInfo(settings).includes("diff") && (unavailableDiff || diff?.presentation?.visible === false)) leaveLoadingDiff(button);
           button.remove(); buttons.delete(key);
         }
         for (const key of exposed) {
@@ -1030,6 +1059,7 @@ export function injectComposerInfo(document: Document): () => void {
       updateScrollHints();
     };
     return { sync, bar, close, editing, resize, cleanup() {
+      cancelDiffExit();
       close(false, true);
       for (const animation of entryAnimations) animation.cancel();
       entryAnimations.clear();
