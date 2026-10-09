@@ -1497,3 +1497,31 @@ test("queued arrivals survive row-first and count-first rendering without missin
   assert.equal(drops.at(-1)?.parentNode,f.document.body);
   stop();assert.equal(f.document.querySelector('[data-bb-chat-ui-info-queue-drop]'),null);f.dom.window.close();
 });
+
+test("queue rerendering does not turn existing messages into extra droplets", async () => {
+  const f=fixture(); f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings','{"showQueue":"상단 표시"}');
+  const queue=f.document.querySelector('section[aria-label="Queued messages"]')!;
+  queue.querySelector('header button')!.innerHTML='<span data-queued-messages-count>2</span>';
+  const count=queue.querySelector('[data-queued-messages-count]')!; const rows=queue.querySelector('#queue')!;
+  const add=(id:string)=>{const row=f.document.createElement('div');row.setAttribute('data-queued-message-id',id);rows.append(row);return row;};
+  const a=add('a'); add('b');
+  let flights=0;
+  f.dom.window.HTMLElement.prototype.animate=function(){if(this.hasAttribute('data-bb-chat-ui-info-queue-drop')) flights++;return {cancel(){}} as Animation;};
+  const stop=injectComposerInfo(f.document);
+  a.remove(); await f.tick();
+  add('a'); add('c'); count.textContent='3'; await f.tick();
+  assert.equal(flights,1,'restoring an existing row alongside one new send flies only once');
+  rows.replaceChildren(); count.textContent='0'; await f.tick();
+  add('a'); add('b'); add('c'); add('d'); count.textContent='4'; await f.tick();
+  assert.equal(flights,2,'rebuilding all rows and the counter does not replay old messages');
+  const parent=queue.parentNode!;
+  queue.remove(); await f.tick(); parent.appendChild(queue); await f.tick();
+  assert.equal(flights,2,'temporarily remounting the queue is not another send');
+  add('e'); await f.tick(); assert.equal(flights,3,'a real row-first send still flies immediately');
+  rows.querySelector('[data-queued-message-id="e"]')!.remove(); await f.tick();
+  add('e'); count.textContent='5'; await f.tick();
+  assert.equal(flights,3,'a rerender between the row and counter preserves their shared arrival');
+  add('f'); add('g'); count.textContent='7'; await f.tick();
+  assert.equal(flights,5,'two real messages still receive two droplets');
+  stop();f.dom.window.close();
+});

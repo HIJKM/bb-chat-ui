@@ -309,7 +309,7 @@ export function injectComposerInfo(document: Document): () => void {
     let lastTrigger: HTMLElement | null = null;
     let signature = "";
     let childStates = new Map<string, ChildState>();
-    let queueSnapshot:{ count:number; ids:Set<string>; pendingRows:number; pendingCount:number } | null = null;
+    let queueSnapshot:{ count:number; seenIds:Set<string>; pendingRows:number; pendingCount:number } | null = null;
     const queueAnimations = new Set<Animation>();
     const queueDrops = new Set<HTMLElement>();
     const cancelQueueMotion = () => {
@@ -1122,24 +1122,34 @@ export function injectComposerInfo(document: Document): () => void {
       }
       fit(!widthChange);
       const queue = items.find(item => item.key === "queue");
-      const ids = new Set(queue ? Array.from(queue.node.querySelectorAll('[data-queued-message-id]')).map(row => row.getAttribute('data-queued-message-id')!) : []);
-      const countText = queue ? queueCount(queue) || queue.trigger?.textContent?.trim() || "" : "0";
-      const previousQueue = queueSnapshot;
-      const count = /^\d+$/.test(countText) ? Number(countText) : previousQueue?.count ?? ids.size;
-      const newIds = previousQueue?.ids.size ? [...ids].filter(id => !previousQueue.ids.has(id)).length : 0;
-      const growth = previousQueue ? Math.max(0,count - previousQueue.count) : 0;
-      const rowCredit = Math.min(previousQueue?.pendingRows ?? 0,newIds);
-      const countCredit = Math.min(previousQueue?.pendingCount ?? 0,growth);
-      const rowArrivals = newIds - rowCredit, countArrivals = growth - countCredit;
-      const added = Math.max(rowArrivals,countArrivals);
-      queueSnapshot = { count, ids,
-        // Match the later counterpart without retaining credit once rows and
-        // header agree, or after the collapsed list is first hydrated.
-        pendingRows:Math.min(Math.max(0,count - ids.size),Math.max(0,(previousQueue?.pendingRows ?? 0) - rowCredit) + Math.max(0,countArrivals - rowArrivals)),
-        pendingCount:Math.min(Math.max(0,ids.size - count),Math.max(0,(previousQueue?.pendingCount ?? 0) - countCredit) + Math.max(0,rowArrivals - countArrivals)),
-      };
-      if (!listed.includes("queue") || bar.hidden) cancelQueueMotion();
-      else for (let index = 0; index < added; index++) queueAddition(index * 45);
+      if (queue) {
+        const ids = new Set(Array.from(queue.node.querySelectorAll('[data-queued-message-id]')).map(row => row.getAttribute('data-queued-message-id')!));
+        const countText = queueCount(queue) || queue.trigger?.textContent?.trim() || "";
+        const previousQueue = queueSnapshot;
+        const count = /^\d+$/.test(countText) ? Number(countText) : previousQueue?.count ?? ids.size;
+        const newIds = previousQueue && (previousQueue.seenIds.size || previousQueue.count === 0)
+          ? [...ids].filter(id => !previousQueue.seenIds.has(id)).length : 0;
+        const growth = previousQueue ? Math.max(0,count - previousQueue.count) : 0;
+        const rowCredit = Math.min(previousQueue?.pendingRows ?? 0,newIds);
+        const countCredit = Math.min(previousQueue?.pendingCount ?? 0,growth);
+        const rowArrivals = newIds - rowCredit, countArrivals = growth - countCredit;
+        const complete = ids.size > 0 && ids.size === count;
+        // A complete list identifies real arrivals even if its counter was reset
+        // during a remount. Previously seen rows are not new sends.
+        const added = complete && previousQueue?.seenIds.size ? rowArrivals : Math.max(rowArrivals,countArrivals);
+        queueSnapshot = { count, seenIds:new Set([...(previousQueue?.seenIds ?? []), ...ids]),
+          // Retain counterpart credit while rows are temporarily unmounted.
+          pendingRows:complete ? 0 : Math.max(0,(previousQueue?.pendingRows ?? 0) - rowCredit) + Math.max(0,countArrivals - rowArrivals),
+          pendingCount:complete ? 0 : Math.max(0,(previousQueue?.pendingCount ?? 0) - countCredit) + Math.max(0,rowArrivals - countArrivals),
+        };
+        if (!listed.includes("queue") || bar.hidden) cancelQueueMotion();
+        else for (let index = 0; index < added; index++) queueAddition(index * 45);
+      } else {
+        // Native rendering can briefly remove the whole queue. Keep its arrival
+        // history rather than treating all restored messages as additions.
+        queueSnapshot ??= { count:0, seenIds:new Set(), pendingRows:0, pendingCount:0 };
+        cancelQueueMotion();
+      }
       if (widthChange && !widthChange.button.hidden) {
         const { button, from } = widthChange;
         const width = button.offsetWidth || button.getBoundingClientRect().width;
