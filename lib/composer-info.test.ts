@@ -743,6 +743,9 @@ test("child avatars use host provider artwork, including late and updated logos,
 
 test("Agentation uses the browser picker icon and count while retaining native controls", async () => {
   const f = fixture();
+  const nativeStyle = f.document.createElement('style');
+  nativeStyle.textContent = '.overflow-hidden { overflow:hidden; }';
+  f.document.head.append(nativeStyle);
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
   source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showAnnotations:'상단 표시' }));
@@ -755,7 +758,7 @@ test("Agentation uses the browser picker icon and count while retaining native c
     shell.classList.toggle('agentation-staging-shell--expanded', !collapsed);
     const icon = '<svg data-icon="ChatFeedback" data-feedback-icon><path d="M9 10h6" /></svg>';
     shell.innerHTML = `<div>${collapsed ? `<button aria-expanded="false" aria-label="Expand 3 staged annotations">${icon}Annotations <span class="tabular-nums">3</span></button>` : `<div>${icon}<p>Annotations</p><button aria-expanded="true" aria-label="Collapse staged annotations"><svg data-chevron /></button></div><div><button data-discard-all>Discard all</button><button data-send-all>Send all</button></div>`}</div>
-      <div class="grid"><div><div><ul>${[1,2,3].map(id => `<li><span class="sr-only">Description ${id}</span><span aria-hidden="true"><span>Composer</span><span>button</span><span>→</span><span>Feedback ${id}</span></span><button aria-label="Mention annotation">Mention</button><button aria-label="Send annotation to this thread">Send</button><button aria-label="Discard annotation">Discard</button></li>`).join('')}</ul></div></div></div>`;
+      <div class="grid overflow-hidden"><div class="min-h-0 overflow-hidden"><div><ul>${[1,2,3].map(id => `<li><span class="sr-only">Description ${id}</span><span aria-hidden="true"><span>Composer</span><span>button</span><span>→</span><span>Feedback ${id}</span></span><button aria-label="Mention annotation">Mention</button><button aria-label="Send annotation to this thread">Send</button><button aria-label="Discard annotation">Discard</button></li>`).join('')}</ul></div></div></div>`;
     shell.querySelector('button[aria-expanded]')!.addEventListener('click', () => render(!collapsed));
     shell.querySelector('[data-send-all]')?.addEventListener('click', () => sent++);
   };
@@ -774,6 +777,13 @@ test("Agentation uses the browser picker icon and count while retaining native c
   assert.ok(shell.hasAttribute('data-bb-chat-ui-info-open'));
   assert.equal(shell.parentElement, parent);
   assert.equal(f.dom.window.getComputedStyle(shell).display, 'grid');
+  assert.equal(f.dom.window.getComputedStyle(shell).overflow, 'auto', 'the card remains the scroll boundary');
+  for (const wrapper of shell.querySelectorAll('.overflow-hidden')) {
+    assert.equal(f.dom.window.getComputedStyle(wrapper).overflow, 'visible', 'native body wrappers must not clip the widened row background');
+  }
+  const rowStyle = f.dom.window.getComputedStyle(shell.querySelector('li')!);
+  assert.equal(rowStyle.paddingLeft, '8px');
+  assert.equal(rowStyle.marginLeft, '-8px', 'row content aligns with the heading while hover extends into the gutter');
   assert.ok(pill.querySelector('[data-picker-icon]'), 'expanding the native card keeps the picker glyph');
   assert.ok(decodeURIComponent(stack.style.getPropertyValue('--bb-chat-ui-feedback-icon')).includes('data-picker-icon'), 'popup header and row masks use the picker glyph');
   assert.equal(f.dom.window.getComputedStyle(shell.querySelector('[data-feedback-icon]')!).display, 'none', 'the old header icon is hidden without removing its native DOM');
@@ -789,7 +799,11 @@ test("Agentation uses the browser picker icon and count while retaining native c
   f.click('[aria-label="Collapse staged annotations"]');
   await f.tick();
   assert.equal(shell.hasAttribute('data-bb-chat-ui-info-open'), false);
-  stop(); f.dom.window.close();
+  stop();
+  for (const wrapper of shell.querySelectorAll('.overflow-hidden')) {
+    assert.equal(f.dom.window.getComputedStyle(wrapper).overflow, 'hidden', 'unloading restores native body clipping');
+  }
+  f.dom.window.close();
 });
 
 test("Agentation replaces its native glyph when the SDK picker icon finishes loading", async () => {

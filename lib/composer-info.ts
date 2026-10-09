@@ -197,6 +197,8 @@ ${DETAIL}.agentation-staging-shell > div:first-child > div:last-child > button {
 ${DETAIL}.agentation-staging-shell > div:first-child > div:last-child > button:first-child { order:2; }
 ${DETAIL}.agentation-staging-shell > div:first-child > div:last-child > button:last-child { order:1; }
 ${DETAIL}.agentation-staging-shell > .grid { grid-area:body; width:100%; }
+${DETAIL}.agentation-staging-shell > .grid,
+${DETAIL}.agentation-staging-shell > .grid > div { overflow:visible !important; }
 ${DETAIL}.agentation-staging-shell > .grid > div > div { padding:0 !important; }
 ${DETAIL}.agentation-staging-shell ul { max-height:none !important; margin:0 !important; padding:0 !important; border:0 !important; overflow:visible !important; }
 ${DETAIL}.agentation-staging-shell li { display:flex !important; align-items:center; gap:8px; min-width:0; min-height:52px; width:calc(100% + 16px); box-sizing:border-box; padding:10px 8px; margin:0 -8px !important; border:0 !important; border-radius:10px; background:transparent !important; transition:background-color 150ms ease-out; }
