@@ -104,6 +104,11 @@ export const composerInfoCss = `
 [${MARK}-diff] p { white-space:pre-wrap; }
 [${MARK}-diff-content] { display:block !important; }
 [${MARK}-diff-file], [${MARK}-diff-commit] { display:flex; align-items:center; gap:8px; padding:7px 0; font-size:12px; min-width:0; }
+[${MARK}-diff-file][hidden], [${MARK}-diff-commit][hidden] { display:none !important; }
+[${MARK}-diff-toggle] { display:flex; align-items:center; gap:6px; width:100%; min-height:28px; margin:3px 0; padding:4px 8px; border-radius:8px; font-size:11px; color:var(--subtle-foreground); cursor:pointer; text-align:left; }
+[${MARK}-diff-toggle]:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
+[${MARK}-diff-toggle] svg { width:12px; height:12px; flex-shrink:0; }
+[${MARK}-diff-toggle][aria-expanded=true] svg { transform:rotate(180deg); }
 [${MARK}-diff-file] > svg { width:16px; height:16px; flex-shrink:0; }
 [${MARK}-diff-commit] { padding:0; min-height:32px; }
 [${MARK}-diff-graph] { position:relative; align-self:stretch; width:16px; flex-shrink:0; color:var(--subtle-foreground); }
@@ -111,6 +116,7 @@ export const composerInfoCss = `
 [${MARK}-diff-graph]::before { top:0; bottom:calc(50% + 4px); }
 [${MARK}-diff-graph]::after { top:calc(50% + 4px); bottom:0; }
 [${MARK}-diff-commit]:first-child [${MARK}-diff-graph]::before, [${MARK}-diff-commit]:last-child [${MARK}-diff-graph]::after { display:none; }
+[${MARK}-diff-commits][${MARK}-diff-collapsed] > [${MARK}-diff-commit]:nth-child(5) [${MARK}-diff-graph]::after { display:none; }
 [${MARK}-diff-graph] svg { position:absolute; width:12px; height:12px; left:2px; top:calc(50% - 6px); fill:none; stroke:currentColor; stroke-width:1.5; }
 [${MARK}-diff-file] code, [${MARK}-diff-commit] code { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:11px/1.6 var(--font-mono,monospace); }
 [${MARK}-diff-file] > span { flex-shrink:0; font-size:11px; }
@@ -454,12 +460,40 @@ export function injectComposerInfo(document: Document): () => void {
       return `${describe(item)}${branch ? `\nBranch · ${branch}` : ""}`;
     };
     const renderDiff = (container: HTMLElement, item: InfoItem) => {
+      const expanded = new Set(Array.from(container.querySelectorAll(`[${MARK}-diff-toggle][aria-expanded="true"]`))
+        .map(button => button.getAttribute(`${MARK}-diff-toggle`)));
       const summary = document.createElement("p"); summary.textContent = describeDiff(item);
       container.replaceChildren(summary);
       let detail: HeadDiffDetail | undefined;
       try { detail = JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "{}").detail; } catch { /* Summary remains usable while data loads. */ }
       if (!detail || !Array.isArray(detail.files) || !Array.isArray(detail.commits)) return;
       container.replaceChildren();
+      const foldRows = (list: HTMLElement, kind: "files" | "commits") => {
+        const rows = Array.from(list.querySelectorAll<HTMLElement>(`[${MARK}-diff-${kind === "files" ? "file" : "commit"}]`));
+        if (rows.length <= 5) return;
+        list.id = `bb-composer-info-diff-${kind}-${++serial}`;
+        const toggle = document.createElement("button"); toggle.type = "button";
+        toggle.setAttribute(`${MARK}-diff-toggle`, kind);
+        toggle.setAttribute("aria-controls", list.id);
+        const chevron = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        chevron.setAttribute("viewBox", "0 0 24 24"); chevron.setAttribute("fill", "none");
+        chevron.setAttribute("stroke", "currentColor"); chevron.setAttribute("stroke-width", "1.5"); chevron.setAttribute("aria-hidden", "true");
+        const path = document.createElementNS(chevron.namespaceURI, "path"); path.setAttribute("d", "m6 9 6 6 6-6"); chevron.append(path);
+        const text = document.createElement("span"); toggle.append(chevron, text);
+        const setExpanded = (open: boolean) => {
+          rows.forEach((row, index) => { row.hidden = !open && index >= 5; });
+          list.toggleAttribute(`${MARK}-diff-collapsed`, !open);
+          toggle.setAttribute("aria-expanded", String(open));
+          text.textContent = open ? "접기" : `${rows.length - 5}개 더 보기`;
+          toggle.setAttribute("aria-label", `${kind === "files" ? "변경 파일" : "커밋"} · ${text.textContent}`);
+        };
+        setExpanded(expanded.has(kind));
+        toggle.addEventListener("click", () => {
+          setExpanded(toggle.getAttribute("aria-expanded") !== "true");
+          updateScrollHints();
+        });
+        container.append(toggle);
+      };
       const branch = document.createElement("p"); branch.setAttribute(`${MARK}-diff-branch`, "");
       const icon = emptyIcon("diff")?.cloneNode(true) as Element | undefined;
       icon?.setAttribute("aria-hidden", "true");
@@ -493,6 +527,7 @@ export function injectComposerInfo(document: Document): () => void {
         row.append(status, path, stats); files.append(row);
       }
       container.append(files);
+      foldRows(files, "files");
       if (detail.commitKind || detail.commits.length) {
         const label = document.createElement("h4");
         label.setAttribute(`${MARK}-diff-meta`, "commits");
@@ -520,6 +555,7 @@ export function injectComposerInfo(document: Document): () => void {
           row.append(graph, text); commits.append(row);
         }
         container.append(commits);
+        foldRows(commits, "commits");
       }
       if (detail.commitKind === "pr" && detail.unpushedCount != null) {
         const push = document.createElement("p");

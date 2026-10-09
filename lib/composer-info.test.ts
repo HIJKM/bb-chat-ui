@@ -1089,3 +1089,72 @@ test("Diff popover orders commits by latest authored time, stably, and sorts ref
   assert.deepEqual(rows(),['fresh · Just committed','new · Latest','tie · Same time','middle · Middle','old · Older']);
   stop(); f.dom.window.close();
 });
+
+test("Diff lists show five rows and independently expand their remaining rows across refreshes", async () => {
+  const f = fixture();
+  const source = f.document.createElement('span');
+  const snapshot = { insertions:8, deletions:0, files:8, branch:'feature/chat', detail:{
+    branch:'feature/chat', basis:'HEAD 대비 미커밋 변경', baseRef:'origin/main',
+    files:Array.from({length:8}, (_,n) => ({path:`file-${n}.ts`,status:'M',insertions:1,deletions:0})),
+    commits:Array.from({length:7}, (_,n) => ({sha:`sha-${n}`,shortSha:`${n}`,subject:`Commit ${n}`,authoredAt:n})),
+  } };
+  const publish = () => source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify(snapshot));
+  publish(); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  const stop = injectComposerInfo(f.document);
+  const visible = (kind:string) => [...f.document.querySelectorAll<HTMLElement>(`[data-bb-chat-ui-info-diff-${kind}]`)].filter(row => !row.hidden);
+  const toggle = (kind:string) => f.document.querySelector<HTMLButtonElement>(`[data-bb-chat-ui-info-diff-toggle="${kind}"]`)!;
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="diff"]');
+    assert.equal(visible('file').length,5);
+    assert.equal(visible('commit').length,5);
+    assert.deepEqual(visible('commit').map(row=>row.querySelector('code')?.textContent),
+      ['6 · Commit 6','5 · Commit 5','4 · Commit 4','3 · Commit 3','2 · Commit 2']);
+    for (const kind of ['files','commits']) {
+      assert.equal(toggle(kind).getAttribute('aria-expanded'),'false');
+      assert.ok(f.document.getElementById(toggle(kind).getAttribute('aria-controls')!));
+    }
+    assert.equal(toggle('files').textContent,'3개 더 보기');
+    assert.equal(toggle('commits').textContent,'2개 더 보기');
+    const hidden = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-diff-file][hidden]')!;
+    assert.equal(f.dom.window.getComputedStyle(hidden).display,'none','hidden rows do not occupy the scroll view');
+    toggle('files').click();
+    assert.equal(visible('file').length,8);
+    assert.equal(visible('commit').length,5,'opening files does not open commits');
+    assert.equal(toggle('files').getAttribute('aria-expanded'),'true');
+    assert.equal(toggle('files').textContent,'접기');
+    snapshot.detail.files.push({path:'file-8.ts',status:'A',insertions:1,deletions:0});
+    snapshot.files++;
+    snapshot.detail.commits.push({sha:'sha-7',shortSha:'7',subject:'Commit 7',authoredAt:7});
+    publish(); await f.tick();
+    assert.equal(visible('file').length,9,'open files stay expanded on refresh');
+    assert.equal(visible('commit').length,5,'closed commits stay collapsed on refresh');
+    assert.equal(toggle('commits').textContent,'3개 더 보기');
+    toggle('commits').click();
+    assert.equal(visible('commit').length,8);
+    toggle('files').click();
+    assert.equal(visible('file').length,5);
+    assert.equal(visible('commit').length,8,'closing files leaves commits open');
+    f.click('[data-bb-chat-ui-info-trigger="diff"]');
+    f.click('[data-bb-chat-ui-info-trigger="diff"]');
+    assert.equal(visible('file').length,5,'reopening resets the preview');
+    assert.equal(visible('commit').length,5);
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("Diff lists with five or fewer rows have no collapse control", () => {
+  const f = fixture();
+  const source = f.document.createElement('span');
+  source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({insertions:5,deletions:0,files:5,branch:'feature/chat',detail:{
+    branch:'feature/chat',basis:'HEAD 대비 미커밋 변경',baseRef:'origin/main',
+    files:Array.from({length:5}, (_,n)=>({path:`file-${n}.ts`,status:'M',insertions:1,deletions:0})),
+    commits:Array.from({length:5}, (_,n)=>({sha:`sha-${n}`,shortSha:`${n}`,subject:`Commit ${n}`})),
+  }}));
+  f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  const stop = injectComposerInfo(f.document);
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="diff"]');
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff-toggle]'),null);
+    assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-diff-file]:not([hidden])').length,5);
+    assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-diff-commit]:not([hidden])').length,5);
+  } finally { stop(); f.dom.window.close(); }
+});
