@@ -84,7 +84,7 @@ export const composerInfoCss = `
 [${MARK}-avatar][data-state="error"] [${MARK}-avatar-dot] { background:var(--destructive-text,#d99090); }
 [${MARK}-avatar][data-state="done"] [${MARK}-avatar-dot] { display:flex; align-items:center; justify-content:center; width:11px; height:11px; right:-2px; bottom:-2px; }
 [${MARK}-avatar-dot] svg { width:8px; height:8px; color:var(--bb-chat-ui-glass-base,var(--background)); }
-[${MARK}-avatar][data-new] { animation:bb-info-bubble 700ms cubic-bezier(.22,1,.36,1); }
+[${MARK}-avatar][data-new] { animation:bb-info-bubble 1100ms cubic-bezier(.4,0,.2,1); }
 [${MARK}-menu], ${DETAIL} { position:absolute !important; display:block !important; left:0 !important; right:0 !important; top:auto !important; bottom:40px !important; transform:none !important; width:100% !important; max-width:none !important; min-height:0 !important; height:auto !important; max-height:min(50dvh,26rem) !important; overflow:auto !important; margin:0 !important; order:0 !important; border:0 !important; border-radius:18px !important; background:var(--bb-chat-ui-info-face) !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); color:var(--foreground); box-shadow:0 12px 32px -14px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; z-index:52; animation:bb-info-enter 320ms cubic-bezier(.22,1,.36,1); }
 [${MARK}-menu] { padding:12px; }
 [${MARK}-menu], ${DETAIL} { overscroll-behavior:contain !important; }
@@ -167,7 +167,7 @@ ${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span:nth-chil
 ${DETAIL}.agentation-staging-shell li > span[aria-hidden="true"] > span:nth-child(4) { grid-area:comment; font-size:12px; font-weight:400; white-space:normal; overflow-wrap:anywhere; }
 ${DETAIL}.agentation-staging-shell li::before { content:""; flex-shrink:0; width:14px; height:14px; background:var(--subtle-foreground); mask:var(--bb-chat-ui-feedback-icon) center/contain no-repeat; }
 @keyframes bb-info-enter { from { opacity:0; transform:translateY(8px) scale(.98); } to { opacity:1; transform:none; } }
-@keyframes bb-info-bubble { 0% { transform:translateY(12px) scale(.25); } 45% { transform:translateY(-4px) scale(1.18); } 65% { transform:scale(.94); } 82% { transform:scale(1.03); } 100% { transform:none; } }
+@keyframes bb-info-bubble { 0% { transform:translateY(8px) scale(.85); } 65% { transform:translateY(-2px) scale(1.1); } 100% { transform:none; } }
 @keyframes bb-info-breathe { 50% { opacity:.4; } }
 @media (prefers-reduced-motion:reduce) { [${MARK}-bar] *, [${MARK}-stack] [${UNIT}][${OPEN}] { animation:none !important; transition:none !important; } }
 `;
@@ -398,7 +398,11 @@ export function injectComposerInfo(document: Document): () => void {
     const reduced = () => view!.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const pulse = () => {
       if (reduced()) return;
-      orb.animate?.([{ transform:"scale(1)" }, { transform:"scale(1.15)" }, { transform:"scale(.96)" }, { transform:"scale(1)" }], { duration:500, easing:"cubic-bezier(.22,1,.36,1)" });
+      orb.animate?.([
+        { transform:"scale(1)", offset:0, easing:"cubic-bezier(.4,0,.2,1)" },
+        { transform:"scale(1.1)", offset:.65, easing:"cubic-bezier(.4,0,.2,1)" },
+        { transform:"scale(1)", offset:1 },
+      ], { duration:800 });
     };
     const mark = (node: HTMLElement, attr: string, collection: Set<HTMLElement>) => {
       collection.add(node);
@@ -548,7 +552,11 @@ export function injectComposerInfo(document: Document): () => void {
           }
           avatar.append(dot);
           if (!childStates.has(child.id)) avatar.setAttribute("data-new", "");
-          else if (childStates.get(child.id) !== "done" && stateOf(child) === "done" && !reduced()) avatar.animate?.([{ transform:"scale(1)" }, { transform:"scale(1.1)" }, { transform:"scale(1)" }], { duration:450, easing:"cubic-bezier(.22,1,.36,1)" });
+          else if (childStates.get(child.id) !== "done" && stateOf(child) === "done" && !reduced()) avatar.animate?.([
+            { transform:"scale(1)", offset:0, easing:"cubic-bezier(.4,0,.2,1)" },
+            { transform:"scale(1.1)", offset:.65, easing:"cubic-bezier(.4,0,.2,1)" },
+            { transform:"scale(1)", offset:1 },
+          ], { duration:800 });
           avatars.append(avatar);
         }
         if (children.length > 3) {
@@ -725,12 +733,10 @@ export function injectComposerInfo(document: Document): () => void {
         appeared.add(key);
         if (reduced() || button.querySelector(`[${MARK}-avatars]`)) continue;
         const animation = button.animate?.([
-          { transform:"translateY(12px) scale(.25)", offset:0 },
-          { transform:"translateY(-4px) scale(1.18)", offset:.45 },
-          { transform:"scale(.94)", offset:.65 },
-          { transform:"scale(1.03)", offset:.82 },
+          { transform:"translateY(8px) scale(.85)", offset:0, easing:"cubic-bezier(.4,0,.2,1)" },
+          { transform:"translateY(-2px) scale(1.1)", offset:.65, easing:"cubic-bezier(.4,0,.2,1)" },
           { transform:"none", offset:1 },
-        ], { duration:700, easing:"cubic-bezier(.22,1,.36,1)" });
+        ], { duration:1100 });
         if (animation) {
           entryAnimations.add(animation);
           animation.onfinish = animation.oncancel = () => entryAnimations.delete(animation);

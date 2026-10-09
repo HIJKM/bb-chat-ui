@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { injectComposerInfo, fitComposerInfo } from "./composer-info.ts";
+import { injectComposerInfo, fitComposerInfo, composerInfoCss } from "./composer-info.ts";
 import { infoKinds } from "./composer-info-settings.ts";
 
 function fixture() {
@@ -48,10 +48,10 @@ test("pills bubble once on first visible appearance, preserving avatar motion an
   const f = fixture();
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
   source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'상단 표시', showQueue:'상단 표시' }));
-  const entries: { key:string; frames:Keyframe[]; cancelled:boolean }[] = [];
-  f.dom.window.HTMLElement.prototype.animate = function(frames) {
+  const entries: { key:string; frames:Keyframe[]; options:KeyframeAnimationOptions; cancelled:boolean }[] = [];
+  f.dom.window.HTMLElement.prototype.animate = function(frames, options) {
     const key = this.getAttribute('data-bb-chat-ui-info-trigger');
-    const entry = { key:key ?? 'orb', frames:frames as Keyframe[], cancelled:false };
+    const entry = { key:key ?? 'orb', frames:frames as Keyframe[], options:options as KeyframeAnimationOptions, cancelled:false };
     entries.push(entry);
     return { cancel:() => { entry.cancelled = true; } } as Animation;
   };
@@ -59,7 +59,12 @@ test("pills bubble once on first visible appearance, preserving avatar motion an
   const pills = () => entries.filter(entry => entry.key !== 'orb');
   assert.deepEqual(pills().map(entry => entry.key), ['diff', 'goal', 'queue']);
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]'), 'avatars retain their existing individual bubbles');
-  assert.ok(pills()[0].frames.some(frame => frame.transform === 'translateY(-4px) scale(1.18)'));
+  assert.deepEqual(pills()[0].frames.map(frame => frame.transform), ['translateY(8px) scale(.85)', 'translateY(-2px) scale(1.1)', 'none']);
+  assert.equal(pills()[0].options.duration, 1100);
+  assert.equal(pills()[0].frames[0].easing, 'cubic-bezier(.4,0,.2,1)');
+  assert.equal(pills()[0].frames[1].easing, 'cubic-bezier(.4,0,.2,1)', 'each segment slows to zero at the turn and the end');
+  assert.match(composerInfoCss, /animation:bb-info-bubble 1100ms cubic-bezier\(\.4,0,\.2,1\)/);
+  assert.match(composerInfoCss, /65% \{ transform:translateY\(-2px\) scale\(1\.1\); \} 100% \{ transform:none; \}/);
   f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent = '+14 −4 · 3 files';
   await f.tick();
   source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'끄기', showQueue:'상단 표시' }));
