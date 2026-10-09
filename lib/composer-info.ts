@@ -43,6 +43,7 @@ export const composerInfoCss = `
 [${MARK}-trigger][hidden] { display:none; }
 [${MARK}-trigger] > span:not([${MARK}-avatars]) { overflow:hidden; text-overflow:ellipsis; }
 [${MARK}-trigger] svg { width:16px; height:16px; flex-shrink:0; }
+[${MARK}-trigger] [data-bb-chat-ui-branch] { display:inline-flex; flex-shrink:0; color:var(--color-purple-500,var(--foreground)); }
 [${MARK}-trigger="diff"] { min-width:0; }
 [${MARK}-all] { position:absolute; right:0; width:32px; padding:0; }
 [${MARK}-bar][${MARK}-jump] { padding-right:80px; }
@@ -65,6 +66,7 @@ export const composerInfoCss = `
 ${DETAIL} [data-queued-messages-scroll-frame] { position:static !important; width:100% !important; height:auto !important; max-height:22rem; }
 ${DETAIL} header[data-queued-messages-mode] { position:relative !important; width:100% !important; max-width:none !important; height:32px !important; padding:0 12px !important; justify-content:space-between; background:transparent !important; }
 ${DETAIL} header[data-queued-messages-mode]::before { content:none; }
+${DETAIL} header[data-queued-messages-mode] button[aria-expanded], ${DETAIL} header[data-queued-messages-mode] button svg { color:var(--foreground) !important; }
 ${DETAIL} header[data-queued-messages-mode] > div:first-child, ${DETAIL} header[data-queued-messages-mode] > button { display:flex !important; }
 ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] { display:none !important; }
 [data-promptbox-shell]:has(> [${MARK}-request]) [data-follow-up-composer-anchor] { display:none !important; }
@@ -222,6 +224,7 @@ export function injectComposerInfo(document: Document): () => void {
         }
       }
       button.title = `${item.label} · ${describe(item)}${item.key === "diff" && item.trigger?.title ? ` · ${item.trigger.title}` : ""}`;
+      button.setAttribute("aria-label", button.title);
     };
     const close = (restoreFocus = false, force = false) => {
       if (!force && editing()) return false;

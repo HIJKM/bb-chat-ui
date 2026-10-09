@@ -185,3 +185,44 @@ test("archived stack-only composer retains supplementary data and native restore
   stop();
   f.dom.window.close();
 });
+
+test("read-only supplements remain available without replacing native editable cards", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  stack.insertAdjacentHTML("beforeend", `<div data-bb-chat-ui-info-supplements>
+    <section data-bb-chat-ui-info-kind="goal" aria-label="Goal"><p>Read-only Goal snapshot</p></section>
+    <section data-bb-chat-ui-info-kind="plan" aria-label="Plan"><p>Archived plan text</p></section>
+  </div>`);
+  const stop = injectComposerInfo(f.document);
+  f.click('[aria-label^="전체 정보"]');
+  assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-choice="goal"]').length, 1);
+  f.click('[data-bb-chat-ui-info-choice="goal"]');
+  assert.ok(f.document.querySelector('section[aria-label="Goal"]:not([data-bb-chat-ui-info-kind])')!.hasAttribute('data-bb-chat-ui-info-open'));
+  f.click('[aria-label^="전체 정보"]');
+  f.click('[data-bb-chat-ui-info-choice="plan"]');
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-kind="plan"]')!.hasAttribute('data-bb-chat-ui-info-open'));
+  stop();
+  f.dom.window.close();
+});
+
+test("remounts and two composer scopes do not leak disclosures or hide each other's requests", async () => {
+  const f = fixture();
+  const shell = f.document.querySelector('[data-promptbox-shell]')!;
+  const other = shell.cloneNode(true) as HTMLElement;
+  f.document.body.append(other);
+  const stop = injectComposerInfo(f.document);
+  const bars = f.document.querySelectorAll('[data-bb-chat-ui-info-bar]');
+  assert.equal(bars.length, 2);
+  (bars[0].querySelector('[data-bb-chat-ui-info-all]') as HTMLButtonElement).click();
+  assert.equal(other.querySelector('[data-bb-chat-ui-info-menu]'), null);
+  other.querySelector('.grid')!.insertAdjacentHTML('afterbegin', '<section data-testid="user-question-banner"><button>Answer</button></section>');
+  await f.tick();
+  assert.equal(shell.querySelector('.grid')!.hasAttribute('data-bb-chat-ui-info-request'), false);
+  assert.equal(other.querySelector('.grid')!.hasAttribute('data-bb-chat-ui-info-request'), true);
+  shell.remove();
+  await f.tick();
+  assert.equal(shell.querySelector('[data-bb-chat-ui-info-bar]'), null);
+  stop();
+  assert.equal(other.querySelector('[data-bb-chat-ui-info-unit]'), null);
+  f.dom.window.close();
+});
