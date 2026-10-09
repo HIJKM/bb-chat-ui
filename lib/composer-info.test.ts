@@ -67,6 +67,43 @@ test("catalog entries retain their family icon with or without current informati
   stop(); f.dom.window.close();
 });
 
+test("popover scroll hints follow available content, including nested scroll areas, and are cleaned up", async () => {
+  const f = fixture();
+  const stop = injectComposerInfo(f.document);
+  f.click('[data-bb-chat-ui-info-all]');
+  const menu = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-menu]')!;
+  // JSDOM does not derive overflowY from the popover's overflow shorthand.
+  menu.style.overflowY = 'auto';
+  let scrollHeight = 600;
+  Object.defineProperties(menu, { scrollHeight:{ get:() => scrollHeight }, clientHeight:{ value:200 } });
+  const hints = () => ['top', 'bottom'].map(edge => f.document.querySelector<HTMLElement>(`[data-bb-chat-ui-info-scroll-hint="${edge}"]`));
+  const scroll = (node: HTMLElement, top: number) => { node.scrollTop = top; node.dispatchEvent(new f.dom.window.Event('scroll')); };
+  scroll(menu, 0);
+  assert.deepEqual(hints().map(node => node?.hidden), [true, false]);
+  scroll(menu, 120);
+  assert.deepEqual(hints().map(node => node?.hidden), [false, false]);
+  scroll(menu, 400);
+  assert.deepEqual(hints().map(node => node?.hidden), [false, true]);
+  scrollHeight = 200;
+  scroll(menu, 0);
+  assert.deepEqual(hints().map(node => node?.hidden), [true, true]);
+  f.click('[data-bb-chat-ui-info-choice="queue"]');
+  const frame = f.document.querySelector<HTMLElement>('[data-queued-messages-scroll-frame]')!;
+  frame.style.overflowY = 'auto';
+  Object.defineProperties(frame, { scrollHeight:{ value:500 }, clientHeight:{ value:180 } });
+  scroll(frame, 0);
+  assert.deepEqual(hints().map(node => node?.hidden), [true, false]);
+  scroll(frame, 320);
+  assert.deepEqual(hints().map(node => node?.hidden), [false, true]);
+  f.document.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
+  assert.deepEqual(hints().map(node => node?.hidden), [true, true]);
+  const before = frame.parentElement;
+  stop();
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-scroll-hint]'), null);
+  assert.equal(frame.parentElement, before, 'native scroll content keeps its original parent');
+  f.dom.window.close();
+});
+
 test("children use a bare latest-three avatar stack and prefer the designed SDK detail", async () => {
   const f = fixture();
   const children = [

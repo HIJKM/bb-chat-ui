@@ -83,6 +83,10 @@ export const composerInfoCss = `
 [${MARK}-choice] svg { width:16px; height:16px; flex-shrink:0; }
 [${MARK}-choice][${MARK}-unavailable] { color:var(--subtle-foreground); }
 [${MARK}-choice] small { margin-left:auto; flex-shrink:0; font-size:10px; color:var(--subtle-foreground); }
+[${MARK}-scroll-hint] { position:absolute; pointer-events:none; z-index:53; backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); }
+[${MARK}-scroll-hint][hidden] { display:none; }
+[${MARK}-scroll-hint="top"] { border-radius:18px 18px 0 0; background:linear-gradient(to bottom,var(--bb-chat-ui-info-face),transparent); mask-image:linear-gradient(to bottom,black,transparent); -webkit-mask-image:linear-gradient(to bottom,black,transparent); }
+[${MARK}-scroll-hint="bottom"] { border-radius:0 0 18px 18px; background:linear-gradient(to top,var(--bb-chat-ui-info-face),transparent); mask-image:linear-gradient(to top,black,transparent); -webkit-mask-image:linear-gradient(to top,black,transparent); }
 [${MARK}-diff] p { white-space:pre-wrap; }
 [${MARK}-diff-content] { display:block !important; }
 [${MARK}-diff-file], [${MARK}-diff-commit] { display:flex; align-items:center; gap:8px; padding:7px 0; border-top:1px solid var(--border-hairline,var(--border)); font-size:12px; min-width:0; }
@@ -222,6 +226,49 @@ export function injectComposerInfo(document: Document): () => void {
     let signature = "";
     let childStates = new Map<string, ChildState>();
     let diffSupplement: HTMLElement | null = null;
+    const scrollHints = (["top", "bottom"] as const).map(edge => {
+      const hint = document.createElement("span");
+      hint.setAttribute(`${MARK}-scroll-hint`, edge);
+      hint.setAttribute("aria-hidden", "true");
+      hint.hidden = true;
+      bar.append(hint);
+      return hint;
+    });
+    let edgeRoot: HTMLElement | null = null;
+    let edgeScroller: HTMLElement | null = null;
+    const updateScrollHints = () => {
+      const root = menu ?? activeNode;
+      const scrollable = (node: HTMLElement) => {
+        if (node.matches('textarea, input, [contenteditable="true"]')) return false;
+        const css = view!.getComputedStyle(node);
+        return /auto|scroll|overlay/.test(css.overflowY || css.overflow) && node.clientHeight > 0 && node.scrollHeight > node.clientHeight + 1;
+      };
+      const scroller = root && (scrollable(root) ? root : Array.from(root.querySelectorAll<HTMLElement>("*")).filter(scrollable).sort((a, b) => b.clientHeight - a.clientHeight)[0]) || null;
+      if (edgeRoot !== root || edgeScroller !== scroller) {
+        edgeResize?.disconnect();
+        edgeRoot = root;
+        edgeScroller = scroller;
+        if (root) {
+          edgeResize?.observe(root);
+          for (const child of Array.from(root.children)) edgeResize?.observe(child);
+          if (scroller && scroller !== root) edgeResize?.observe(scroller);
+        }
+      }
+      scrollHints.forEach(hint => { hint.hidden = true; });
+      if (!scroller) return;
+      const rect = scroller.getBoundingClientRect();
+      const anchor = bar.getBoundingClientRect();
+      const height = Math.min(24, rect.height / 4);
+      scrollHints.forEach((hint, index) => {
+        hint.style.left = `${rect.left - anchor.left}px`;
+        hint.style.width = `${rect.width}px`;
+        hint.style.height = `${height}px`;
+        hint.style.top = `${(index ? rect.bottom - height : rect.top) - anchor.top}px`;
+        hint.hidden = index ? scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1 : scroller.scrollTop <= 1;
+      });
+    };
+    const edgeResize = typeof view!.ResizeObserver === "function" ? new view!.ResizeObserver(updateScrollHints) : null;
+    stack.addEventListener("scroll", updateScrollHints, true);
     const editing = () => stack.querySelector('[data-queued-message-inline-editor]') !== null;
     const reduced = () => view!.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const pulse = () => {
@@ -362,6 +409,7 @@ export function injectComposerInfo(document: Document): () => void {
       menu = null;
       active = null;
       activeNode = null;
+      updateScrollHints();
       orb.setAttribute("aria-expanded", "false");
       for (const button of buttons.values()) button.setAttribute("aria-expanded", "false");
       if (restoreFocus) (lastTrigger?.isConnected ? lastTrigger : orb).focus();
@@ -417,6 +465,7 @@ export function injectComposerInfo(document: Document): () => void {
         bar.append(menu);
         orb.setAttribute("aria-controls", menu.id);
         orb.setAttribute("aria-expanded", "true");
+        updateScrollHints();
         return;
       }
       const item = selected ?? items.find(item => item.key === key);
@@ -456,6 +505,7 @@ export function injectComposerInfo(document: Document): () => void {
         bar.append(menu);
         orb.setAttribute("aria-controls", menu.id);
         orb.setAttribute("aria-expanded", "true");
+        updateScrollHints();
         return;
       }
       active = key;
@@ -463,6 +513,7 @@ export function injectComposerInfo(document: Document): () => void {
       item.node.setAttribute(OPEN, "");
       if (item.trigger?.getAttribute("aria-expanded") === "false") item.trigger.click();
       buttons.get(key)?.setAttribute("aria-expanded", "true");
+      updateScrollHints();
     };
     orb.addEventListener("click", () => open("all", orb));
     const fit = () => {
@@ -586,10 +637,13 @@ export function injectComposerInfo(document: Document): () => void {
         orb.title = `전체 정보 · ${count}개`;
       }
       fit();
+      updateScrollHints();
     };
     return { sync, bar, close, editing, resize, cleanup() {
       close(false, true);
       resize?.disconnect();
+      edgeResize?.disconnect();
+      stack.removeEventListener("scroll", updateScrollHints, true);
       bar.remove();
       stack.removeAttribute(`${MARK}-stack`);
       stack.removeAttribute(`${MARK}-request`);
