@@ -236,6 +236,8 @@ export function injectComposerInfo(document: Document): () => void {
     const owned = new Set<HTMLElement>();
     const wrappers = new Set<HTMLElement>();
     const buttons = new Map<InfoKind, HTMLButtonElement>();
+    const appeared = new Set<InfoKind>();
+    const entryAnimations = new Set<Animation>();
     let active: InfoKind | "all" | null = null;
     let activeNode: HTMLElement | null = null;
     let menu: HTMLElement | null = null;
@@ -633,11 +635,29 @@ export function injectComposerInfo(document: Document): () => void {
     const fit = () => {
       const widths = [...buttons].map(([key, button]) => {
         button.hidden = false;
-        return { key, width:button.getBoundingClientRect().width };
+        // Entry transforms change visual bounds, but must not change which pills fit.
+        return { key, width:button.offsetWidth || button.getBoundingClientRect().width };
       });
       const width = stack.getBoundingClientRect().width;
       const visible = new Set(fitComposerInfo(widths, width > 0 ? width - (bar.hasAttribute(`${MARK}-jump`) ? 40 : 0) : Number.POSITIVE_INFINITY));
       for (const [key, button] of buttons) button.hidden = !visible.has(key);
+      if (bar.hidden) return;
+      for (const [key, button] of buttons) {
+        if (button.hidden || appeared.has(key)) continue;
+        appeared.add(key);
+        if (reduced() || button.querySelector(`[${MARK}-avatars]`)) continue;
+        const animation = button.animate?.([
+          { transform:"translateY(12px) scale(.25)", offset:0 },
+          { transform:"translateY(-4px) scale(1.18)", offset:.45 },
+          { transform:"scale(.94)", offset:.65 },
+          { transform:"scale(1.03)", offset:.82 },
+          { transform:"none", offset:1 },
+        ], { duration:700, easing:"cubic-bezier(.22,1,.36,1)" });
+        if (animation) {
+          entryAnimations.add(animation);
+          animation.onfinish = animation.oncancel = () => entryAnimations.delete(animation);
+        }
+      }
     };
     const resize = typeof view!.ResizeObserver === "function" ? new view!.ResizeObserver(fit) : null;
     resize?.observe(stack);
@@ -757,6 +777,8 @@ export function injectComposerInfo(document: Document): () => void {
     };
     return { sync, bar, close, editing, resize, cleanup() {
       close(false, true);
+      for (const animation of entryAnimations) animation.cancel();
+      entryAnimations.clear();
       resize?.disconnect();
       edgeResize?.disconnect();
       stack.removeEventListener("scroll", updateScrollHints, true);

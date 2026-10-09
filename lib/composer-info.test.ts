@@ -44,6 +44,68 @@ test("overflow reserves the all-information button and prefers Diff and children
   assert.deepEqual(fitComposerInfo(items, 30), []);
 });
 
+test("pills bubble once on first visible appearance, preserving avatar motion and cancelling on unload", async () => {
+  const f = fixture();
+  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'상단 표시', showQueue:'상단 표시' }));
+  const entries: { key:string; frames:Keyframe[]; cancelled:boolean }[] = [];
+  f.dom.window.HTMLElement.prototype.animate = function(frames) {
+    const key = this.getAttribute('data-bb-chat-ui-info-trigger');
+    const entry = { key:key ?? 'orb', frames:frames as Keyframe[], cancelled:false };
+    entries.push(entry);
+    return { cancel:() => { entry.cancelled = true; } } as Animation;
+  };
+  const stop = injectComposerInfo(f.document);
+  const pills = () => entries.filter(entry => entry.key !== 'orb');
+  assert.deepEqual(pills().map(entry => entry.key), ['diff', 'goal', 'queue']);
+  assert.ok(f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]'), 'avatars retain their existing individual bubbles');
+  assert.ok(pills()[0].frames.some(frame => frame.transform === 'translateY(-4px) scale(1.18)'));
+  f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent = '+14 −4 · 3 files';
+  await f.tick();
+  source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'끄기', showQueue:'상단 표시' }));
+  await f.tick();
+  source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'상단 표시', showQueue:'상단 표시' }));
+  await f.tick();
+  f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+  assert.deepEqual(pills().map(entry => entry.key), ['diff', 'goal', 'queue'], 'refresh, re-enable and resize do not replay entry motion');
+  stop();
+  assert.ok(pills().every(entry => entry.cancelled), 'in-progress entry animations are cancelled on unload');
+  f.dom.window.close();
+});
+
+test("pill bubbles wait for visible space and requests, and respect reduced motion", async () => {
+  for (const reduced of [false, true]) {
+    const f = fixture();
+    Object.defineProperty(f.dom.window, 'matchMedia', { value:() => ({ matches:reduced }) });
+    f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings', '{"showGoal":"상단 표시"}');
+    Object.defineProperty(f.dom.window.HTMLElement.prototype, 'offsetWidth', { get:() => 120 });
+    f.dom.window.HTMLElement.prototype.getBoundingClientRect = () => ({ width:10 } as DOMRect);
+    const animated:string[] = [];
+    f.dom.window.HTMLElement.prototype.animate = function() {
+      const key = this.getAttribute('data-bb-chat-ui-info-trigger');
+      if (key) animated.push(key);
+      return { cancel() {} } as Animation;
+    };
+    const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+    let width = 30;
+    stack.getBoundingClientRect = () => ({ width } as DOMRect);
+    const request = f.document.createElement('div'); request.setAttribute('data-testid','user-question-banner'); stack.append(request);
+    const stop = injectComposerInfo(f.document);
+    assert.deepEqual(animated, []);
+    width = 200; f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+    assert.deepEqual(animated, [], 'hidden request state does not consume entry motion');
+    request.remove(); await f.tick();
+    assert.deepEqual(animated, reduced ? [] : ['diff']);
+    assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-trigger="goal"]')!.hidden, true, 'bubble scale does not make overflow pills fit');
+    width = 500; f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+    assert.deepEqual(animated, reduced ? [] : ['diff', 'goal'], 'an overflow pill waits until it first becomes visible');
+    width = 200; f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+    width = 500; f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+    assert.deepEqual(animated, reduced ? [] : ['diff', 'goal']);
+    stop(); f.dom.window.close();
+  }
+});
+
 test("catalog entries retain their family icon with or without current information", async () => {
   const f = fixture();
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
