@@ -480,6 +480,9 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   };
   const stop = injectComposerInfo(f.document);
   const pills = () => entries.filter(entry => entry.key !== 'orb' && entry.options.duration === 460);
+  const bar=f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
+  assert.ok(bar.firstElementChild?.matches('[data-bb-chat-ui-info-all]'),'the all-information button is the leftmost flex item');
+  assert.equal(f.dom.window.getComputedStyle(bar.firstElementChild!).position,'static','the orb occupies a stable slot before the pills');
   const visible = ['diff', 'goal', 'todos', 'queue', 'pullRequest', 'other'];
   assert.deepEqual(pills().map(entry => entry.key), visible);
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]'), 'avatars retain their existing individual bubbles');
@@ -489,9 +492,9 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   ]);
   assert.deepEqual(pills()[0].frames.map(frame => frame.offset), [0,.35,.65,.82,1], 'stretch, landing squash and gentle recovery fit inside one quick entrance');
   assert.equal(pills()[0].options.duration, 460);
-  assert.deepEqual(pills().map(entry => entry.options.delay), [0,180,225,270,315,360], 'visible pills and child avatars enter from left to right in 45ms steps');
+  assert.deepEqual(pills().map(entry => entry.options.delay), [45,225,270,315,360,405], 'visible pills and child avatars follow the leftmost orb in 45ms steps');
   assert.ok(pills().every(entry => entry.options.fill === 'backwards'), 'delayed pills hold their starting pose until their turn');
-  assert.deepEqual([...f.document.querySelectorAll<HTMLElement>('[data-bb-chat-ui-info-avatar][data-new]')].map(avatar => avatar.style.animationDelay), ['45ms','90ms','135ms']);
+  assert.deepEqual([...f.document.querySelectorAll<HTMLElement>('[data-bb-chat-ui-info-avatar][data-new]')].map(avatar => avatar.style.animationDelay), ['90ms','135ms','180ms']);
   assert.equal(pills()[0].frames[0].easing, 'cubic-bezier(.36,0,.18,1)');
   assert.equal(pills()[0].frames[1].easing, 'cubic-bezier(.36,0,.18,1)', 'each segment slows to zero at the turn and the end');
   assert.match(composerInfoCss, /animation:bb-info-droplet 460ms cubic-bezier\(\.36,0,\.18,1\) backwards/);
@@ -506,8 +509,8 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   await f.tick();
   f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
   assert.deepEqual(pills().map(entry => entry.key), visible, 'refresh, re-enable and resize do not replay entry motion');
-  assert.equal(entries.filter(entry => entry.key === 'orb' && entry.options.duration === 460).length,1,'the all-information button enters once after the pills');
-  assert.equal(entries.find(entry => entry.key === 'orb')?.options.delay,405);
+  assert.equal(entries.filter(entry => entry.key === 'orb' && entry.options.duration === 460).length,1,'the all-information button enters once before the pills');
+  assert.equal(entries.find(entry => entry.key === 'orb')?.options.delay,0);
   assert.ok(entries.filter(entry => entry.key === 'orb' && entry.options.duration !== 460).every(entry => entry.options.duration === 360), 'activity reactions settle quickly too');
   stop();
   assert.ok(pills().every(entry => entry.cancelled), 'in-progress entry animations are cancelled on unload');

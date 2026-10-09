@@ -41,7 +41,7 @@ export const composerInfoCss = `
 [${MARK}-stack]::after { display:none !important; }
 [${WRAP}] { display:contents !important; }
 [${UNIT}] { display:none !important; }
-[${MARK}-bar] { position:relative; display:flex; align-items:center; gap:8px; height:32px; min-width:0; padding-right:40px; }
+[${MARK}-bar] { position:relative; display:flex; align-items:center; gap:8px; height:32px; min-width:0; padding-right:0; }
 [${MARK}-bar][hidden] { display:none; }
 [${MARK}-all][hidden] { display:none; }
 [${MARK}-bar][${MARK}-archived] { padding-right:0; }
@@ -104,9 +104,8 @@ ${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] > :is(svg, [data-i
 [${MARK}-diff-previous] { position:absolute; inset:0; pointer-events:none; animation:bb-info-count-out 180ms cubic-bezier(.2,.8,.2,1) forwards; }
 [${MARK}-diff-previous]::before { content:attr(${MARK}-diff-value); }
 [${MARK}-queue-drop] { position:fixed; width:12px; height:12px; border-radius:50%; pointer-events:none; z-index:54; background:color-mix(in oklab,var(--bb-chat-ui-info-face) 60%,var(--foreground) 40%); backdrop-filter:blur(14px) saturate(1.25); box-shadow:inset 0 1px 3px var(--bb-chat-ui-info-edge),0 2px 8px -2px var(--bb-chat-ui-info-shadow); }
-[${MARK}-all] { position:absolute; right:0; width:32px; padding:0; }
-[${MARK}-bar][${MARK}-jump] { padding-right:80px; }
-[${MARK}-bar][${MARK}-jump] [${MARK}-all] { right:40px; }
+[${MARK}-all] { position:static; width:32px; padding:0; }
+[${MARK}-bar][${MARK}-jump] { padding-right:40px; }
 [${MARK}-orb] { display:grid; grid-template-columns:repeat(2,4px); gap:3px; }
 [${MARK}-orb] i { width:4px; height:4px; border-radius:50%; background:currentColor; }
 [${MARK}-badge] { position:absolute; right:-3px; top:-4px; font-size:9px; min-width:14px; line-height:14px; padding:0 3px; border-radius:999px; background:var(--bb-chat-ui-info-face); color:var(--subtle-foreground); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)); }
@@ -300,7 +299,7 @@ export function injectComposerInfo(document: Document): () => void {
     badge.setAttribute(`${MARK}-badge`, "");
     badge.setAttribute("aria-hidden", "true");
     orb.append(symbol, badge);
-    bar.append(pills, orb);
+    bar.append(orb, pills);
     stack.append(bar);
     let items: InfoItem[] = [];
     let readOnlyLabel: string | null = null;
@@ -1200,7 +1199,7 @@ export function injectComposerInfo(document: Document): () => void {
       for (const button of positions.keys()) if (!moving.includes(button as HTMLButtonElement)) { positions.delete(button); moves.get(button)?.cancel(); moves.delete(button); }
       if (bar.hidden) return;
       let entryDelay = 0;
-      for (const button of [...Array.from(pills.children) as HTMLElement[], orb]) {
+      for (const button of [orb, ...Array.from(pills.children) as HTMLElement[]]) {
         const key = button === orb ? "all" : button.getAttribute(`${MARK}-trigger`) as InfoKind;
         if (button.hidden || appeared.has(key)) continue;
         appeared.add(key);
