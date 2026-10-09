@@ -44,7 +44,7 @@ test("overflow reserves the all-information button and prefers Diff and children
   assert.deepEqual(fitComposerInfo(items, 30), []);
 });
 
-test("pills bubble once on first visible appearance, preserving avatar motion and cancelling on unload", async () => {
+test("pills use a sequential droplet entrance once, preserving avatar motion and cancelling on unload", async () => {
   const f = fixture();
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
   source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ showGoal:'상단 표시', showQueue:'상단 표시' }));
@@ -60,15 +60,19 @@ test("pills bubble once on first visible appearance, preserving avatar motion an
   const pills = () => entries.filter(entry => entry.key !== 'orb');
   assert.deepEqual(pills().map(entry => entry.key), ['diff', 'goal', 'queue']);
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]'), 'avatars retain their existing individual bubbles');
-  assert.deepEqual(pills()[0].frames.map(frame => frame.transform), ['translateY(8px) scale(.85)', 'translateY(-2px) scale(1.1)', 'none']);
+  assert.deepEqual(pills()[0].frames.map(frame => frame.transform), [
+    'translateY(8px) scale(.82,.72)', 'translateY(-4px) scale(.94,1.16)',
+    'translateY(0) scale(1.1,.94)', 'translateY(-1px) scale(.985,1.015)', 'none',
+  ]);
+  assert.deepEqual(pills()[0].frames.map(frame => frame.offset), [0,.35,.65,.82,1], 'stretch, landing squash and gentle recovery fit inside one quick entrance');
   assert.equal(pills()[0].options.duration, 460);
   assert.deepEqual(pills().map(entry => entry.options.delay), [0,180,225], 'visible pills and child avatars enter from left to right in 45ms steps');
   assert.ok(pills().every(entry => entry.options.fill === 'backwards'), 'delayed pills hold their starting pose until their turn');
   assert.deepEqual([...f.document.querySelectorAll<HTMLElement>('[data-bb-chat-ui-info-avatar][data-new]')].map(avatar => avatar.style.animationDelay), ['45ms','90ms','135ms']);
   assert.equal(pills()[0].frames[0].easing, 'cubic-bezier(.36,0,.18,1)');
   assert.equal(pills()[0].frames[1].easing, 'cubic-bezier(.36,0,.18,1)', 'each segment slows to zero at the turn and the end');
-  assert.match(composerInfoCss, /animation:bb-info-bubble 460ms cubic-bezier\(\.36,0,\.18,1\) backwards/);
-  assert.match(composerInfoCss, /60% \{ transform:translateY\(-2px\) scale\(1\.1\); \} 100% \{ transform:none; \}/);
+  assert.match(composerInfoCss, /animation:bb-info-droplet 460ms cubic-bezier\(\.36,0,\.18,1\) backwards/);
+  assert.match(composerInfoCss, /35% \{ transform:translateY\(-4px\) scale\(\.94,1\.16\); \} 65% \{ transform:translateY\(0\) scale\(1\.1,\.94\); \} 82% \{ transform:translateY\(-1px\) scale\(\.985,1\.015\); \} 100% \{ transform:none; \}/);
   const firstAvatar=f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]');
   f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent = '+14 −4 · 3 files';
   await f.tick();
