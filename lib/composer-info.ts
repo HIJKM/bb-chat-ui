@@ -296,8 +296,8 @@ export function injectComposerInfo(document: Document): () => void {
     symbol.setAttribute(`${MARK}-orb`, "");
     symbol.setAttribute("aria-hidden", "true");
     symbol.setAttribute("viewBox", "0 0 32 32");
-    const particles = Array.from({ length:64 }, (_, index) => {
-      const y = 1 - 2 * (index + .5) / 64;
+    const particles = Array.from({ length:32 }, (_, index) => {
+      const y = 1 - 2 * (index + .5) / 32;
       const angle = index * Math.PI * (3 - Math.sqrt(5));
       const ring = Math.sqrt(1 - y * y);
       return { x:ring * Math.cos(angle), y, z:ring * Math.sin(angle) };
