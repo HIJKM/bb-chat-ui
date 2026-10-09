@@ -62,7 +62,7 @@ test("managed queue has one entry point and stays usable alongside the legacy qu
         f.click('[data-bb-chat-ui-info-trigger="queue"]'); await f.tick();
         assert.ok(f.queue.hasAttribute('data-bb-chat-ui-info-open'));
         assert.equal(f.toggle.getAttribute('aria-expanded'), 'true', 'the first click really opens the native list');
-        assert.equal(f.dom.window.getComputedStyle(f.queue).display, 'block');
+        assert.equal(f.dom.window.getComputedStyle(f.queue).display, 'flex');
         assert.equal(f.dom.window.getComputedStyle(f.queue).height, 'auto');
         assert.equal(f.dom.window.getComputedStyle(f.toggle.closest('header')!).display, 'none', 'the old header button does not duplicate the new entry point');
         f.click('[data-bb-chat-ui-info-trigger="diff"]'); await f.tick();
@@ -95,5 +95,29 @@ test("native queue editing protects the draft and releasing it restores every in
     f.click('[data-bb-chat-ui-info-trigger="queue"]'); await f.tick();
     assert.equal(f.toggle.getAttribute('aria-expanded'), 'true');
     assert.equal(f.document.querySelector('[data-follow-up-composer-anchor] textarea')!.textContent, 'composer draft');
+  } finally { stopInfo(); stopQueue(); f.cleanup(); }
+});
+
+test("managed queue confines overflow to the native message list without replacing its controls", async () => {
+  const f = fixture();
+  const frame = f.queue.querySelector<HTMLElement>('[data-queued-messages-scroll-frame]')!;
+  const list = f.queue.querySelector<HTMLElement>('[data-queued-messages-scroll]')!;
+  const send = f.queue.querySelector('[data-send]');
+  const stopQueue = injectQueuedMessages(f.document);
+  const stopInfo = injectComposerInfo(f.document);
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="queue"]'); await f.tick();
+    const style = (node: Element) => f.dom.window.getComputedStyle(node);
+    assert.equal(style(f.queue).overflow, 'hidden', 'the popover is not a second scroll container');
+    assert.equal(style(frame).overflow, 'hidden', 'the native animation frame clips the list');
+    assert.equal(style(list).overflowY, 'auto', 'only the native message list scrolls');
+    assert.equal(style(list).overflowX, 'hidden');
+    assert.equal(style(list).minHeight, '0px', 'the list can shrink inside the bounded frame');
+    assert.equal(style(list).overscrollBehavior, 'contain');
+    assert.equal(f.queue.querySelector('[data-queued-messages-scroll]'), list);
+    assert.equal(f.queue.querySelector('[data-send]'), send);
+    f.click('[data-send]'); assert.equal(f.sent(), 1);
+    f.click('[data-edit]'); await f.tick();
+    assert.equal(f.queue.querySelector('textarea')!.value, 'unsaved queue draft');
   } finally { stopInfo(); stopQueue(); f.cleanup(); }
 });
