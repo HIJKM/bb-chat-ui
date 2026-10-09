@@ -57,7 +57,7 @@ Registers composer customize plus content scripts in `app.tsx` (`composer-glass`
 
 입력 요청 중에는 요청만 표시하고 입력창도 숨긴다. 요청이 끝나면 초안을 그대로 복원한다. 큐 편집 중에는 다른 상세로 전환하지 않는다. Archived 화면의 정보도 숨겨서 보관하며, 호스트 복구 버튼은 유지한다. 새 Child Thread는 bubble 모션으로 나타나며 reduced motion 설정을 따른다.
 
-Child Thread는 배경 없는 색상 아바타 스택과 상태 점으로 표시한다. 펼치면 아바타·제목·provider·상태 목록에서 각 스레드를 연다. Agentation은 피드백 아이콘과 개수로 압축하고, 펼치면 본문과 위치·대상을 표시한다. 전체 전송·삭제는 목록 아래에 두고 개별 액션도 유지한다.
+Child Thread는 배경 없는 색상 아바타 스택과 상태 점으로 표시한다. 펼치면 아바타·제목·provider·상태 목록에서 각 스레드를 연다. Agentation은 원래 카드의 피드백 아이콘과 개수로 압축하고, 펼치면 본문과 위치·대상을 표시한다. 전체 전송·삭제는 목록 아래에 두고 개별 액션도 유지한다.
 
 검증: `npm ci`, `npm test`, `npm run typecheck`, `bb plugin build`.
 
@@ -72,3 +72,5 @@ Child Thread는 배경 없는 색상 아바타 스택과 상태 점으로 표시
 ## license
 
 MIT. See [LICENSE](LICENSE).
+
+정보 필·원 버튼·팝오버·상세 버튼은 기존 Agentation 카드와 같은 반투명 표면·블러·하이라이트를 쓴다. Diff 상세에는 실제 파일별 추가/삭제 줄 수와 비교 기준, 기준 브랜치 대비 커밋 목록도 표시하며, 열린 상태에서도 갱신한다. 미푸시 여부는 만들지 않는다.
