@@ -251,6 +251,39 @@ test("Diff first opens one dismissible popover from either the pill or the catal
   stop(); f.dom.window.close();
 });
 
+test("Diff popover retains changed files, line statistics, comparison basis and actual branch commits while open", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const source = f.document.createElement('span');
+  const detail = {
+    branch:'bb/review', basis:'HEAD 대비 미커밋 변경', baseRef:'main',
+    files:[{ path:'app.tsx', status:'M', insertions:8, deletions:2 },{ path:'image.png', status:'A', insertions:null, deletions:null }],
+    commits:[{ sha:'a7c21f0abcdef', shortSha:'a7c21f0', subject:'컴포저 정보 정리' }],
+  };
+  const publish = () => source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify({ insertions:8, deletions:2, files:2, branch:'bb/review', detail }));
+  publish(); stack.append(source);
+  const stop = injectComposerInfo(f.document);
+  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  const popup = f.document.querySelector('[data-bb-chat-ui-info-diff]')!;
+  assert.ok(popup.textContent?.includes('HEAD 대비 미커밋 변경'));
+  const rows = popup.querySelectorAll('[data-bb-chat-ui-info-diff-file]');
+  assert.equal(rows.length, 2);
+  assert.ok(rows[0].textContent?.includes('app.tsx'));
+  assert.ok(rows[0].textContent?.includes('+8'));
+  assert.ok(rows[0].textContent?.includes('−2'));
+  assert.ok(rows[1].textContent?.includes('통계 없음'));
+  assert.ok(popup.textContent?.includes('a7c21f0 · 컴포저 정보 정리'));
+  assert.ok(popup.textContent?.includes('main 대비'));
+  assert.equal(popup.textContent?.includes('unpushed'), false);
+  detail.files[0].path = 'lib/composer.ts';
+  publish(); await f.tick();
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-diff]'), popup);
+  assert.ok(popup.textContent?.includes('lib/composer.ts'));
+  assert.equal(popup.textContent?.includes('app.tsx'), false);
+  assert.equal(popup.querySelectorAll('[data-bb-chat-ui-info-action="diff"]').length, 1);
+  stop(); f.dom.window.close();
+});
+
 test("read-only Diff summaries show real branch information and defer the scoped panel action", async t => {
   const f = fixture();
   const previousButton = Object.getOwnPropertyDescriptor(globalThis, 'HTMLButtonElement');

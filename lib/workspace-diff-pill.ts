@@ -64,6 +64,15 @@ export interface HeadDiffOptions {
   isWorktree?: boolean;
 }
 
+interface DiffFile { path:string; status:string; insertions:number | null; deletions:number | null; }
+interface DiffCommit { sha:string; shortSha:string; subject:string; }
+interface DetailedWorkspace extends HeadWorkspace {
+  workingTree: DiffStats & { files:readonly DiffFile[] };
+  mergeBase?: (DiffStats & { files:readonly DiffFile[]; commits:readonly DiffCommit[]; baseRef:string | null; mergeBaseBranch:string }) | null;
+}
+
+export interface HeadDiffDetail { branch:string | null; basis:string; baseRef:string | null; files:readonly DiffFile[]; commits:readonly DiffCommit[]; }
+
 function shortBranch(name: string): string {
   if (name.startsWith("refs/heads/")) return name.slice("refs/heads/".length);
   if (name.startsWith("refs/remotes/")) {
@@ -91,6 +100,18 @@ export function headDiffSummary(workspace: HeadWorkspace, options: HeadDiffOptio
     deletions: counts.deletions,
     files: counts.files.length,
     branch: current !== null && !onDefault ? current : null,
+  };
+}
+
+export function headDiffDetail(workspace: DetailedWorkspace, options: HeadDiffOptions = {}): HeadDiffDetail {
+  const useCommitted = !hasDiff(workspace.workingTree) && options.isWorktree && hasDiff(workspace.mergeBase);
+  const baseRef = workspace.mergeBase?.baseRef ?? workspace.mergeBase?.mergeBaseBranch ?? null;
+  return {
+    branch:workspace.branch.currentBranch,
+    basis:useCommitted ? `${baseRef ?? "Merge base"} 대비 커밋된 변경` : "HEAD 대비 미커밋 변경",
+    baseRef,
+    files:(useCommitted ? workspace.mergeBase! : workspace.workingTree).files,
+    commits:workspace.mergeBase?.commits ?? [],
   };
 }
 

@@ -1,7 +1,7 @@
 import { createElement, useEffect, useState } from "react";
 import { experimental_Icon, useComposer, useSdk } from "@get-bb/plugin-sdk/app";
 
-import { HEAD_DIFF_MARK, headDiffSummary } from "./workspace-diff-pill.ts";
+import { HEAD_DIFF_MARK, headDiffSummary, headDiffDetail } from "./workspace-diff-pill.ts";
 
 export function WorkspaceDiffBridge() {
   const sdk = useSdk();
@@ -44,7 +44,7 @@ export function WorkspaceDiffBridge() {
         });
         if (signal.aborted) return;
         setSummary(result.outcome === "available"
-          ? JSON.stringify(headDiffSummary(result.workspace, { isWorktree })) : "");
+          ? JSON.stringify({ ...headDiffSummary(result.workspace, { isWorktree }), detail:headDiffDetail(result.workspace, { isWorktree }) }) : "");
       } catch {
         // Keep the last summary during a temporary disconnect.
       } finally {

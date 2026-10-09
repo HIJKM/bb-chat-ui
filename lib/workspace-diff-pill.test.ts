@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   headDiffSummary,
+  headDiffDetail,
   planChangesPanelClicks,
   readChangedFileLabel,
 } from "./workspace-diff-pill.ts";
@@ -13,6 +14,25 @@ test("counts only changes against HEAD, excluding committed branch changes", () 
     workingTree: { insertions: 12, deletions: 3, files: [{}, {}] },
     mergeBase: { insertions: 400, deletions: 90, files: [{}, {}, {}] },
   }), { insertions: 12, deletions: 3, files: 2, branch: "feature/chat" });
+});
+
+test("detail files use the same comparison as the pill and distinguish branch commits from unpushed commits", () => {
+  const dirty = { path:'draft.ts', status:'M', insertions:4, deletions:1 };
+  const committed = { path:'saved.ts', status:'A', insertions:23, deletions:0 };
+  const commits = [{ sha:'1234567abc', shortSha:'1234567', subject:'저장된 변경' }];
+  const workspace = {
+    branch:{ currentBranch:'feature/chat', defaultBranch:'main' },
+    workingTree:{ insertions:4, deletions:1, files:[dirty] },
+    mergeBase:{ insertions:23, deletions:0, files:[committed], commits, baseRef:'main', mergeBaseBranch:'main' },
+  };
+  assert.deepEqual(headDiffDetail(workspace, { isWorktree:true }), {
+    branch:'feature/chat', basis:'HEAD 대비 미커밋 변경', baseRef:'main', files:[dirty], commits,
+  });
+  workspace.workingTree = { insertions:0, deletions:0, files:[] };
+  assert.deepEqual(headDiffDetail(workspace, { isWorktree:true }), {
+    branch:'feature/chat', basis:'main 대비 커밋된 변경', baseRef:'main', files:[committed], commits,
+  });
+  assert.deepEqual(headDiffDetail(workspace).files, []);
 });
 
 test("omits the branch icon on the repository's default branch", () => {

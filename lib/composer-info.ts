@@ -1,6 +1,6 @@
 import { exposedInfo, infoKinds, listedInfo, type InfoKind } from "./composer-info-settings.ts";
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
-import { HEAD_DIFF_MARK, openChangesPanel } from "./workspace-diff-pill.ts";
+import { HEAD_DIFF_MARK, openChangesPanel, type HeadDiffDetail } from "./workspace-diff-pill.ts";
 import { childInitial, type ChildState, type ChildSummary } from "./composer-child.ts";
 
 const STACK = "[data-promptbox-shell] > .grid";
@@ -80,6 +80,11 @@ export const composerInfoCss = `
 [${MARK}-choice][${MARK}-unavailable] { color:var(--subtle-foreground); }
 [${MARK}-choice] small { margin-left:auto; flex-shrink:0; font-size:10px; color:var(--subtle-foreground); }
 [${MARK}-diff] p { white-space:pre-wrap; }
+[${MARK}-diff-content] { display:block !important; }
+[${MARK}-diff-file], [${MARK}-diff-commit] { display:flex; align-items:center; gap:8px; padding:7px 0; border-top:1px solid var(--border-hairline,var(--border)); font-size:12px; min-width:0; }
+[${MARK}-diff-file] code, [${MARK}-diff-commit] code { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:11px/1.6 var(--font-mono,monospace); }
+[${MARK}-diff-file] > span { flex-shrink:0; font-size:11px; }
+[${MARK}-diff-content] h4 { font-size:10px; font-weight:400; color:var(--subtle-foreground); margin:9px 0 3px; }
 [${MARK}-action="diff"] { border:0; border-radius:10px; padding:9px 12px; background:var(--surface-recessed); font-size:12px !important; }
 ${DETAIL} [data-queued-messages-scroll-frame] { position:static !important; width:100% !important; height:auto !important; max-height:22rem; }
 ${DETAIL} header[data-queued-messages-mode] { position:relative !important; width:100% !important; max-width:none !important; height:32px !important; padding:0 12px !important; justify-content:space-between; background:transparent !important; }
@@ -242,6 +247,35 @@ export function injectComposerInfo(document: Document): () => void {
         || (item.node === diffSupplement && item.trigger?.title !== "Code Diff" ? item.trigger?.title : null);
       return `${describe(item)}${branch ? `\nBranch · ${branch}` : ""}`;
     };
+    const renderDiff = (container: HTMLElement, item: InfoItem) => {
+      const summary = document.createElement("p"); summary.textContent = describeDiff(item);
+      container.replaceChildren(summary);
+      let detail: HeadDiffDetail | undefined;
+      try { detail = JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "{}").detail; } catch { /* Summary remains usable while data loads. */ }
+      if (!detail || !Array.isArray(detail.files) || !Array.isArray(detail.commits)) return;
+      const basis = document.createElement("p"); basis.textContent = `${detail.branch ?? "detached HEAD"} · ${detail.basis}`; container.append(basis);
+      for (const file of detail.files) {
+        const row = document.createElement("div"); row.setAttribute(`${MARK}-diff-file`, "");
+        const path = document.createElement("code"); path.textContent = file.path; path.title = file.path;
+        const status = document.createElement("span"); status.textContent = file.status; status.className = "text-subtle-foreground";
+        const stats = document.createElement("span");
+        if (file.insertions === null && file.deletions === null) stats.textContent = "통계 없음";
+        else {
+          const added = document.createElement("span"); added.className = "text-diff-added"; added.textContent = file.insertions === null ? "—" : `+${file.insertions}`;
+          const removed = document.createElement("span"); removed.className = "text-diff-removed"; removed.textContent = file.deletions === null ? "—" : `−${file.deletions}`;
+          stats.append(added, " ", removed);
+        }
+        row.append(path, status, stats); container.append(row);
+      }
+      if (detail.commits.length) {
+        const label = document.createElement("h4"); label.textContent = `브랜치 커밋 · ${detail.baseRef ?? "Merge base"} 대비`; container.append(label);
+        for (const commit of detail.commits) {
+          const row = document.createElement("div"); row.setAttribute(`${MARK}-diff-commit`, "");
+          const text = document.createElement("code"); text.textContent = `${commit.shortSha} · ${commit.subject}`; text.title = `${commit.sha} · ${commit.subject}`;
+          row.append(text); container.append(row);
+        }
+      }
+    };
     const decorate = (button: HTMLElement, item: InfoItem, summary: boolean) => {
       const text = document.createElement("span");
       text.textContent = summary && item.key === "diff" ? describe(item) : item.label;
@@ -385,7 +419,9 @@ export function injectComposerInfo(document: Document): () => void {
         dismiss.setAttribute("aria-label", `${labelOf(key)} 닫기`);
         dismiss.addEventListener("click", () => close(true));
         header.append(dismiss);
-        const caption = document.createElement("p"); caption.textContent = item ? describeDiff(item) : "현재 정보 없음";
+        const caption = document.createElement(item ? "div" : "p");
+        if (item) { caption.setAttribute(`${MARK}-diff-content`, ""); renderDiff(caption, item); }
+        else caption.textContent = "현재 정보 없음";
         menu.append(header, caption);
         if (item) {
           const action = document.createElement("button");
@@ -489,7 +525,7 @@ export function injectComposerInfo(document: Document): () => void {
       bar.hidden = request || !listed.length && !editing();
       const exposed = exposedInfo(settings);
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
-      const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`)]);
+      const next = JSON.stringify([settings, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK)]);
       if (signature !== next) {
         if (signature) pulse();
         signature = next;
@@ -513,7 +549,7 @@ export function injectComposerInfo(document: Document): () => void {
         if (active === "all") { close(); open("all", orb); }
         else if (active === "diff" && menu?.hasAttribute(`${MARK}-diff`)) {
           const item = items.find(item => item.key === "diff");
-          if (item) menu.querySelector("p")!.textContent = describeDiff(item);
+          if (item) renderDiff(menu.querySelector(`[${MARK}-diff-content]`)!, item);
         }
         else if (active && !activeNode && items.some(item => item.key === active)) {
           const key = active;
