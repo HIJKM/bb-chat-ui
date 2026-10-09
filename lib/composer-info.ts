@@ -424,9 +424,17 @@ export function injectComposerInfo(document: Document): () => void {
       const list = item.node.querySelector("ul");
       return list ? String(list.children.length) : item.node.querySelector(".tabular-nums")?.textContent?.trim() ?? "!";
     };
-    const queueCount = (item: InfoItem) => (item.node.querySelector(
-      'header [data-queued-messages-count] > span:not([data-queued-messages-previous-count])',
-    ) ?? item.node.querySelector('header span.tabular-nums:not([data-queued-messages-count])'))?.textContent?.trim() ?? "";
+    const queueCount = (item: InfoItem) => {
+      const current = item.node.querySelector('header [data-queued-messages-count]');
+      const counters = current ? [current] : Array.from(item.node.querySelectorAll('header span.tabular-nums')).reverse();
+      for (const counter of counters) {
+        const copy = counter.cloneNode(true) as Element;
+        copy.querySelectorAll('[aria-hidden="true"], [data-queued-messages-previous-count], .bb-count-roll-out').forEach(node => node.remove());
+        const count = copy.textContent?.trim() ?? "";
+        if (/^\d+$/.test(count)) return count;
+      }
+      return "";
+    };
     const catalog = () => infoKinds.filter(kind => listed.includes(kind.key)).flatMap<InfoItem | { key:InfoKind; label:string }>(kind => {
       const available = items.filter(item => item.key === kind.key);
       return available.length ? available : [{ key:kind.key, label:kind.label }];

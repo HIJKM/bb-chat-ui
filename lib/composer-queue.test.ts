@@ -149,6 +149,27 @@ test("queue count reads the current value without the hidden native roll-out num
   } finally { stop(); f.cleanup(); }
 });
 
+test("queue count ignores a legacy animated previous value without splitting real multi-digit counts", async () => {
+  const f = fixture();
+  const count = f.toggle.querySelector('.tabular-nums')!;
+  count.innerHTML = '<span aria-hidden="true" class="bb-count-roll-out">1</span><span class="bb-count-roll-in">2</span>';
+  f.toggle.insertAdjacentHTML('afterbegin', '<span class="tabular-nums">· 30s</span>');
+  const stop = injectComposerInfo(f.document);
+  try {
+    const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]')!;
+    assert.equal(pill.textContent, '2', 'previous 1 and current 2 never become 12');
+    count.innerHTML = '<span class="bb-count-roll-out">1</span><span class="bb-count-roll-in">2</span>';
+    await f.tick();
+    assert.equal(pill.textContent, '2', 'legacy roll-out classes also identify the outgoing number');
+    count.innerHTML = '<span aria-hidden="true" class="bb-count-roll-out">2</span><span class="bb-count-roll-in">12</span>';
+    await f.tick();
+    assert.equal(pill.textContent, '12', 'a genuine twelve-item queue retains both digits');
+    count.innerHTML = '<span aria-hidden="true">12</span><span>0</span>';
+    await f.tick();
+    assert.equal(pill.textContent, '0');
+  } finally { stop(); f.cleanup(); }
+});
+
 test("native queue editing protects the draft and releasing it restores every information control", async () => {
   const f = fixture();
   const stopQueue = injectQueuedMessages(f.document);
