@@ -492,7 +492,11 @@ export function injectComposerInfo(document: Document): () => void {
         }
       }
       scrollHints.forEach(hint => { hint.hidden = true; });
-      if (!scroller) return;
+      // Hints are siblings of the card and do not share its entrance opacity or
+      // movement. Wait for the card to settle before measuring their edges.
+      if (!scroller || root?.getAnimations?.().some(animation =>
+        "animationName" in animation && animation.animationName === "bb-info-enter"
+        && animation.playState !== "finished" && animation.playState !== "idle")) return;
       const rect = scroller.getBoundingClientRect();
       const anchor = bar.getBoundingClientRect();
       const height = Math.min(24, rect.height / 4);
@@ -506,6 +510,8 @@ export function injectComposerInfo(document: Document): () => void {
     };
     const edgeResize = typeof view!.ResizeObserver === "function" ? new view!.ResizeObserver(updateScrollHints) : null;
     stack.addEventListener("scroll", updateScrollHints, true);
+    stack.addEventListener("animationend", updateScrollHints, true);
+    stack.addEventListener("animationcancel", updateScrollHints, true);
     const scrollRoot = (event:Event) => {
       const root = menu ?? activeNode;
       return event.target && root?.contains(event.target as Node) ? root : null;
@@ -1376,6 +1382,8 @@ export function injectComposerInfo(document: Document): () => void {
       resize?.disconnect();
       edgeResize?.disconnect();
       stack.removeEventListener("scroll", updateScrollHints, true);
+      stack.removeEventListener("animationend", updateScrollHints, true);
+      stack.removeEventListener("animationcancel", updateScrollHints, true);
       stack.removeEventListener("wheel", onWheel);
       stack.removeEventListener("touchstart", onTouchStart);
       stack.removeEventListener("touchmove", onTouchMove);

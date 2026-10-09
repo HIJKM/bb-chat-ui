@@ -553,6 +553,28 @@ test("popover scroll hints follow available content, including nested scroll are
   f.dom.window.close();
 });
 
+test("Diff scroll hints wait for the card entrance to finish before showing at its settled edge", () => {
+  const f = fixture();
+  const stop = injectComposerInfo(f.document);
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="diff"]');
+    const menu = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-diff]')!;
+    Object.defineProperties(menu, { scrollHeight:{ value:600 }, clientHeight:{ value:200 } });
+    menu.style.overflowY = 'auto';
+    let entering = true;
+    menu.getAnimations = () => entering ? [{ animationName:'bb-info-enter', playState:'running' } as CSSAnimation] : [];
+    menu.getBoundingClientRect = () => new f.dom.window.DOMRect(0, entering ? 108 : 100, 300, 200);
+    menu.dispatchEvent(new f.dom.window.Event('scroll'));
+    const bottom = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-scroll-hint="bottom"]')!;
+    assert.equal(bottom.hidden, true, 'an opaque sibling fade must not float below a transparent, moving card');
+    entering = false;
+    menu.dispatchEvent(new f.dom.window.Event('animationend', { bubbles:true }));
+    assert.equal(bottom.hidden, false);
+    assert.equal(bottom.style.top, '276px', 'the fade uses the settled lower edge, not the entrance offset');
+    assert.equal(bottom.style.height, '24px');
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("popover wheel scrolling stays inside its scrollable root and nested editors, including empty and edge states", () => {
   const f = fixture();
   let chatWheels = 0;
