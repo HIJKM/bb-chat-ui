@@ -143,6 +143,7 @@ ${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:10px; right:12px; co
 [${MARK}-diff-file] code, [${MARK}-diff-commit] code { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:11px/1.6 var(--font-mono,monospace); }
 [${MARK}-diff-file] > span { flex-shrink:0; font-size:11px; }
 [${MARK}-diff-content] h4 { font-size:10px; font-weight:400; color:var(--subtle-foreground); margin:9px 0 3px; }
+[${MARK}-diff-content] > hr { margin:10px 0; border:0; border-top:1px solid color-mix(in oklab,var(--border-seam,var(--border)) 55%,transparent); }
 [${MARK}-diff-meta] { display:flex; flex-wrap:wrap; align-items:center; gap:4px; font-size:11px !important; color:var(--subtle-foreground); }
 [${MARK}-diff-meta] code { font:inherit; overflow-wrap:anywhere; }
 ${DETAIL}[aria-label="Queued messages"] { --bb-chat-ui-queue-height:min(36dvh,16rem); display:flex !important; flex-direction:column; max-height:var(--bb-chat-ui-queue-height) !important; overflow:hidden !important; padding:12px !important; gap:0 !important; }
@@ -684,6 +685,7 @@ export function injectComposerInfo(document: Document): () => void {
       const removed = document.createElement("span"); removed.className = "text-diff-removed"; removed.textContent = `−${snapshot?.deletions ?? 0}`;
       basis.append("HEAD · ", added, " ", removed, ` · ${detail.files.length} files`);
       container.append(basis);
+      if (detail.files.length || detail.commitKind || detail.commits.length) container.append(document.createElement("hr"));
       const files = document.createElement("div"); files.setAttribute(`${MARK}-diff-files`, "");
       if (detail.files.length) {
         const heading = document.createElement("h4"); heading.textContent = `변경 파일 · ${detail.files.length}`; files.append(heading);
@@ -704,7 +706,8 @@ export function injectComposerInfo(document: Document): () => void {
       container.append(files);
       foldRows(files, "files");
       if (detail.commitKind || detail.commits.length) {
-        const label = document.createElement("h4");
+        const heading = document.createElement("h4"); heading.textContent = "커밋"; container.append(heading);
+        const label = document.createElement("p");
         label.setAttribute(`${MARK}-diff-meta`, "commits");
         label.title = detail.commitKind
           ? `${detail.commitKind === "pr" ? "PR 후보" : "미푸시"} · ${detail.commitCount == null ? "확인 불가" : `${detail.commitCount} commits`} · ${detail.baseRef ?? "기준 없음"} 대비`

@@ -1438,7 +1438,15 @@ test("Diff popover puts changed files before the commit heading and connected ra
   const rail = popup.querySelector('[data-bb-chat-ui-info-diff-commits]');
   const files = popup.querySelector('[data-bb-chat-ui-info-diff-files]');
   assert.ok(rail); assert.ok(files);
-  assert.ok(files.compareDocumentPosition(popup.querySelector('h4[data-bb-chat-ui-info-diff-meta="commits"]')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  const separator=popup.querySelector('hr');
+  assert.ok(separator,'a semantic separator divides metadata from the lists');
+  assert.ok(popup.querySelector('[data-bb-chat-ui-info-diff-meta="head"]')!.compareDocumentPosition(separator) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(separator.compareDocumentPosition(files) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.equal(files.querySelector('h4')?.textContent,'변경 파일 · 7');
+  const commitHeading=[...popup.querySelectorAll('h4')].find(heading=>heading.textContent==='커밋');
+  assert.ok(commitHeading,'commits have their own short heading separate from comparison metadata');
+  assert.ok(files.compareDocumentPosition(commitHeading) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(commitHeading.compareDocumentPosition(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
   assert.ok(files.compareDocumentPosition(rail) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
   assert.equal(rail.querySelectorAll('[data-bb-chat-ui-info-diff-commit]').length, 3);
   assert.equal(rail.querySelectorAll('[data-bb-chat-ui-info-diff-graph] svg circle').length, 3);
@@ -1457,6 +1465,8 @@ test("Diff popover puts changed files before the commit heading and connected ra
   source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify(updated)); await f.tick();
   const refreshedFiles = popup.querySelector('[data-bb-chat-ui-info-diff-files]')!;
   assert.equal(refreshedFiles.querySelectorAll('[data-bb-chat-ui-info-diff-file]').length, 6);
+  assert.equal(popup.querySelectorAll('hr').length,1,'refresh replaces rather than duplicates the separator');
+  assert.equal([...popup.querySelectorAll('h4')].filter(heading=>heading.textContent==='커밋').length,1);
   assert.ok(refreshedFiles.compareDocumentPosition(popup.querySelector('[data-bb-chat-ui-info-diff-meta="commits"]')!) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'open popover refresh keeps changed files above commits');
   stop(); f.dom.window.close();
 });
