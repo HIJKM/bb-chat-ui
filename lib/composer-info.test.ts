@@ -1378,6 +1378,32 @@ test("current and child requests suppress information and the editor, and resolu
   }
 });
 
+test("composer question cards have rounded corners and a gentle entrance without changing native answers", async () => {
+  for (const id of ['tool-use-ask','plugin-request-banner','user-question-banner']) {
+    const f=fixture();
+    const stack=f.document.querySelector('[data-promptbox-shell] > .grid')!;
+    const outside=f.document.createElement('section'); outside.setAttribute('data-testid',id); outside.style.borderRadius='4px'; f.document.body.append(outside);
+    const question=f.document.createElement('section'); question.setAttribute('data-testid',id);
+    question.innerHTML='<p>Which option?</p><button type="button">Option A</button><textarea>Custom answer</textarea><button type="button">Submit</button>';
+    stack.prepend(question);
+    const answer=question.querySelector('button')!; const parent=answer.parentElement;
+    let selected=0; answer.addEventListener('click',()=>selected++);
+    const stop=injectComposerInfo(f.document);
+    try {
+      await f.tick();
+      const css=f.dom.window.getComputedStyle(question);
+      assert.equal(css.borderRadius,'18px',id);
+      assert.ok(css.animation.includes('bb-info-enter 260ms'),id);
+      assert.equal(css.overflow,'hidden','the card surface clips to its rounded edge');
+      answer.click(); assert.equal(selected,1); assert.equal(answer.parentElement,parent);
+      assert.equal(question.querySelector('textarea')!.value,'Custom answer');
+      assert.equal(f.dom.window.getComputedStyle(outside).borderRadius,'4px','past questions outside the composer are unchanged');
+      stop();
+      assert.equal(f.dom.window.getComputedStyle(question).borderRadius,'','unloading restores native styling');
+    } finally {stop();f.dom.window.close();}
+  }
+});
+
 test("two plugin notices are separately reachable, and unloading keeps a queue edit open", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;

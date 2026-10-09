@@ -13,6 +13,7 @@ const WRAP = `${MARK}-wrap`;
 const OPEN = `${MARK}-open`;
 const SOURCE = `${MARK}-settings`;
 const REQUEST = ['tool-use-ask', 'plugin-request-banner', 'plan-review-request', 'approval-banner', 'user-question-banner', 'plan-review-banner'].map(id => `[data-testid="${id}"]`).join(", ");
+const QUESTION = ['tool-use-ask', 'plugin-request-banner', 'user-question-banner'].map(id => `[data-testid="${id}"]`).join(", ");
 const NATIVE = `section[aria-label], .agentation-staging-shell, [${MARK}-kind]`;
 const WORKFLOW_COLLAPSE = 'button[aria-label^="Collapse "][aria-label$=" workflows"][aria-controls]';
 const ARCHIVED = '[aria-label="Thread archived"], [aria-label="Thread is archived"], [aria-label="Archived thread"]';
@@ -174,6 +175,7 @@ ${DETAIL} [data-queued-messages-scroll] { height:auto !important; min-height:0 !
 ${DETAIL} header[data-queued-messages-mode] { display:none !important; }
 ${DETAIL}[aria-label="Queued messages"] > div:has(> button[aria-label="Collapse queued messages"]) { display:none !important; }
 ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] { display:none !important; }
+[${MARK}-stack] :is(${QUESTION}) { border-radius:18px !important; overflow:hidden; transform-origin:center bottom; animation:bb-info-enter 260ms cubic-bezier(.22,1,.36,1); }
 [data-promptbox-shell]:has(> [${MARK}-request]) [data-follow-up-composer-anchor] { display:none !important; }
 [data-scroll-footer]:has([${MARK}-request]) button[aria-label="Scroll to latest event"] { display:none !important; }
 [${MARK}-stack] [${MARK}-supplements] { display:contents; }
@@ -229,6 +231,7 @@ ${DETAIL} [${MARK}-dismiss], [${MARK}-menu] [${MARK}-close], ${DETAIL}.agentatio
 @keyframes bb-info-count-in { from { translate:0 100%; opacity:0; } to { translate:0 0; opacity:1; } }
 @keyframes bb-info-count-out { from { translate:0 0; opacity:1; } to { translate:0 -100%; opacity:0; } }
 @media (prefers-reduced-motion:reduce) { [${MARK}-bar] *, [${MARK}-stack] [${UNIT}][${OPEN}] { animation:none !important; transition:none !important; } }
+@media (prefers-reduced-motion:reduce) { [${MARK}-stack] :is(${QUESTION}) { animation:none !important; transition:none !important; } }
 @media (prefers-reduced-motion:reduce) { [${MARK}-diff-previous] { display:none; } }
 `;
 
