@@ -1664,6 +1664,190 @@ test("secret scroll edge drops the header hairline and keeps the glass shell", a
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("secret card height eases between the open body and the header instead of snapping", async () => {
+  const f = fixture();
+  let reduce = false;
+  Object.defineProperty(f.dom.window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({ matches: query.includes("prefers-reduced-motion") && reduce }),
+  });
+  const native = f.document.createElement("style");
+  native.textContent = ".border-b { border-bottom: 1px solid rgb(222, 222, 222); } .overflow-y-auto { overflow-y: auto; } .bg-surface-recessed-solid { background-color: rgb(210, 210, 214); } .border-t { border-top: 1px solid rgba(0, 0, 0, 0.7); }";
+  f.document.head.append(native);
+  const stack = f.document.querySelector("[data-promptbox-shell] > .grid")!;
+  const banner = f.document.createElement("div");
+  banner.setAttribute("data-testid", "plugin-request-banner");
+  banner.innerHTML = '<section data-testid="plugin-interaction-shell" data-expanded=""><div class="border-b border-border-hairline py-1.5"><button type="button" aria-label="Add secrets">Add secrets</button><button type="button" aria-label="Hide details">Hide</button></div><div data-secret-body class="overflow-y-auto"><form class="@container/secrets"><label>UI_PREVIEW_TOKEN<input type="password" value="dummy"></label><div class="sticky border-t bg-surface-recessed-solid"><button type="submit">Add secrets</button></div></form></div></section>';
+  const other = f.document.createElement("div");
+  other.setAttribute("data-testid", "plugin-request-banner");
+  other.innerHTML = '<section data-testid="plugin-interaction-shell" data-expanded=""><div class="border-b border-border-hairline"><button type="button">Other request</button></div><div class="overflow-y-auto"><form><button type="button">Continue</button></form></div></section>';
+  stack.prepend(other, banner);
+  const shell = banner.querySelector("section")!;
+  const body = shell.querySelector<HTMLElement>("[data-secret-body]")!;
+  const form = shell.querySelector("form")!;
+  const input = shell.querySelector("input")!;
+  const otherShell = other.querySelector("section")!;
+  const hiddenNodes = [body, form, input];
+  let flight: { animation: { cancel(): void }; height: number; done: boolean } | null = null;
+  const motions: { keyframes: { height?: string }[]; options: { duration?: number; easing?: string; fill?: string }; animation: { onfinish: (() => void) | null; oncancel: (() => void) | null; cancelled: boolean; finish(): void } }[] = [];
+  const otherMotions: unknown[] = [];
+  const box = (height: number) => ({ x: 0, y: 0, top: 0, left: 0, right: 420, bottom: height, width: 420, height, toJSON() { return {}; } });
+  shell.getBoundingClientRect = () => {
+    const height = flight && !flight.done ? flight.height : shell.hasAttribute("data-expanded") ? 320 : f.dom.window.getComputedStyle(body).display === "none" ? 48 : 320;
+    return box(height);
+  };
+  shell.animate = (keyframes: { height?: string }[], options: { duration?: number; easing?: string; fill?: string }) => {
+    const animation = {
+      onfinish: null as (() => void) | null,
+      oncancel: null as (() => void) | null,
+      cancelled: false,
+      cancel() {
+        if (this.cancelled) return;
+        this.cancelled = true;
+        if (flight?.animation === this) flight.done = true;
+        this.oncancel?.();
+      },
+      finish() {
+        if (flight?.animation === this) flight.done = true;
+        this.onfinish?.();
+      },
+    };
+    motions.push({ keyframes, options, animation });
+    flight = { animation, height: Number.parseFloat(keyframes[0]?.height ?? "0"), done: false };
+    return animation;
+  };
+  otherShell.animate = () => {
+    otherMotions.push(true);
+    return { cancel() {}, onfinish: null, oncancel: null };
+  };
+  const beforePaint = async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+  const hideBody = () => {
+    shell.removeAttribute("data-expanded");
+    body.hidden = true;
+    for (const node of hiddenNodes) node.style.setProperty("display", "none", "important");
+  };
+  const showBody = () => {
+    shell.setAttribute("data-expanded", "");
+    body.hidden = false;
+    for (const node of hiddenNodes) node.style.removeProperty("display");
+  };
+  let submits = 0;
+  let headerClicks = 0;
+  form.addEventListener("submit", event => { event.preventDefault(); submits++; });
+  shell.querySelector("button")!.addEventListener("click", () => headerClicks++);
+  const stop = injectComposerInfo(f.document);
+  try {
+    await beforePaint();
+    assert.equal(motions.length, 0, "the first paint records the open card and does not replay a height animation");
+    assert.match(f.dom.window.getComputedStyle(banner).animation, /bb-info-enter 260ms/);
+    assert.equal(f.dom.window.getComputedStyle(shell).animationName, "none");
+    assert.equal(f.dom.window.getComputedStyle(shell).overflow, "hidden");
+    assert.equal(f.dom.window.getComputedStyle(shell).borderRadius, "18px");
+    assert.equal(f.dom.window.getComputedStyle(shell.firstElementChild!).borderBottomColor, "rgba(0, 0, 0, 0)");
+    assert.equal(f.dom.window.getComputedStyle(shell.querySelector(".sticky")!).backgroundColor, "rgba(0, 0, 0, 0)");
+    const hideButton = shell.querySelector<HTMLButtonElement>('[aria-label="Hide details"]')!;
+    hideButton.focus();
+    hideBody();
+    await beforePaint();
+    assert.equal(motions.length, 1, "collapse schedules a height animation before the next frame");
+    assert.deepEqual(motions[0].keyframes.map(frame => frame.height), ["320px", "48px"]);
+    assert.ok((motions[0].options.duration ?? 0) >= 200 && motions[0].options.duration !== 260);
+    assert.equal(motions[0].options.fill, "both");
+    assert.match(motions[0].options.easing ?? "", /cubic-bezier/);
+    assert.equal(body.hidden, false, "the hidden attribute is lifted while the shell height clips the body");
+    assert.equal(f.dom.window.getComputedStyle(body).display, "block", "the closing body stays painted so the shell can clip it");
+    assert.notEqual(f.dom.window.getComputedStyle(input).display, "none");
+    assert.equal(f.document.activeElement, hideButton);
+    assert.equal(input.value, "dummy");
+    body.hidden = true;
+    body.style.setProperty("display", "none", "important");
+    form.style.setProperty("display", "none", "important");
+    await beforePaint();
+    assert.equal(body.hidden, false, "a re-render does not put the closing body back into hidden");
+    assert.equal(f.dom.window.getComputedStyle(body).display, "block", "a re-render keeps the closing body painted");
+    assert.equal(f.dom.window.getComputedStyle(form).display, "block");
+    assert.equal(motions.length, 1, "a re-render does not start a second height animation");
+    shell.style.maxHeight = "480px";
+    await beforePaint();
+    assert.equal(shell.style.height, "");
+    assert.equal(motions.length, 1);
+    motions[0].animation.finish();
+    assert.equal(body.hidden, true);
+    assert.equal(body.style.display, "none");
+    assert.equal(body.style.getPropertyPriority("display"), "important");
+    assert.equal(input.style.display, "none");
+    assert.equal(f.dom.window.getComputedStyle(body).display, "none");
+    assert.equal(shell.style.height, "");
+    showBody();
+    await beforePaint();
+    assert.equal(motions.length, 2);
+    assert.deepEqual(motions[1].keyframes.map(frame => frame.height), ["48px", "320px"]);
+    motions[1].animation.finish();
+    shell.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    shell.querySelector("button")!.click();
+    assert.equal(submits, 1);
+    assert.equal(headerClicks, 1);
+    assert.equal(input.value, "dummy");
+    hideBody();
+    await beforePaint();
+    assert.equal(motions.length, 3);
+    flight!.height = 180;
+    const interrupted = motions[2].animation;
+    showBody();
+    await beforePaint();
+    assert.equal(motions.length, 4, "a reverse toggle replaces the in-flight animation");
+    assert.deepEqual(motions[3].keyframes.map(frame => frame.height), ["180px", "320px"]);
+    interrupted.onfinish?.();
+    assert.equal(shell.hasAttribute("data-expanded"), true);
+    assert.notEqual(f.dom.window.getComputedStyle(body).display, "none", "the interrupted close does not hide the reopened body");
+    motions[3].animation.finish();
+    otherShell.removeAttribute("data-expanded");
+    await beforePaint();
+    assert.equal(otherMotions.length, 0, "question and other request shells keep their own motion");
+    assert.equal(motions.length, 4);
+    reduce = true;
+    hideBody();
+    await beforePaint();
+    assert.equal(motions.length, 4, "reduced motion keeps the native snap");
+    assert.equal(body.style.display, "none");
+    assert.equal(body.style.getPropertyPriority("display"), "important");
+    assert.equal(f.dom.window.getComputedStyle(body).display, "none");
+    reduce = false;
+    showBody();
+    await beforePaint();
+    assert.deepEqual(motions.at(-1)?.keyframes.map(frame => frame.height), ["48px", "320px"]);
+    motions.at(-1)!.animation.finish();
+    hideBody();
+    await beforePaint();
+    const removed = motions.at(-1)!.animation;
+    assert.equal(f.dom.window.getComputedStyle(body).display, "block");
+    shell.remove();
+    await beforePaint();
+    assert.equal(removed.cancelled, true, "removing the card cancels its height animation");
+    banner.append(shell);
+    await beforePaint();
+    assert.equal(f.dom.window.getComputedStyle(body).display, "none", "a removed card comes back collapsed");
+    showBody();
+    await beforePaint();
+    motions.at(-1)!.animation.finish();
+    hideBody();
+    await beforePaint();
+    const unloading = motions.at(-1)!;
+    assert.equal(f.dom.window.getComputedStyle(body).display, "block");
+    stop();
+    assert.equal(unloading.animation.cancelled, true);
+    assert.equal(body.style.display, "none");
+    assert.equal(body.style.getPropertyPriority("display"), "important");
+    assert.equal(f.dom.window.getComputedStyle(body).display, "none");
+    assert.equal([...shell.attributes].some(attr => attr.name.includes("secret")), false);
+    assert.equal(input.value, "dummy");
+    assert.equal(f.dom.window.getComputedStyle(otherShell.firstElementChild!).borderBottomColor, "rgb(222, 222, 222)");
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("plan review body sits in the card and fades only the scroll directions that remain", async () => {
   assert.deepEqual(scrollOverflowEdges({ scrollTop: 0, clientHeight: 288, scrollHeight: 200 }), { above: false, below: false });
   assert.deepEqual(scrollOverflowEdges({ scrollTop: 0, clientHeight: 288, scrollHeight: 600 }), { above: false, below: true });

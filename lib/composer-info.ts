@@ -1413,6 +1413,145 @@ export function injectComposerInfo(document: Document): () => void {
     };
     const resize = typeof view!.ResizeObserver === "function" ? new view!.ResizeObserver(() => fit()) : null;
     resize?.observe(stack);
+    // Secret shells change height in the same commit that hides the body. Cache the
+    // resting box and animate before paint; the shared rAF sync would already be the snapped frame.
+    const SECRET_FORM = 'form[class~="@container/secrets"]';
+    const secretHeights = new WeakMap<HTMLElement, number>();
+    const secretExpanded = new WeakMap<HTMLElement, boolean>();
+    const secretMotions = new Map<HTMLElement, Animation>();
+    const secretHidden = new Map<HTMLElement, { node: HTMLElement; hidden: boolean; display: boolean }[]>();
+    const secretStyled = new WeakSet<HTMLElement>();
+    let secretObserver: MutationObserver | null = null;
+    const secretBox = (shell: HTMLElement) => shell.getBoundingClientRect().height;
+    const rememberSecret = (shell: HTMLElement) => {
+      if (secretMotions.has(shell)) return;
+      const height = secretBox(shell);
+      if (height > 0) secretHeights.set(shell, height);
+    };
+    const claimHidden = (shell: HTMLElement) => {
+      const found: { node: HTMLElement; hidden: boolean; display: boolean }[] = [];
+      for (const node of Array.from(shell.querySelectorAll<HTMLElement>("*"))) {
+        const hidden = node.hidden;
+        const display = node.style.display === "none" && node.style.getPropertyPriority("display") === "important";
+        if (!hidden && !display) continue;
+        // Tailwind's layered [hidden] rule beats an author display override, so lift the attribute.
+        if (hidden) node.hidden = false;
+        if (display) node.style.removeProperty("display");
+        found.push({ node, hidden, display });
+      }
+      if (found.length) secretHidden.set(shell, [...secretHidden.get(shell) ?? [], ...found]);
+    };
+    const restoreSecret = (shell: HTMLElement) => {
+      const nodes = secretHidden.get(shell);
+      secretHidden.delete(shell);
+      if (!nodes || shell.hasAttribute("data-expanded")) return;
+      for (const record of nodes) {
+        if (record.display) record.node.style.setProperty("display", "none", "important");
+        if (record.hidden) record.node.hidden = true;
+      }
+    };
+    const dropSecretMotion = (shell: HTMLElement) => {
+      const animation = secretMotions.get(shell);
+      if (animation) {
+        animation.onfinish = animation.oncancel = null;
+        secretMotions.delete(shell);
+        entryAnimations.delete(animation);
+        animation.cancel();
+      }
+      if (shell.hasAttribute("data-expanded")) secretHidden.delete(shell);
+      else restoreSecret(shell);
+      secretStyled.delete(shell);
+    };
+    const finishSecret = (shell: HTMLElement, animation: Animation) => {
+      if (secretMotions.get(shell) !== animation) return;
+      if (shell.hasAttribute("data-expanded")) secretHidden.delete(shell);
+      else restoreSecret(shell);
+      animation.onfinish = animation.oncancel = null;
+      secretMotions.delete(shell);
+      entryAnimations.delete(animation);
+      animation.cancel();
+      rememberSecret(shell);
+    };
+    const animateSecret = (shell: HTMLElement, expanded: boolean) => {
+      const previous = secretMotions.get(shell);
+      const from = previous ? secretBox(shell) : secretHeights.get(shell) ?? secretBox(shell);
+      if (previous) {
+        previous.onfinish = previous.oncancel = null;
+        secretMotions.delete(shell);
+        entryAnimations.delete(previous);
+        previous.cancel();
+      }
+      const to = secretBox(shell);
+      if (reduced() || Math.abs(from - to) < 1 || !shell.animate) {
+        if (expanded) secretHidden.delete(shell);
+        else restoreSecret(shell);
+        rememberSecret(shell);
+        return;
+      }
+      if (expanded) secretHidden.delete(shell);
+      else claimHidden(shell);
+      const animation = shell.animate([{ height:`${from}px` }, { height:`${to}px` }], { duration:320, easing:"cubic-bezier(.22,1,.36,1)", fill:"both" });
+      secretMotions.set(shell, animation);
+      entryAnimations.add(animation);
+      animation.finished?.catch(() => {});
+      animation.onfinish = animation.oncancel = () => finishSecret(shell, animation);
+    };
+    const trackSecretShell = (shell: HTMLElement) => {
+      if (!shell.isConnected || (!shell.hasAttribute(`${MARK}-secret`) && !shell.querySelector(SECRET_FORM))) return;
+      shell.setAttribute(`${MARK}-secret`, "");
+      if (secretObserver && !secretStyled.has(shell)) {
+        secretStyled.add(shell);
+        secretObserver.observe(shell, { subtree:true, attributes:true, attributeFilter:["style"] });
+      }
+      const expanded = shell.hasAttribute("data-expanded");
+      const known = secretExpanded.get(shell);
+      if (known === undefined) {
+        secretExpanded.set(shell, expanded);
+        rememberSecret(shell);
+        return;
+      }
+      if (known === expanded) {
+        if (!expanded && secretMotions.has(shell)) claimHidden(shell);
+        rememberSecret(shell);
+        return;
+      }
+      secretExpanded.set(shell, expanded);
+      animateSecret(shell, expanded);
+    };
+    const shellsIn = (node: Node) => {
+      if (node.nodeType !== 1) return [] as HTMLElement[];
+      const element = node as HTMLElement;
+      const found = element.matches('[data-testid="plugin-interaction-shell"]') ? [element] : [];
+      for (const shell of Array.from(element.querySelectorAll<HTMLElement>('[data-testid="plugin-interaction-shell"]'))) found.push(shell);
+      return found;
+    };
+    const trackSecrets = () => {
+      for (const shell of Array.from(stack.querySelectorAll<HTMLElement>('[data-testid="plugin-interaction-shell"]'))) trackSecretShell(shell);
+      for (const shell of secretMotions.keys()) if (!shell.isConnected) dropSecretMotion(shell);
+    };
+    const releaseSecrets = () => {
+      secretObserver?.disconnect();
+      secretObserver = null;
+      const shells = new Set<HTMLElement>(secretMotions.keys());
+      for (const shell of Array.from(stack.querySelectorAll<HTMLElement>(`[${MARK}-secret]`))) shells.add(shell);
+      for (const shell of shells) {
+        dropSecretMotion(shell);
+        shell.removeAttribute(`${MARK}-secret`);
+      }
+      secretMotions.clear();
+    };
+    secretObserver = new view!.MutationObserver(records => {
+      const shells = new Set<HTMLElement>();
+      for (const record of records) {
+        const target = record.target.nodeType === 1 ? record.target as HTMLElement : record.target.parentElement;
+        const shell = target?.closest<HTMLElement>('[data-testid="plugin-interaction-shell"]') ?? null;
+        if (shell) shells.add(shell);
+        if (record.type === "childList") for (const node of [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]) for (const nested of shellsIn(node)) shells.add(nested);
+      }
+      for (const shell of shells) trackSecretShell(shell);
+      for (const shell of secretMotions.keys()) if (!shell.isConnected) dropSecretMotion(shell);
+    });
+    secretObserver.observe(stack, { childList:true, subtree:true, attributes:true, attributeFilter:["data-expanded", "hidden"] });
     const sync = () => {
       const source = stack.querySelector(`[${SOURCE}]`);
       if (!source) return;
@@ -1633,8 +1772,10 @@ export function injectComposerInfo(document: Document): () => void {
         }
       }
       updateScrollHints();
+      trackSecrets();
     };
     return { sync, bar, close, editing, resize, cleanup() {
+      releaseSecrets();
       clearTitleIcon();
       cancelQueueMotion();
       cancelExit(); positions.clear(); moves.clear();
