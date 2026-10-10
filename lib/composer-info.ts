@@ -615,7 +615,10 @@ export function injectComposerInfo(document: Document): () => void {
     let edgeRoot: HTMLElement | null = null;
     let edgeScroller: HTMLElement | null = null;
     const BODY_SCROLLER = '[data-testid="plan-review-request"] > .overflow-auto, [data-testid="command-preview"] > .overflow-auto';
+    const REQUEST_SHELL = '[data-testid="plan-review-banner"], [data-testid="approval-banner"]';
+    const HEIGHT_SHELL = `[data-testid="plugin-interaction-shell"], ${REQUEST_SHELL}`;
     const bodyFades = new Map<HTMLElement, { above: HTMLElement; below: HTMLElement }>();
+    const secretMotions = new Map<HTMLElement, Animation>();
     const updateBodyFades = () => {
       const live = new Set<HTMLElement>();
       const anchor = stack.getBoundingClientRect();
@@ -646,8 +649,11 @@ export function injectComposerInfo(document: Document): () => void {
           node.style.height = `${height}px`;
           node.style.top = `${top - anchor.top}px`;
         };
-        place(pair.above, edges.above, rect.top);
-        place(pair.below, edges.below, rect.bottom - height);
+        // Fades sit on the stack, outside the card clip, so hide them until the height settles.
+        const request = scroller.closest<HTMLElement>(REQUEST_SHELL);
+        const moving = !!request && secretMotions.has(request);
+        place(pair.above, edges.above && !moving, rect.top);
+        place(pair.below, edges.below && !moving, rect.bottom - height);
       }
       for (const [scroller, pair] of bodyFades) if (!live.has(scroller)) {
         edgeResize?.unobserve(scroller);
@@ -1454,7 +1460,6 @@ export function injectComposerInfo(document: Document): () => void {
     const SECRET_FORM = 'form[class~="@container/secrets"]';
     const secretHeights = new WeakMap<HTMLElement, number>();
     const secretExpanded = new WeakMap<HTMLElement, boolean>();
-    const secretMotions = new Map<HTMLElement, Animation>();
     const secretHidden = new Map<HTMLElement, { node: HTMLElement; hidden: boolean; display: boolean }[]>();
     const secretStyled = new WeakSet<HTMLElement>();
     let secretObserver: MutationObserver | null = null;
@@ -1464,9 +1469,19 @@ export function injectComposerInfo(document: Document): () => void {
       const height = secretBox(shell);
       if (height > 0) secretHeights.set(shell, height);
     };
+    const disclosureOf = (shell: HTMLElement) => {
+      const id = shell.querySelector("button[aria-controls]")?.getAttribute("aria-controls");
+      if (!id) return null;
+      const node = shell.ownerDocument.getElementById(id);
+      return node && shell.contains(node) ? node : null;
+    };
     const claimHidden = (shell: HTMLElement) => {
       const found: { node: HTMLElement; hidden: boolean; display: boolean }[] = [];
-      for (const node of Array.from(shell.querySelectorAll<HTMLElement>("*"))) {
+      // Request cards contain their own hidden controls. Only the disclosure Activity hides is painted.
+      const candidates = shell.matches(REQUEST_SHELL)
+        ? [disclosureOf(shell)].filter((node): node is HTMLElement => node !== null)
+        : Array.from(shell.querySelectorAll<HTMLElement>("*"));
+      for (const node of candidates) {
         const hidden = node.hidden;
         const display = node.style.display === "none" && node.style.getPropertyPriority("display") === "important";
         if (!hidden && !display) continue;
@@ -1497,6 +1512,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (shell.hasAttribute("data-expanded")) secretHidden.delete(shell);
       else restoreSecret(shell);
       secretStyled.delete(shell);
+      updateScrollHints();
     };
     const finishSecret = (shell: HTMLElement, animation: Animation) => {
       if (secretMotions.get(shell) !== animation) return;
@@ -1507,6 +1523,7 @@ export function injectComposerInfo(document: Document): () => void {
       entryAnimations.delete(animation);
       animation.cancel();
       rememberSecret(shell);
+      updateScrollHints();
     };
     const animateSecret = (shell: HTMLElement, expanded: boolean) => {
       const previous = secretMotions.get(shell);
@@ -1522,6 +1539,7 @@ export function injectComposerInfo(document: Document): () => void {
         if (expanded) secretHidden.delete(shell);
         else restoreSecret(shell);
         rememberSecret(shell);
+        updateScrollHints();
         return;
       }
       if (expanded) secretHidden.delete(shell);
@@ -1531,10 +1549,12 @@ export function injectComposerInfo(document: Document): () => void {
       entryAnimations.add(animation);
       animation.finished?.catch(() => {});
       animation.onfinish = animation.oncancel = () => finishSecret(shell, animation);
+      updateScrollHints();
     };
     const trackSecretShell = (shell: HTMLElement) => {
-      if (!shell.isConnected || (!shell.hasAttribute(`${MARK}-secret`) && !shell.querySelector(SECRET_FORM))) return;
-      shell.setAttribute(`${MARK}-secret`, "");
+      const request = shell.matches(REQUEST_SHELL);
+      if (!shell.isConnected || (!request && !shell.hasAttribute(`${MARK}-secret`) && !shell.querySelector(SECRET_FORM))) return;
+      if (!request) shell.setAttribute(`${MARK}-secret`, "");
       if (secretObserver && !secretStyled.has(shell)) {
         secretStyled.add(shell);
         secretObserver.observe(shell, { subtree:true, attributes:true, attributeFilter:["style"] });
@@ -1557,12 +1577,12 @@ export function injectComposerInfo(document: Document): () => void {
     const shellsIn = (node: Node) => {
       if (node.nodeType !== 1) return [] as HTMLElement[];
       const element = node as HTMLElement;
-      const found = element.matches('[data-testid="plugin-interaction-shell"]') ? [element] : [];
-      for (const shell of Array.from(element.querySelectorAll<HTMLElement>('[data-testid="plugin-interaction-shell"]'))) found.push(shell);
+      const found = element.matches(HEIGHT_SHELL) ? [element] : [];
+      for (const shell of Array.from(element.querySelectorAll<HTMLElement>(HEIGHT_SHELL))) found.push(shell);
       return found;
     };
     const trackSecrets = () => {
-      for (const shell of Array.from(stack.querySelectorAll<HTMLElement>('[data-testid="plugin-interaction-shell"]'))) trackSecretShell(shell);
+      for (const shell of Array.from(stack.querySelectorAll<HTMLElement>(HEIGHT_SHELL))) trackSecretShell(shell);
       for (const shell of secretMotions.keys()) if (!shell.isConnected) dropSecretMotion(shell);
     };
     const releaseSecrets = () => {
@@ -1580,7 +1600,7 @@ export function injectComposerInfo(document: Document): () => void {
       const shells = new Set<HTMLElement>();
       for (const record of records) {
         const target = record.target.nodeType === 1 ? record.target as HTMLElement : record.target.parentElement;
-        const shell = target?.closest<HTMLElement>('[data-testid="plugin-interaction-shell"]') ?? null;
+        const shell = target?.closest<HTMLElement>(HEIGHT_SHELL) ?? null;
         if (shell) shells.add(shell);
         if (record.type === "childList") for (const node of [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]) for (const nested of shellsIn(node)) shells.add(nested);
       }

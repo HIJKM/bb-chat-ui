@@ -1890,6 +1890,252 @@ test("secret card height eases between the open body and the header instead of s
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("plan and approval cards ease height from the current box and keep independent hides", async () => {
+  const f = fixture();
+  let reduce = false;
+  Object.defineProperty(f.dom.window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({ matches: query.includes("prefers-reduced-motion") && reduce }),
+  });
+  const stack = f.document.querySelector("[data-promptbox-shell] > .grid")!;
+  const plan = f.document.createElement("section");
+  plan.setAttribute("data-testid", "plan-review-banner");
+  plan.setAttribute("data-expanded", "");
+  plan.style.maxHeight = "160px";
+  plan.innerHTML = '<button type="button" aria-controls="plan-body" aria-label="Plan review">Plan review</button><button type="button" aria-label="Hide details">Hide</button><div id="plan-body"><div data-testid="plan-review-request"><div class="overflow-auto">Long plan</div></div><button type="button" data-approve>Approve</button><input value="keep"><button type="button" data-independent>Hidden</button></div>';
+  const approval = f.document.createElement("section");
+  approval.setAttribute("data-testid", "approval-banner");
+  approval.setAttribute("data-expanded", "");
+  approval.style.maxHeight = "400px";
+  approval.innerHTML = '<button type="button" aria-controls="approval-body" aria-label="Approval needed">Approval needed</button><button type="button" aria-label="Show details">Show</button><div id="approval-body"><div data-testid="command-preview"><pre class="overflow-auto">$ echo</pre></div><button type="button" data-deny>Deny</button><span data-independent>Hidden</span></div>';
+  const question = f.document.createElement("section");
+  question.setAttribute("data-testid", "user-question-banner");
+  question.setAttribute("data-expanded", "");
+  question.innerHTML = '<button type="button" aria-controls="question-body">Question</button><div id="question-body">Ask</div>';
+  stack.prepend(question, approval, plan);
+  const planBody = plan.querySelector<HTMLElement>("#plan-body")!;
+  const approvalBody = approval.querySelector<HTMLElement>("#approval-body")!;
+  const questionBody = question.querySelector<HTMLElement>("#question-body")!;
+  const planPrivate = plan.querySelector<HTMLElement>("[data-independent]")!;
+  const approvalPrivate = approval.querySelector<HTMLElement>("[data-independent]")!;
+  for (const node of [planPrivate, approvalPrivate]) {
+    node.hidden = true;
+    node.style.setProperty("display", "none", "important");
+  }
+  const planScroller = plan.querySelector<HTMLElement>(".overflow-auto")!;
+  const painted = (body: HTMLElement) => f.dom.window.getComputedStyle(body).display !== "none";
+  const rect = (x: number, y: number, width: number, height: number) => new f.dom.window.DOMRect(x, y, width, height);
+  stack.getBoundingClientRect = () => rect(0, 40, 400, 800);
+  planScroller.getBoundingClientRect = () => painted(planBody) ? rect(24, 180, 320, 288) : rect(24, 220, 320, 0);
+  Object.defineProperty(planScroller, "scrollTop", { configurable: true, writable: true, value: 0 });
+  Object.defineProperty(planScroller, "clientHeight", { configurable: true, get: () => painted(planBody) ? 288 : 0 });
+  Object.defineProperty(planScroller, "scrollHeight", { configurable: true, get: () => painted(planBody) ? 600 : 0 });
+  Object.defineProperty(plan, "scrollHeight", { configurable: true, value: 320 });
+  Object.defineProperty(approval, "scrollHeight", { configurable: true, value: 90 });
+  const box = (height: number) => ({ x: 0, y: 0, top: 0, left: 0, right: 420, bottom: height, width: 420, height, toJSON() { return {}; } });
+  const flights = new WeakMap<HTMLElement, { animation: { cancel(): void }; height: number; done: boolean }>();
+  const used = (shell: HTMLElement, body: HTMLElement, content: number) => {
+    const flight = flights.get(shell);
+    if (flight && !flight.done) return flight.height;
+    const cap = Number.parseFloat(shell.style.maxHeight);
+    const open = Number.isFinite(cap) ? Math.min(content, cap) : content;
+    if (shell.hasAttribute("data-expanded") && painted(body)) return open;
+    if (!shell.hasAttribute("data-expanded") && !painted(body)) return 48;
+    return open;
+  };
+  type Motion = { keyframes: { height?: string }[]; options: { duration?: number; easing?: string; fill?: string }; animation: { onfinish: (() => void) | null; oncancel: (() => void) | null; cancelled: boolean; finish(): void } };
+  const mockHeight = (shell: HTMLElement, body: HTMLElement, content: number, bucket: Motion[]) => {
+    shell.getBoundingClientRect = () => box(used(shell, body, content));
+    shell.animate = ((keyframes: { height?: string }[], options: Motion["options"]) => {
+      const animation = {
+        onfinish: null as (() => void) | null,
+        oncancel: null as (() => void) | null,
+        cancelled: false,
+        cancel() {
+          if (this.cancelled) return;
+          this.cancelled = true;
+          const flight = flights.get(shell);
+          if (flight?.animation === this) flight.done = true;
+          this.oncancel?.();
+        },
+        finish() {
+          const flight = flights.get(shell);
+          if (flight?.animation === this) flight.done = true;
+          this.onfinish?.();
+        },
+      };
+      bucket.push({ keyframes, options, animation });
+      flights.set(shell, { animation, height: Number.parseFloat(keyframes[0]?.height ?? "0"), done: false });
+      return animation;
+    }) as typeof shell.animate;
+  };
+  const planMotions: Motion[] = [];
+  const approvalMotions: Motion[] = [];
+  let questionMotions = 0;
+  mockHeight(plan, planBody, 320, planMotions);
+  mockHeight(approval, approvalBody, 90, approvalMotions);
+  question.animate = () => {
+    questionMotions += 1;
+    return { cancel() {}, onfinish: null, oncancel: null } as unknown as Animation;
+  };
+  const beforePaint = async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+  const hide = (shell: HTMLElement, body: HTMLElement) => {
+    shell.removeAttribute("data-expanded");
+    body.hidden = true;
+    body.style.setProperty("display", "none", "important");
+  };
+  const show = (shell: HTMLElement, body: HTMLElement) => {
+    shell.setAttribute("data-expanded", "");
+    body.hidden = false;
+    body.style.removeProperty("display");
+  };
+  const hiddenStill = (node: HTMLElement) => {
+    assert.equal(node.hidden, true);
+    assert.equal(node.style.display, "none");
+    assert.equal(node.style.getPropertyPriority("display"), "important");
+    assert.equal(f.dom.window.getComputedStyle(node).display, "none");
+  };
+  const planFade = (edge: string) => [...f.document.querySelectorAll<HTMLElement>(`[data-bb-chat-ui-info-body-fade="${edge}"]`)].find(node => node.style.left === "24px");
+  const endHeight = (motion: Motion) => Number.parseFloat(motion.keyframes.at(-1)?.height ?? "");
+  let decisions = 0;
+  plan.querySelector("[data-approve]")!.addEventListener("click", () => decisions++);
+  approval.querySelector("[data-deny]")!.addEventListener("click", () => decisions++);
+  const stop = injectComposerInfo(f.document);
+  try {
+    await beforePaint();
+    assert.equal(planMotions.length, 0, "the first paint records the open card and does not replay a height animation");
+    assert.equal(approvalMotions.length, 0);
+    assert.equal(f.dom.window.getComputedStyle(plan).borderRadius, "18px");
+    assert.equal(f.dom.window.getComputedStyle(plan).overflow, "hidden");
+    assert.equal(f.dom.window.getComputedStyle(plan).animationName, "none");
+    assert.equal(f.dom.window.getComputedStyle(plan).backdropFilter, "blur(14px) saturate(1.25)");
+    assert.equal(planFade("below")?.hidden, false, "a settled long body shows the remaining scroll fade");
+    assert.equal(plan.contains(planFade("below")!), false);
+    hiddenStill(planPrivate);
+    hide(question, questionBody);
+    await beforePaint();
+    assert.equal(questionMotions, 0, "question cards keep their own motion");
+    assert.equal(f.dom.window.getComputedStyle(questionBody).display, "none");
+    hide(plan, planBody);
+    await beforePaint();
+    assert.equal(planMotions.length, 1, "collapse schedules a height animation before the next frame");
+    assert.deepEqual(planMotions[0].keyframes.map(frame => frame.height), ["160px", "48px"]);
+    assert.equal(planMotions[0].options.duration, 320);
+    assert.equal(planMotions[0].options.easing, "cubic-bezier(.22,1,.36,1)");
+    assert.equal(planMotions[0].options.fill, "both");
+    assert.equal(planBody.hidden, false, "the disclosure stays painted while the shell height clips it");
+    assert.notEqual(f.dom.window.getComputedStyle(planBody).display, "none");
+    assert.equal(plan.style.height, "");
+    assert.equal(plan.style.maxHeight, "160px");
+    hiddenStill(planPrivate);
+    assert.equal(plan.querySelector("[data-approve]")!.parentElement, planBody);
+    assert.equal(planScroller.clientHeight, 288);
+    assert.equal(planFade("below")?.hidden, true, "the stack fade hides while the shell height is moving");
+    assert.equal(f.dom.window.getComputedStyle(planFade("below")!).display, "none");
+    planBody.hidden = true;
+    planBody.style.setProperty("display", "none", "important");
+    await beforePaint();
+    assert.equal(planBody.hidden, false, "a re-render keeps the closing disclosure painted");
+    assert.notEqual(f.dom.window.getComputedStyle(planBody).display, "none");
+    hiddenStill(planPrivate);
+    assert.equal(planMotions.length, 1, "a re-render does not start a second height animation");
+    flights.get(plan)!.height = 100;
+    assert.equal(plan.getBoundingClientRect().height, 100, "a mid frame uses the in-flight height");
+    const interrupted = planMotions[0].animation;
+    show(plan, planBody);
+    await beforePaint();
+    assert.equal(planMotions.length, 2, "a reverse toggle replaces the in-flight animation");
+    assert.deepEqual(planMotions[1].keyframes.map(frame => frame.height), ["100px", "160px"]);
+    interrupted.onfinish?.();
+    assert.notEqual(f.dom.window.getComputedStyle(planBody).display, "none", "the interrupted close does not hide the reopened body");
+    hiddenStill(planPrivate);
+    assert.equal(planFade("below")?.hidden, true, "the fade stays hidden through the reverse");
+    planMotions[1].animation.finish();
+    assert.equal(plan.getBoundingClientRect().height, endHeight(planMotions[1]), "cancelling the fill does not jump past the capped box");
+    assert.equal(plan.getBoundingClientRect().height, 160);
+    assert.notEqual(plan.getBoundingClientRect().height, 320);
+    assert.equal(plan.style.height, "");
+    assert.equal(plan.style.maxHeight, "160px");
+    assert.equal(planFade("below")?.hidden, false, "the fade returns from the settled scroll edges");
+    (plan.querySelector("[data-approve]") as HTMLButtonElement).click();
+    assert.equal((plan.querySelector("input") as HTMLInputElement).value, "keep");
+    hide(plan, planBody);
+    await beforePaint();
+    assert.deepEqual(planMotions.at(-1)?.keyframes.map(frame => frame.height), ["160px", "48px"]);
+    planMotions.at(-1)!.animation.finish();
+    assert.equal(plan.getBoundingClientRect().height, 48);
+    assert.equal(endHeight(planMotions.at(-1)!), 48);
+    assert.equal(plan.style.height, "");
+    assert.equal(planBody.hidden, true);
+    assert.equal(planBody.style.display, "none");
+    assert.equal(planBody.style.getPropertyPriority("display"), "important");
+    assert.equal(f.dom.window.getComputedStyle(planBody).display, "none");
+    assert.equal(planScroller.clientHeight, 0);
+    assert.equal(planFade("below")?.hidden, true, "the collapsed body recalculates the fade instead of leaving it forced");
+    hiddenStill(planPrivate);
+    hide(approval, approvalBody);
+    await beforePaint();
+    assert.equal(approvalMotions.length, 1);
+    assert.deepEqual(approvalMotions[0].keyframes.map(frame => frame.height), ["90px", "48px"]);
+    hiddenStill(approvalPrivate);
+    assert.equal(approval.querySelector("[data-deny]")!.parentElement, approvalBody);
+    approvalMotions[0].animation.finish();
+    assert.equal(approval.getBoundingClientRect().height, 48);
+    assert.equal(approval.style.height, "");
+    assert.equal(f.dom.window.getComputedStyle(approvalBody).display, "none");
+    show(approval, approvalBody);
+    await beforePaint();
+    assert.deepEqual(approvalMotions.at(-1)?.keyframes.map(frame => frame.height), ["48px", "90px"]);
+    approvalMotions.at(-1)!.animation.finish();
+    assert.equal(approval.getBoundingClientRect().height, 90);
+    assert.equal(approval.style.maxHeight, "400px");
+    hiddenStill(approvalPrivate);
+    (approval.querySelector("[data-deny]") as HTMLButtonElement).click();
+    assert.equal(decisions, 2);
+    reduce = true;
+    hide(plan, planBody);
+    await beforePaint();
+    assert.equal(planMotions.length, 3, "reduced motion keeps the native snap");
+    assert.equal(f.dom.window.getComputedStyle(planBody).display, "none");
+    assert.equal(planBody.style.getPropertyPriority("display"), "important");
+    reduce = false;
+    show(plan, planBody);
+    await beforePaint();
+    assert.deepEqual(planMotions.at(-1)?.keyframes.map(frame => frame.height), ["48px", "160px"]);
+    planMotions.at(-1)!.animation.finish();
+    hide(plan, planBody);
+    await beforePaint();
+    const removed = planMotions.at(-1)!.animation;
+    assert.notEqual(f.dom.window.getComputedStyle(planBody).display, "none");
+    plan.remove();
+    await beforePaint();
+    assert.equal(removed.cancelled, true, "removing the card cancels its height animation");
+    stack.prepend(plan);
+    await beforePaint();
+    assert.equal(f.dom.window.getComputedStyle(planBody).display, "none", "a removed card comes back collapsed");
+    hiddenStill(planPrivate);
+    show(plan, planBody);
+    await beforePaint();
+    planMotions.at(-1)!.animation.finish();
+    hide(plan, planBody);
+    await beforePaint();
+    const unloading = planMotions.at(-1)!;
+    assert.notEqual(f.dom.window.getComputedStyle(planBody).display, "none");
+    stop();
+    assert.equal(unloading.animation.cancelled, true);
+    assert.equal(planBody.style.display, "none");
+    assert.equal(planBody.style.getPropertyPriority("display"), "important");
+    assert.equal(f.dom.window.getComputedStyle(planBody).display, "none");
+    assert.equal([...plan.attributes].some(attr => attr.name.includes("secret")), false);
+    assert.equal([...approval.attributes].some(attr => attr.name.includes("secret")), false);
+    assert.equal(questionMotions, 0);
+    assert.equal((plan.querySelector("input") as HTMLInputElement).value, "keep");
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("plan review body sits in the card and fades only the scroll directions that remain", async () => {
   assert.deepEqual(scrollOverflowEdges({ scrollTop: 0, clientHeight: 288, scrollHeight: 200 }), { above: false, below: false });
   assert.deepEqual(scrollOverflowEdges({ scrollTop: 0, clientHeight: 288, scrollHeight: 600 }), { above: false, below: true });
