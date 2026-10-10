@@ -195,6 +195,31 @@ ${darkScope(FACE)} {
     0 6px 18px -12px ${DARK_SHADOW},
     inset 0 1px 3px ${DARK_EDGE};
 }
+${FOOTER} [data-promptbox]:has([class~="@container/mention-menu"]) {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  isolation: isolate;
+}
+${FOOTER} [data-promptbox]:has([class~="@container/mention-menu"])::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  background: ${LIGHT_GLASS_FACE};
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+}
+.dark ${FOOTER} [data-promptbox]:has([class~="@container/mention-menu"])::before {
+  background: ${DARK_GLASS_FACE};
+}
+[class~="@container/mention-menu"] .sticky.bg-background {
+  background: transparent !important;
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+}
 .dark [class~="@container/mention-menu"] {
   background: ${DARK_GLASS_FACE} !important;
   border-color: transparent !important;

@@ -486,7 +486,7 @@ test("raises all composer controls over their own chat tone, including annotatio
 
 test("strengthens only the composer specular highlight while keeping its soft edge", () => {
   const blocks = [...composerGlassCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-    .filter(([, selector, body]) => selector.includes("[data-promptbox]") && !selector.includes(",") && body.includes("inset"));
+    .filter(([, selector, body]) => selector.includes("[data-promptbox]") && !selector.includes(",") && body.includes("inset 0 1px"));
   assert.equal(blocks.length, 8);
   for (const [, selector, body] of blocks) {
     const strength = selector.includes(".dark") ? 14 : 60;
@@ -503,7 +503,9 @@ test("frosts only the shared slash and at candidate box", () => {
     selector: selector.trim(),
     body,
   }));
-  const menus = blocks.filter((block) => block.selector.includes("@container/mention-menu"));
+  const menus = blocks.filter((block) =>
+    block.selector === '[class~="@container/mention-menu"]' || block.selector === '.dark [class~="@container/mention-menu"]',
+  );
   assert.deepEqual(
     menus.map((block) => block.selector),
     ['[class~="@container/mention-menu"]', '.dark [class~="@container/mention-menu"]'],
@@ -529,4 +531,65 @@ test("frosts only the shared slash and at candidate box", () => {
     blocks.some((block) => /listbox|monaco-menu|plugin-interaction|ResponsiveDrawer/.test(block.selector)),
     false,
   );
+});
+
+test("lifts only an open mention composer face onto its before layer", () => {
+  const blocks = [...composerGlassCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
+    selector: selector.trim().replace(/\s+/g, " "),
+    body,
+  }));
+  const liftSelector = '[data-scroll-footer]:has(.chat-prompt-box) [data-promptbox]:has([class~="@container/mention-menu"])';
+  const lift = blocks.find((block) => block.selector === liftSelector);
+  assert.ok(lift, "open mention composer");
+  assert.match(lift.body, /background:\s*transparent !important;/);
+  assert.match(lift.body, /backdrop-filter:\s*none !important;/);
+  assert.match(lift.body, /-webkit-backdrop-filter:\s*none !important;/);
+  assert.match(lift.body, /isolation:\s*isolate;/);
+  assert.equal(lift.body.includes("box-shadow"), false);
+  const darkFaceAt = composerGlassCss.indexOf(".dark [data-scroll-footer]:has(.chat-prompt-box) [data-promptbox]");
+  const liftAt = composerGlassCss.indexOf(`${liftSelector} {`);
+  assert.ok(darkFaceAt >= 0 && liftAt > darkFaceAt);
+
+  const before = blocks.find((block) => block.selector === `${liftSelector}::before`);
+  assert.ok(before, "composer ::before");
+  assert.match(before.body, /content:\s*"";/);
+  assert.match(before.body, /position:\s*absolute;/);
+  assert.match(before.body, /inset:\s*0;/);
+  assert.match(before.body, /border-radius:\s*inherit;/);
+  assert.match(before.body, /pointer-events:\s*none;/);
+  assert.match(before.body, /z-index:\s*-1;/);
+  assert.ok(before.body.includes(`background: ${LIGHT_GLASS_FACE};`));
+  assert.match(before.body, /backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/);
+  assert.match(before.body, /-webkit-backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/);
+  assert.equal(before.body.includes("box-shadow"), false);
+
+  const darkBefore = blocks.find((block) => block.selector === `.dark ${liftSelector}::before`);
+  assert.ok(darkBefore, "dark composer ::before");
+  assert.ok(darkBefore.body.includes(`background: ${DARK_GLASS_FACE};`));
+  assert.equal(darkBefore.body.includes("0.68"), false);
+
+  const header = blocks.find((block) => block.selector === '[class~="@container/mention-menu"] .sticky.bg-background');
+  assert.ok(header, "sticky section header");
+  assert.match(header.body, /background:\s*transparent !important;/);
+  assert.match(header.body, /backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/);
+  assert.match(header.body, /-webkit-backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/);
+  assert.equal(header.body.includes(LIGHT_GLASS_FACE), false);
+  assert.equal(header.body.includes(DARK_GLASS_FACE), false);
+
+  assert.deepEqual(
+    blocks.filter((block) => block.selector.includes("@container/mention-menu")).map((block) => block.selector),
+    [
+      '[class~="@container/mention-menu"]',
+      liftSelector,
+      `${liftSelector}::before`,
+      `.dark ${liftSelector}::before`,
+      '[class~="@container/mention-menu"] .sticky.bg-background',
+      '.dark [class~="@container/mention-menu"]',
+    ],
+  );
+  const closed = blocks.find((block) => block.selector.startsWith("[data-scroll-footer]:has(.chat-prompt-box) [data-promptbox],"));
+  assert.ok(closed);
+  assert.ok(closed.body.includes(`background: ${LIGHT_GLASS_FACE} !important;`));
+  assert.match(closed.body, /backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/);
+  assert.equal(blocks.some((block) => /typeahead-menu|plugin-interaction|ResponsiveDrawer/.test(block.selector)), false);
 });
