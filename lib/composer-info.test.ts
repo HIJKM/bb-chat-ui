@@ -1620,6 +1620,50 @@ test("secret action row drops its solid fill and divider without a second blur",
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("secret scroll edge drops the header hairline and keeps the glass shell", async () => {
+  const f = fixture();
+  const native = f.document.createElement("style");
+  native.textContent = ".border-b { border-bottom-style: solid; border-bottom-width: 1px; } .border-border-hairline { border-color: rgb(222, 222, 222); } .overflow-y-auto { overflow-y: auto; } .bg-surface-recessed-solid { background-color: rgb(210, 210, 214); } .border-t { border-top: 1px solid rgba(0, 0, 0, 0.7); }";
+  f.document.head.append(native);
+  const stack = f.document.querySelector("[data-promptbox-shell] > .grid")!;
+  const banner = f.document.createElement("div");
+  banner.setAttribute("data-testid", "plugin-request-banner");
+  banner.innerHTML = '<section data-testid="plugin-interaction-shell" data-expanded=""><div class="border-b border-border-hairline"><button type="button" aria-label="Add secrets">Add secrets</button></div><div class="overflow-y-auto"><form class="@container/secrets"><label>UI_PREVIEW_TOKEN<input type="password" value="dummy"></label><div class="sticky border-t bg-surface-recessed-solid"><button type="submit">Add secrets</button></div></form></div></section>';
+  const other = f.document.createElement("div");
+  other.setAttribute("data-testid", "plugin-request-banner");
+  other.innerHTML = '<section data-testid="plugin-interaction-shell" data-expanded=""><div class="border-b border-border-hairline"><button type="button">Other request</button></div><div class="overflow-y-auto"><form><button type="button">Continue</button></form></div></section>';
+  stack.prepend(other, banner);
+  const shell = banner.querySelector("section")!;
+  const header = shell.firstElementChild!;
+  const scroll = shell.querySelector(".overflow-y-auto")!;
+  const otherHeader = other.querySelector("section > div")!;
+  let submits = 0;
+  shell.querySelector("form")!.addEventListener("submit", event => { event.preventDefault(); submits++; });
+  const stop = injectComposerInfo(f.document);
+  try {
+    await f.tick();
+    const edge = f.dom.window.getComputedStyle(header);
+    const face = f.dom.window.getComputedStyle(shell);
+    const row = f.dom.window.getComputedStyle(shell.querySelector(".sticky")!);
+    assert.equal(edge.borderBottomColor, "rgba(0, 0, 0, 0)", "the secret header hairline is not a solid line on the scroll edge");
+    assert.equal(edge.borderBottomWidth, "1px", "clearing the color keeps the header box");
+    assert.equal(f.dom.window.getComputedStyle(otherHeader).borderBottomColor, "rgb(222, 222, 222)", "other request cards keep their header line");
+    assert.equal(face.backdropFilter, "blur(14px) saturate(1.25)");
+    assert.ok(face.boxShadow.includes("inset"), "the shell keeps its soft inset edge");
+    assert.equal(face.borderRadius, "18px");
+    assert.equal(f.dom.window.getComputedStyle(scroll).overflowY, "auto");
+    assert.equal(row.backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.equal(row.borderTopWidth, "0px");
+    assert.equal(row.backdropFilter, "none");
+    assert.equal((shell.querySelector("input") as HTMLInputElement).value, "dummy");
+    shell.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    assert.equal(submits, 1);
+    f.document.documentElement.classList.add("dark");
+    assert.equal(f.dom.window.getComputedStyle(header).borderBottomColor, "rgba(0, 0, 0, 0)");
+    assert.match(f.dom.window.getComputedStyle(stack).getPropertyValue("--bb-chat-ui-info-face"), /\/\s*0\.76\)/);
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("plan review body sits in the card and fades only the scroll directions that remain", async () => {
   assert.deepEqual(scrollOverflowEdges({ scrollTop: 0, clientHeight: 288, scrollHeight: 200 }), { above: false, below: false });
   assert.deepEqual(scrollOverflowEdges({ scrollTop: 0, clientHeight: 288, scrollHeight: 600 }), { above: false, below: true });

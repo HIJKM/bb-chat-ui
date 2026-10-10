@@ -228,6 +228,8 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-stack] [data-testid="plugin-interaction-shell"]:not([data-expanded]) { margin-bottom:0 !important; }
 [${MARK}-stack] [data-testid="plugin-interaction-shell"]:not([data-expanded]) > :first-child span { align-items:center; }
 [${MARK}-stack] [data-testid="plugin-interaction-shell"] form > .sticky { background:transparent !important; border-top:0 !important; box-shadow:none !important; }
+/* Expanded secret header hairline is the 1px line on the scroll edge. Other request shells keep it. */
+[${MARK}-stack] [data-testid="plugin-interaction-shell"]:has(form[class~="@container/secrets"]) > :first-child { border-bottom-color:transparent !important; }
 [${MARK}-stack] [data-testid="plan-review-request"] { position:relative; background:transparent !important; border:0 !important; border-radius:0 !important; overflow:visible !important; box-shadow:none !important; }
 [${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto { padding-left:0 !important; padding-right:0 !important; }
 [${MARK}-stack] [data-testid="plan-review-request"] > p { border-top:0 !important; padding-left:0 !important; padding-right:0 !important; }
