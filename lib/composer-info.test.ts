@@ -2427,7 +2427,7 @@ test("the right capsule choice joins the all-information button and an expanding
     assert.ok(all.compareDocumentPosition(proxy) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'latest-event extends to the right of the all-information button');
     for (const pill of f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(dock) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'the capsule ends the row');
     assert.equal(f.document.querySelector('[data-bb-chat-ui-info-orb]'), null, 'the particle orb is replaced by the approved glyph');
-    assert.ok(all.querySelector('svg[data-bb-chat-ui-info-glyph="dock"]'));
+    assert.deepEqual([...all.querySelectorAll('svg[data-bb-chat-ui-info-glyph] path')].map(path => path.getAttribute('d')), ['m12 3 9 5-9 5-9-5z', 'm3 13 9 5 9-5'], 'the capsule uses the same layers icon');
     assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true, 'an invisible host button keeps the capsule closed');
     assert.equal(dock.hasAttribute('data-bb-chat-ui-info-jumping'), false);
     assert.equal(f.shown(), 3, 'without latest-event only the 32px capsule is reserved');
@@ -2465,7 +2465,8 @@ test("the default centred choice pins the all-information button right and float
     const proxy = f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-jump]')!;
     assert.equal(all.parentElement, bar); assert.equal(proxy.parentElement, bar);
     for (const pill of f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(all) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
-    assert.ok(all.querySelector('svg[data-bb-chat-ui-info-glyph="center"]'));
+    assert.deepEqual([...all.querySelectorAll('svg[data-bb-chat-ui-info-glyph] path')].map(path => path.getAttribute('d')), ['m12 3 9 5-9 5-9-5z', 'm3 13 9 5 9-5']);
+    const glyph = all.querySelector('svg[data-bb-chat-ui-info-glyph]');
     assert.match(proxy.textContent ?? '', /최신으로/);
     assert.ok(proxy.querySelector('svg'), 'the chip keeps an arrow');
     assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true);
@@ -2485,6 +2486,7 @@ test("the default centred choice pins the all-information button right and float
     source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ infoButtonLayout:'오른쪽 캡슐' })); await f.tick();
     const dock = f.document.querySelector('[data-bb-chat-ui-info-dock]')!;
     assert.ok(dock, 'a settings change applies to the open composer');
+    assert.equal(all.querySelector('svg[data-bb-chat-ui-info-glyph]'), glyph, 'switching layouts keeps one icon');
     assert.equal(all.parentElement, dock); assert.equal(proxy.parentElement, dock);
     assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'), 'dock');
     source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ infoButtonLayout:'가운데 최신으로' })); await f.tick();

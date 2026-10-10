@@ -324,9 +324,8 @@ export function injectComposerInfo(document: Document): () => void {
       for (const d of paths) { const path = document.createElementNS(icon.namespaceURI, "path"); path.setAttribute("d", d); icon.append(path); }
       return icon;
     };
-    // Approved glyphs: a filter for the right capsule, stacked layers for the centred choice.
-    const glyphs = { dock:["M3 6h18M7 12h10M10 18h4"], center:["m12 3 9 5-9 5-9-5z", "m3 13 9 5 9-5"] };
-    let glyph = svg(glyphs.dock, { [`${MARK}-glyph`]:"dock" });
+    // Both layouts use the same stacked-layers glyph.
+    const glyph = svg(["m12 3 9 5-9 5-9-5z", "m3 13 9 5 9-5"], { [`${MARK}-glyph`]:"" });
     const badge = document.createElement("span");
     badge.setAttribute(`${MARK}-badge`, "");
     badge.setAttribute("aria-hidden", "true");
@@ -356,8 +355,6 @@ export function injectComposerInfo(document: Document): () => void {
       if (layout === next) return;
       layout = next;
       bar.setAttribute(`${MARK}-layout`, next);
-      const nextGlyph = svg(glyphs[next], { [`${MARK}-glyph`]:next });
-      glyph.replaceWith(nextGlyph); glyph = nextGlyph;
       if (next === "dock") { if (!badge.isConnected) orb.append(badge); foldedCount.remove(); dock.append(orb, dockSep, jump); pills.after(dock); }
       else { dock.remove(); badge.remove(); orb.append(foldedCount); pills.after(orb, jump); }
     };
