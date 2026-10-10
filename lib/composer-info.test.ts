@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { injectComposerInfo, fitComposerInfo, composerInfoCss } from "./composer-info.ts";
+import { injectComposerInfo, fitComposerInfo, composerInfoCss, scrollOverflowEdges } from "./composer-info.ts";
 import { infoKinds } from "./composer-info-settings.ts";
 import { queuedMessagesCss } from "./queued-messages.ts";
 
@@ -1617,6 +1617,56 @@ test("secret action row drops its solid fill and divider without a second blur",
     assert.equal(shell.querySelector("input")!.value, "dummy");
     submit.click();
     assert.equal(submits, 1);
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("plan review body sits in the card and fades only the scroll directions that remain", async () => {
+  assert.deepEqual(scrollOverflowEdges({ scrollTop: 0, clientHeight: 288, scrollHeight: 200 }), { above: false, below: false });
+  assert.deepEqual(scrollOverflowEdges({ scrollTop: 0, clientHeight: 288, scrollHeight: 600 }), { above: false, below: true });
+  assert.deepEqual(scrollOverflowEdges({ scrollTop: 100, clientHeight: 288, scrollHeight: 600 }), { above: true, below: true });
+  assert.deepEqual(scrollOverflowEdges({ scrollTop: 312, clientHeight: 288, scrollHeight: 600 }), { above: true, below: false });
+
+  const f = fixture();
+  const native = f.document.createElement("style");
+  native.textContent = ".border { border: 1px solid #ccc; } .bg-card { background-color: white; } .rounded-lg { border-radius: 8px; } .px-3 { padding-left: 12px; padding-right: 12px; } .border-t { border-top: 1px solid #ccc; }";
+  f.document.head.append(native);
+  const stack = f.document.querySelector("[data-promptbox-shell] > .grid")!;
+  const card = f.document.createElement("section");
+  card.setAttribute("data-testid", "plan-review-banner");
+  card.setAttribute("data-expanded", "");
+  card.innerHTML = '<div class="mt-2"><div data-testid="plan-review-request" class="overflow-hidden rounded-lg border bg-card"><div class="overflow-auto px-3 py-2">Plan body</div><p class="border-t px-3">docs/plan.md</p></div></div>';
+  stack.prepend(card);
+  const body = card.querySelector('[data-testid="plan-review-request"]')!;
+  const scroller = body.querySelector(".overflow-auto")!;
+  const path = body.querySelector("p")!;
+  const stop = injectComposerInfo(f.document);
+  try {
+    await f.tick();
+    const box = f.dom.window.getComputedStyle(body);
+    const scroll = f.dom.window.getComputedStyle(scroller);
+    assert.equal(box.backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.equal(box.borderTopWidth, "0px");
+    assert.equal(box.borderRadius, "0px");
+    assert.equal(box.backdropFilter, "none", "the plan body does not add a second glass layer");
+    assert.equal(f.dom.window.getComputedStyle(card).backdropFilter, "blur(14px) saturate(1.25)");
+    assert.equal(scroll.paddingLeft, "0px");
+    assert.equal(scroll.paddingRight, "0px");
+    assert.equal(f.dom.window.getComputedStyle(path).borderTopWidth, "0px");
+    assert.match(glassSource(f.document), /plan-review-request"\] > \.overflow-auto::before \{[^}]*-webkit-backdrop-filter:blur\(5px\)/);
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 600 });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 288 });
+    scroller.scrollTop = 0;
+    scroller.dispatchEvent(new f.dom.window.Event("scroll", { bubbles: true }));
+    await f.tick();
+    assert.equal(scroller.getAttribute("data-bb-chat-ui-info-fade"), "below");
+    scroller.scrollTop = 100;
+    scroller.dispatchEvent(new f.dom.window.Event("scroll", { bubbles: true }));
+    await f.tick();
+    assert.equal(scroller.getAttribute("data-bb-chat-ui-info-fade"), "above below");
+    scroller.scrollTop = 312;
+    scroller.dispatchEvent(new f.dom.window.Event("scroll", { bubbles: true }));
+    await f.tick();
+    assert.equal(scroller.getAttribute("data-bb-chat-ui-info-fade"), "above");
   } finally { stop(); f.dom.window.close(); }
 });
 

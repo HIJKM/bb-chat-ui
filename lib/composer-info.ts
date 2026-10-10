@@ -38,6 +38,14 @@ export function fitComposerInfo(items: readonly { key: string; width: number }[]
   return result;
 }
 
+export function scrollOverflowEdges(metrics: { scrollTop: number; clientHeight: number; scrollHeight: number }): { above: boolean; below: boolean } {
+  if (metrics.scrollHeight <= metrics.clientHeight + 1) return { above: false, below: false };
+  return {
+    above: metrics.scrollTop > 1,
+    below: metrics.scrollTop + metrics.clientHeight < metrics.scrollHeight - 1,
+  };
+}
+
 export const composerInfoCss = `
 [${MARK}-stack] { --bb-chat-ui-info-face:${LIGHT_GLASS_FACE}; --bb-chat-ui-info-edge:color-mix(in oklab,var(--popover) 35%,transparent); --bb-chat-ui-info-shadow:color-mix(in oklab,var(--ink,var(--foreground)) 22%,transparent); position:relative; display:block !important; overflow:visible !important; }
 .dark [${MARK}-stack] { --bb-chat-ui-info-face:${DARK_GLASS_FACE}; --bb-chat-ui-info-edge:color-mix(in oklab,var(--foreground) 8%,transparent); --bb-chat-ui-info-shadow:color-mix(in oklab,black 60%,transparent); }
@@ -214,6 +222,13 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-stack] [data-testid="plugin-interaction-shell"]:not([data-expanded]) { margin-bottom:0 !important; }
 [${MARK}-stack] [data-testid="plugin-interaction-shell"]:not([data-expanded]) > :first-child span { align-items:center; }
 [${MARK}-stack] [data-testid="plugin-interaction-shell"] form > .sticky { background:transparent !important; border-top:0 !important; box-shadow:none !important; }
+[${MARK}-stack] [data-testid="plan-review-request"] { position:relative; background:transparent !important; border:0 !important; border-radius:0 !important; overflow:visible !important; box-shadow:none !important; }
+[${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto { padding-left:0 !important; padding-right:0 !important; }
+[${MARK}-stack] [data-testid="plan-review-request"] > p { border-top:0 !important; padding-left:0 !important; padding-right:0 !important; }
+[${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto::before { content:""; display:block; position:sticky; top:0; z-index:1; height:24px; margin-bottom:-24px; pointer-events:none; opacity:0; background:linear-gradient(to bottom,var(--bb-chat-ui-info-face),transparent); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); mask-image:linear-gradient(to bottom,black,transparent); -webkit-mask-image:linear-gradient(to bottom,black,transparent); }
+[${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto::after { content:""; display:block; position:sticky; bottom:0; z-index:1; height:24px; margin-top:-24px; pointer-events:none; opacity:0; background:linear-gradient(to top,var(--bb-chat-ui-info-face),transparent); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); mask-image:linear-gradient(to top,black,transparent); -webkit-mask-image:linear-gradient(to top,black,transparent); }
+[${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto[${MARK}-fade~="above"]::before,
+[${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto[${MARK}-fade~="below"]::after { opacity:1; }
 [data-promptbox-shell]:has(> [${MARK}-request]) [data-follow-up-composer-anchor] { display:none !important; }
 [data-scroll-footer]:has([${MARK}-request]) button[aria-label="Scroll to latest event"] { display:none !important; }
 [${MARK}-stack] [${MARK}-supplements] { display:contents; }
@@ -589,7 +604,16 @@ export function injectComposerInfo(document: Document): () => void {
     });
     let edgeRoot: HTMLElement | null = null;
     let edgeScroller: HTMLElement | null = null;
+    const updatePlanFades = () => {
+      for (const scroller of Array.from(stack.querySelectorAll<HTMLElement>('[data-testid="plan-review-request"] > .overflow-auto'))) {
+        const edges = scrollOverflowEdges({ scrollTop: scroller.scrollTop, clientHeight: scroller.clientHeight, scrollHeight: scroller.scrollHeight });
+        const value = [edges.above ? "above" : "", edges.below ? "below" : ""].filter(Boolean).join(" ");
+        if (value) scroller.setAttribute(`${MARK}-fade`, value);
+        else scroller.removeAttribute(`${MARK}-fade`);
+      }
+    };
     const updateScrollHints = () => {
+      updatePlanFades();
       const root = menu ?? activeNode;
       const scrollable = (node: HTMLElement) => {
         if (node.matches('textarea, input, [contenteditable="true"]')) return false;
@@ -1615,6 +1639,7 @@ export function injectComposerInfo(document: Document): () => void {
       stack.removeEventListener("pointerout", onHoverOut);
       stack.removeEventListener("pointerdown", pinPreview, true);
       stack.removeEventListener("focusin", pinPreview);
+      for (const scroller of Array.from(stack.querySelectorAll('[data-testid="plan-review-request"] > .overflow-auto'))) scroller.removeAttribute(`${MARK}-fade`);
       bar.remove();
       stack.removeAttribute(`${MARK}-stack`);
       stack.removeAttribute(`${MARK}-request`);
