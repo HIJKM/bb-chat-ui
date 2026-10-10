@@ -25,6 +25,7 @@ const UNAVAILABLE = ["Environment unavailable", "Machine removed", "Machine remo
 const DETAIL = `${STACK}[${MARK}-stack] [${UNIT}][${OPEN}]:not([hidden])`;
 const NATIVE_DETAIL = `${DETAIL}:is(${["Thread context before sending", "Child threads", "Prompt mode", "Goal", "To-do list", "Workflow", "Background commands", "Background agents", "Background activity", "Machine status", "Thread history", "Model fallback"].map(label => `section[aria-label="${label}"]`).join(",")})`;
 const PROTECTED_SURFACE = "input, textarea, select, pre, code, [contenteditable='true'], .cm-editor, .cm-content, .monaco-editor";
+const PROTECTED_EXCLUDE = `:not(${PROTECTED_SURFACE}):not(${PROTECTED_SURFACE.split(", ").map(selector => `${selector} *`).join(", ")})`;
 const LEGACY_ROW = `:is([class~="bg-background/70"], [class~="bg-destructive/5"]):not(${PROTECTED_SURFACE}):not(${PROTECTED_SURFACE.split(", ").map(selector => `${selector} *`).join(", ")})`;
 
 // The all-information button is always reachable. Fit measured pills into one row, with essentials first.
@@ -88,6 +89,7 @@ ${NATIVE_DETAIL} > div > button[aria-expanded][aria-controls]:is([class~="px-3"]
 ${NATIVE_DETAIL} > div[class~="p-1"], ${NATIVE_DETAIL} > div[class~="p-1"] > div[class~="px-2"] { padding-left:0 !important; padding-right:0 !important; }
 ${DETAIL}[aria-label="To-do list"] ul[class~="px-2.5"] > li[class~="px-2"] { margin-left:-8px; margin-right:-8px; width:calc(100% + 16px); box-sizing:border-box; }
 ${DETAIL} [${MARK}-close-heading] { box-sizing:border-box; padding-right:34px !important; }
+${NATIVE_DETAIL}[aria-label="Machine status"] > div[class~="p-1"][${MARK}-close-heading] { padding-right:34px !important; }
 ${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:18px; right:24px; color:var(--subtle-foreground); cursor:pointer; }
 ${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:has([${MARK}-parent-row]) [${MARK}-native-dismiss] { top:8px; right:8px; }
 ${DETAIL}[aria-label="Goal"] { display:flex !important; flex-direction:column; outline:0 !important; }
@@ -98,6 +100,17 @@ ${DETAIL}[aria-label="Goal"] > #thread-goal-card-body { order:1; border:0 !impor
 ${DETAIL}[aria-label="Goal"] > #thread-goal-card-body > div { background:transparent !important; box-shadow:none !important; }
 ${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] { order:2; flex:none; width:auto; min-height:28px; padding:5px 9px; border-radius:8px; font-size:11px; line-height:18px; }
 ${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] > :is(svg, [data-icon-root]) { display:none !important; }
+${DETAIL}[aria-label="Prompt mode"] [aria-label="Exit plan mode"] { flex:none; width:auto; min-height:28px; padding:5px 9px; border:0 !important; border-radius:8px; font-size:11px; line-height:18px; }
+${DETAIL}[aria-label="Prompt mode"] [aria-label="Exit plan mode"] > :is(svg, [data-icon-root]) { display:none !important; }
+${DETAIL}[aria-label="Model fallback"] [role="status"] > :is(svg, [data-icon-root]),
+${DETAIL}[aria-label="Model fallback"] [role="status"] > span:not([title]) { display:none !important; }
+${DETAIL}[aria-label="Model fallback"] [aria-label="Dismiss model fallback"] { flex:none; width:auto; min-height:28px; margin-left:8px; padding:5px 9px; border-radius:8px; font-size:11px; line-height:18px; }
+${DETAIL}[aria-label="Model fallback"] [aria-label="Dismiss model fallback"] > :is(svg, [data-icon-root]) { display:none !important; }
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="pullRequest"] div.inline-flex.overflow-hidden.rounded[class~="border"] { border-width:0 !important; border-color:transparent !important; box-shadow:none !important; }
+${DETAIL} [class~="bg-surface-raised-solid"]${PROTECTED_EXCLUDE} { background-color:transparent !important; box-shadow:none !important; border-color:transparent !important; }
+${DETAIL}[${OPEN}="other"] [class~="bg-popover"]${PROTECTED_EXCLUDE} { background-color:transparent !important; box-shadow:none !important; border-width:0 !important; border-color:transparent !important; }
+${DETAIL}[${OPEN}="other"] :is(div[class~="px-3"],p[class~="px-3"],ul[class~="px-3"],ul[class~="px-2.5"])${PROTECTED_EXCLUDE} { padding-left:0 !important; padding-right:0 !important; }
+${DETAIL}[${OPEN}="other"] h3[class~="px-3"][${MARK}-close-heading] { padding-left:0 !important; padding-right:34px !important; }
 /* One glass face. Header disclosure sits flat on it; small actions keep the shared face. */
 ${DETAIL} > section[role="region"] { border-top-width:0 !important; border-top-color:transparent !important; background:transparent !important; box-shadow:none !important; }
 ${DETAIL} > section[role="region"] > div[class~="bg-popover"] { background-color:transparent !important; box-shadow:none !important; }
@@ -105,6 +118,8 @@ ${DETAIL} ${LEGACY_ROW} { background-color:transparent !important; box-shadow:no
 ${DETAIL} ${LEGACY_ROW}:is(:hover, :focus-visible) { background-color:color-mix(in oklab, var(--foreground) 6%, transparent) !important; }
 ${DETAIL} button[aria-expanded][aria-controls] { background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
 ${DETAIL} button[aria-expanded][aria-controls]:is(:hover, :focus-visible) { background-color:color-mix(in oklab, var(--foreground) 6%, transparent) !important; }
+${DETAIL}[${OPEN}="workflow"] button[aria-expanded] { background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
+${DETAIL}[${OPEN}="workflow"] button[aria-expanded]:is(:hover, :focus-visible) { background-color:color-mix(in oklab, var(--foreground) 6%, transparent) !important; }
 [${MARK}-panel-action], [${MARK}-action="diff"] { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; padding:0 !important; border-radius:50% !important; color:var(--subtle-foreground); }
 [${MARK}-panel-action] svg, [${MARK}-action="diff"] svg { width:14px; height:14px; }
 [${MARK}-trigger]:hover, [${MARK}-all]:hover { transform:translateY(-1px); }
@@ -509,6 +524,8 @@ export function injectComposerInfo(document: Document): () => void {
     const closeHeadings = new Set<HTMLElement>();
     const generatedCloseHeadings = new Set<HTMLElement>();
     const goalClearLabels = new Map<HTMLElement, HTMLElement>();
+    const planExitLabels = new Map<HTMLElement, HTMLElement>();
+    const fallbackDismissLabels = new Map<HTMLElement, HTMLElement>();
     const syncNativeControls = () => {
       const currentRows = new Set<HTMLElement>();
       for (const row of Array.from(stack.querySelectorAll<HTMLElement>(WORKFLOW_COLLAPSE))) {
@@ -591,20 +608,23 @@ export function injectComposerInfo(document: Document): () => void {
           if (row.parentElement !== parentHost) parentHost.prepend(row);
         }
       }
-      for (const [button, label] of goalClearLabels) if (item?.key !== "goal" || !item.node.hasAttribute(OPEN) || !item.node.contains(button)) {
-        label.remove(); goalClearLabels.delete(button);
-      }
-      if (!item || !item.node.hasAttribute(OPEN) || item.key === "diff" || item.node.matches(".agentation-staging-shell") || item.node.querySelector(`[${MARK}-dismiss]:not([${MARK}-native-dismiss])`)) return;
-      if (item.key === "goal") {
-        const button = item.node.querySelector<HTMLElement>('[aria-label="Clear active Goal"]');
-        if (button) {
-          let label = goalClearLabels.get(button);
-          if (!label) { label = document.createElement("span"); label.setAttribute(`${MARK}-goal-clear-label`, ""); goalClearLabels.set(button, label); }
-          const text = button.hasAttribute("disabled") ? "해제 중…" : "Goal 해제";
-          if (label.textContent !== text) label.textContent = text;
-          if (label.parentElement !== button) button.append(label);
+      const namedAction = (labels: Map<HTMLElement, HTMLElement>, key: InfoKind, selector: string, mark: string, textFor: (button: HTMLElement) => string) => {
+        for (const [button, label] of labels) if (item?.key !== key || !item.node.hasAttribute(OPEN) || !item.node.contains(button)) {
+          label.remove(); labels.delete(button);
         }
-      }
+        if (item?.key !== key || !item.node.hasAttribute(OPEN)) return;
+        const button = item.node.querySelector<HTMLElement>(selector);
+        if (!button) return;
+        let label = labels.get(button);
+        if (!label) { label = document.createElement("span"); label.setAttribute(mark, ""); labels.set(button, label); }
+        const text = textFor(button);
+        if (label.textContent !== text) label.textContent = text;
+        if (label.parentElement !== button) button.append(label);
+      };
+      namedAction(goalClearLabels, "goal", '[aria-label="Clear active Goal"]', `${MARK}-goal-clear-label`, button => button.hasAttribute("disabled") ? "해제 중…" : "Goal 해제");
+      namedAction(planExitLabels, "plan", '[aria-label="Exit plan mode"]', `${MARK}-plan-exit-label`, button => button.hasAttribute("disabled") ? "종료 중…" : "Plan 종료");
+      namedAction(fallbackDismissLabels, "fallback", '[aria-label="Dismiss model fallback"]', `${MARK}-fallback-dismiss-label`, () => "Fallback 해제");
+      if (!item || !item.node.hasAttribute(OPEN) || item.key === "diff" || item.node.matches(".agentation-staging-shell") || item.node.querySelector(`[${MARK}-dismiss]:not([${MARK}-native-dismiss])`)) return;
       if (item.key !== "parent") {
         let heading = item.node.querySelector<HTMLElement>(`[${MARK}-panel-heading], [${MARK}-close-heading]`);
         if (!heading || heading.closest("button, a")) {

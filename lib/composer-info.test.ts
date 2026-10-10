@@ -433,6 +433,133 @@ test("open info popovers keep one glass face and drop the native body slab, acti
   f.dom.window.close();
 });
 
+test("named native actions stay separate from popover close", async () => {
+  const f = fixture();
+  const utilities = f.document.createElement("style");
+  utilities.textContent = ".border { border-width:1px; border-style:solid; } .border-border { border-color:rgb(9, 9, 9); } .bg-surface-raised-solid { background-color:rgb(20, 20, 20); } .bg-popover { background-color:rgb(255, 255, 255); } .bg-background\\/70 { background-color:rgba(250, 250, 250, 0.7); } .px-3 { padding-left:12px; padding-right:12px; }";
+  f.document.head.append(utilities);
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  stack.insertAdjacentHTML("beforeend", `
+    <section aria-label="Prompt mode"><div role="group" aria-label="Plan mode controls"><button type="button" id="thread-prompt-mode-card-toggle" aria-expanded="false" aria-controls="thread-prompt-mode-card-body" aria-label="Plan">Plan</button><button type="button" aria-label="Exit plan mode"><svg data-plan-exit></svg></button></div><section id="thread-prompt-mode-card-body" hidden><p>Plan steps</p></section></section>
+    <section aria-label="Model fallback"><div role="status"><svg data-fallback-icon></svg><span class="font-medium">Model fallback</span><span title="Switched from Opus to Sonnet">Switched from Opus to Sonnet</span><button type="button" aria-label="Dismiss model fallback"><svg data-fallback-dismiss></svg></button></div></section>
+    <section aria-label="Machine status"><div class="flex items-center gap-0.5 p-1"><button type="button" id="machine-status-toggle" aria-expanded="false" aria-controls="machine-status-body">Paused</button><div class="ml-auto flex shrink-0 items-center gap-1.5 pr-2"><button type="button">Retry</button></div></div><section id="machine-status-body" hidden><p>detail</p></section></section>
+    <section aria-label="Workflow"><button type="button" id="workflow-card-toggle" aria-expanded="false" aria-controls="workflow-card-body">Release</button><div id="workflow-card-body" hidden><button type="button" data-phase="done" aria-expanded="false">코드 감사</button><button type="button" data-phase="active" class="bg-background/70" aria-expanded="false">화면 검증</button><button type="button" data-workflow-action>Retry</button></div></section>
+  `);
+  for (const toggle of stack.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')) {
+    if (toggle.getAttribute("data-wired") === "1") continue;
+    toggle.setAttribute("data-wired", "1");
+    toggle.addEventListener("click", () => {
+      const expanded = toggle.getAttribute("aria-expanded") !== "true";
+      toggle.setAttribute("aria-expanded", String(expanded));
+      const body = f.document.getElementById(toggle.getAttribute("aria-controls") ?? "");
+      if (body) body.hidden = !expanded;
+    });
+  }
+  const context = stack.querySelector('section[aria-label="Thread context before sending"]')!;
+  context.insertAdjacentHTML("beforeend", '<div class="inline-flex overflow-hidden rounded border border-border"><button type="button">Merge</button></div><input class="border border-border" value="keep">');
+  const banner = stack.querySelector(".plugin-banner")!;
+  banner.insertAdjacentHTML("afterbegin", '<h3 class="px-3">Other title</h3>');
+  banner.insertAdjacentHTML("beforeend", '<div data-legacy class="bg-surface-raised-solid">legacy</div><div data-legacy-popover class="rounded border border-border bg-popover px-3"><p>note</p><pre class="bg-popover px-3"><code>keep</code></pre></div><input data-protected-other class="bg-surface-raised-solid" value="field"><pre class="bg-surface-raised-solid"><span data-protected-child class="bg-surface-raised-solid">snippet</span></pre>');
+  let planExits = 0;
+  let fallbackDismisses = 0;
+  let retries = 0;
+  let merges = 0;
+  let phaseClicks = 0;
+  stack.querySelector<HTMLButtonElement>('[aria-label="Exit plan mode"]')!.addEventListener("click", () => planExits++);
+  stack.querySelector<HTMLButtonElement>('[aria-label="Dismiss model fallback"]')!.addEventListener("click", () => fallbackDismisses++);
+  [...stack.querySelectorAll("button")].find(button => button.textContent === "Retry")!.addEventListener("click", () => retries++);
+  [...context.querySelectorAll("button")].find(button => button.textContent === "Merge")!.addEventListener("click", () => merges++);
+  stack.querySelector<HTMLButtonElement>('[data-phase="done"]')!.addEventListener("click", () => phaseClicks++);
+  const stop = injectComposerInfo(f.document);
+  const paint = (node: Element) => f.dom.window.getComputedStyle(node);
+  try {
+    const sheet = f.document.getElementById("bb-chat-ui-composer-info")!.textContent!;
+    assert.match(sheet, /\[aria-label="Machine status"\] > div\[class~="p-1"\]\[data-bb-chat-ui-info-close-heading\] \{ padding-right:34px !important; \}/);
+    assert.match(sheet, /\[data-bb-chat-ui-info-open="workflow"\] button\[aria-expanded\] \{ background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; \}/);
+    assert.match(sheet, /\[data-bb-chat-ui-info-open="other"\] h3\[class~="px-3"\]\[data-bb-chat-ui-info-close-heading\] \{ padding-left:0 !important; padding-right:34px !important; \}/);
+    f.click('[data-bb-chat-ui-info-trigger="plan"]');
+    const exit = f.document.querySelector<HTMLButtonElement>('[aria-label="Exit plan mode"]')!;
+    assert.equal(exit.textContent, "Plan 종료");
+    assert.equal(paint(exit.querySelector("svg")!).display, "none");
+    assert.equal(`${paint(exit).backdropFilter} ${paint(exit).getPropertyValue("-webkit-backdrop-filter")}`.includes("blur(14px)"), true, "Plan 종료 keeps the shared glass");
+    assert.equal(exit.parentElement, f.document.querySelector('[aria-label="Plan mode controls"]'));
+    exit.click();
+    assert.equal(planExits, 1);
+    exit.disabled = true;
+    await f.tick();
+    assert.equal(exit.textContent, "종료 중…");
+    f.click('[aria-label="Plan 닫기"]');
+    assert.equal(planExits, 1, "popover close does not exit plan");
+    f.click('[data-bb-chat-ui-info-trigger="fallback"]');
+    const fallback = f.document.querySelector('section[aria-label="Model fallback"]')!;
+    const message = fallback.querySelector("span[title]")!;
+    assert.equal(message.getAttribute("title"), "Switched from Opus to Sonnet");
+    assert.equal(message.textContent, "Switched from Opus to Sonnet");
+    assert.notEqual(paint(message).display, "none", "the provider transition stays visible");
+    assert.equal(paint(fallback.querySelector("span.font-medium")!).display, "none");
+    assert.equal(paint(fallback.querySelector("[data-fallback-icon]")!).display, "none");
+    const dismissFallback = fallback.querySelector<HTMLButtonElement>('[aria-label="Dismiss model fallback"]')!;
+    assert.equal(dismissFallback.textContent, "Fallback 해제");
+    assert.equal(paint(dismissFallback.querySelector("svg")!).display, "none");
+    dismissFallback.click();
+    assert.equal(fallbackDismisses, 1);
+    f.click('[aria-label="Model fallback 닫기"]');
+    assert.equal(fallbackDismisses, 1, "popover close does not dismiss the fallback");
+    f.click('[data-bb-chat-ui-info-trigger="machine"]');
+    const retry = [...f.document.querySelectorAll("button")].find(button => button.textContent === "Retry")!;
+    retry.click();
+    assert.equal(retries, 1);
+    assert.ok(f.document.querySelector('[aria-label="실행 환경 닫기"]'));
+    f.click('[data-bb-chat-ui-info-trigger="pullRequest"]');
+    const merge = context.querySelector<HTMLElement>("div.inline-flex.rounded")!;
+    assert.equal(paint(merge).borderTopWidth, "0px");
+    assert.equal(paint(context.querySelector("input")!).borderTopWidth, "1px");
+    context.querySelector<HTMLButtonElement>("div.inline-flex button")!.click();
+    assert.equal(merges, 1);
+    f.click('[data-bb-chat-ui-info-trigger="other"]');
+    const other = stack.querySelector(".plugin-banner")!;
+    assert.equal(paint(other.querySelector("[data-legacy]")!).backgroundColor, "rgba(0, 0, 0, 0)");
+    const popoverWrap = other.querySelector<HTMLElement>("[data-legacy-popover]")!;
+    assert.equal(paint(popoverWrap).backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.equal(paint(popoverWrap).borderTopWidth, "0px");
+    assert.equal(paint(popoverWrap).paddingLeft, "0px", "open Other drops the extra px-3 gutter");
+    assert.equal(popoverWrap.querySelector("p")!.textContent, "note");
+    const protectedCode = popoverWrap.querySelector("pre")!;
+    assert.equal(paint(protectedCode).backgroundColor, "rgb(255, 255, 255)");
+    assert.equal(paint(protectedCode).paddingLeft, "12px");
+    assert.equal(protectedCode.textContent, "keep");
+    assert.equal(paint(other.querySelector("[data-protected-other]")!).backgroundColor, "rgb(20, 20, 20)");
+    assert.equal(paint(other.querySelector("[data-protected-child]")!).backgroundColor, "rgb(20, 20, 20)");
+    assert.equal(paint(other.querySelector("pre.bg-surface-raised-solid")!).backgroundColor, "rgb(20, 20, 20)");
+    const otherTitle = other.querySelector("h3.px-3")!;
+    assert.equal(otherTitle.hasAttribute("data-bb-chat-ui-info-close-heading"), true);
+    assert.equal(paint(otherTitle).paddingLeft, "0px", "open Other title lines up with the common gutter");
+    assert.equal(paint(otherTitle).paddingRight, "34px", "open Other title keeps the close reserve");
+    f.click('[data-bb-chat-ui-info-trigger="workflow"]');
+    const workflow = stack.querySelector('section[aria-label="Workflow"]')!;
+    const flatFace = (value: string) => value === "rgba(0, 0, 0, 0)" || value === "transparent" || value === "color-mix(in oklab, var(--foreground) 6%, transparent)";
+    const phaseBlur = (node: Element) => `${paint(node).backdropFilter} ${paint(node).getPropertyValue("-webkit-backdrop-filter")}`;
+    for (const phase of ["done", "active"]) {
+      const button = workflow.querySelector<HTMLButtonElement>(`[data-phase="${phase}"]`)!;
+      assert.equal(button.hasAttribute("aria-controls"), false, `${phase} phase has no aria-controls`);
+      assert.equal(flatFace(paint(button).backgroundColor), true, `${phase} phase is flat`);
+      assert.equal(paint(button).boxShadow, "none", `${phase} phase has no shadow`);
+      assert.equal(phaseBlur(button).includes("blur"), false, `${phase} phase has no nested blur`);
+    }
+    const done = workflow.querySelector<HTMLButtonElement>('[data-phase="done"]')!;
+    done.click();
+    assert.equal(phaseClicks, 1, "a phase disclosure still runs its callback");
+    assert.equal(done.getAttribute("aria-expanded"), "true");
+    assert.equal(flatFace(paint(done).backgroundColor), true, "a clicked phase stays flat");
+    assert.equal(paint(done).boxShadow, "none");
+    const workflowRetry = workflow.querySelector<HTMLButtonElement>("[data-workflow-action]")!;
+    assert.equal(phaseBlur(workflowRetry).includes("blur(14px)"), true, "a workflow action without aria-expanded keeps glass");
+  } finally { stop(); }
+  assert.equal(f.document.querySelector("[data-bb-chat-ui-info-plan-exit-label]"), null);
+  assert.equal(f.document.querySelector("[data-bb-chat-ui-info-fallback-dismiss-label]"), null);
+  f.dom.window.close();
+});
+
 test("desktop hover previews wait for intent, bridge the popover gap, and pin on click", async () => {
   const f=fixture();
   f.document.body.insertAdjacentHTML('beforeend','<span hidden data-bb-chat-ui-device="desktop" data-bb-chat-ui-viewport="narrow"></span>');
