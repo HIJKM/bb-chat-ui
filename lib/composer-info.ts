@@ -72,8 +72,14 @@ export const composerInfoCss = `
 [${MARK}-stack] [${MARK}-collapse] { display:none !important; }
 ${DETAIL} > h3[${MARK}-close-heading] { display:flex; align-items:center; min-height:28px; margin:0 0 8px; font-size:12px; font-weight:600; }
 /* Native cards already have a gutter on layout wrappers; the popover supplies it once. */
-${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"] :is(#thread-prompt-banner-git-toggle, [aria-label^="Pull request "]),
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"] :is(#thread-prompt-banner-git-toggle, #thread-prompt-banner-git-body, #thread-prompt-banner-parent-thread-toggle, [aria-label^="Pull request "]),
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"] > div:has(#thread-prompt-banner-parent-thread-toggle),
 ${DETAIL}[aria-label="Thread context before sending"][${OPEN}="pullRequest"] :is(#thread-prompt-banner-git-toggle, #thread-prompt-banner-parent-thread-toggle, #thread-prompt-banner-parent-thread-body) { display:none !important; }
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"] #thread-prompt-banner-parent-thread-body { border:0 !important; background:transparent !important; box-shadow:none !important; }
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"] #thread-prompt-banner-parent-thread-body > div { background:transparent !important; background-image:none !important; box-shadow:none !important; }
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:not(:has(#thread-prompt-banner-parent-thread-body)) :is(svg, [data-icon-root]):not([${MARK}-title-icon] *) { display:none !important; }
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:not(:has(#thread-prompt-banner-parent-thread-body)) span:has(> a) { font-size:0 !important; }
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:not(:has(#thread-prompt-banner-parent-thread-body)) span:has(> a) > a { font-size:12px !important; line-height:18px !important; }
 ${NATIVE_DETAIL} :is(div[class~="px-3"],p[class~="px-3"],ul[class~="px-3"],ul[class~="px-2.5"]) { padding-left:0 !important; padding-right:0 !important; }
 ${NATIVE_DETAIL} > button[aria-expanded][aria-controls][class~="px-3"] { padding-left:0 !important; padding-right:0 !important; }
 ${NATIVE_DETAIL} > div > button[aria-expanded][aria-controls]:is([class~="px-3"],[class~="px-2"]) { padding-left:0 !important; padding-right:0 !important; }
@@ -472,6 +478,7 @@ export function injectComposerInfo(document: Document): () => void {
       queueDrops.clear();
     };
     let diffSupplement: HTMLElement | null = null;
+    let parentArm: HTMLElement | null = null;
     const panelActions = new Map<HTMLElement, HTMLButtonElement>();
     const panelHeadings = new Set<HTMLElement>();
     const generatedHeadings = new Set<HTMLElement>();
@@ -1110,6 +1117,7 @@ export function injectComposerInfo(document: Document): () => void {
       hoverPreview = false;
       const item = items.find(item => item.node === activeNode && item.key === active);
       activeNode?.removeAttribute(OPEN);
+      parentArm = null;
       if (!editing() && active !== "diff" && item?.trigger?.getAttribute("aria-expanded") === "true") item.trigger.click();
       menu?.remove();
       menu = null;
@@ -1267,6 +1275,7 @@ export function injectComposerInfo(document: Document): () => void {
       activeNode = item.node;
       // The value names the family, so a shared host card shows only that family.
       item.node.setAttribute(OPEN, key);
+      if (key === "parent") parentArm = item.trigger;
       if (item.trigger?.getAttribute("aria-expanded") === "false") item.trigger.click();
       syncNativeControls();
       syncTitleIcon();
@@ -1476,6 +1485,13 @@ export function injectComposerInfo(document: Document): () => void {
       const request = stack.querySelector(REQUEST) !== null;
       if (request !== stack.hasAttribute(`${MARK}-request`)) stack.toggleAttribute(`${MARK}-request`, request);
       if (request || activeNode && !items.some(item => item.node === activeNode)) close(false, true);
+      if (active === "parent" && activeNode?.getAttribute(OPEN) === "parent") {
+        const trigger = items.find(item => item.node === activeNode && item.key === "parent")?.trigger;
+        if (trigger && trigger.getAttribute("aria-expanded") === "false" && trigger !== parentArm) {
+          parentArm = trigger;
+          trigger.click();
+        }
+      }
       syncNativeControls();
       syncTitleIcon();
       if (active === "status" && menu?.hasAttribute(`${MARK}-archived-detail`)) {

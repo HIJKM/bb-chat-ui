@@ -2864,7 +2864,7 @@ test("Parent and PR popovers from the shared context card hide the other familie
     f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
     assert.equal(shown('#thread-prompt-banner-git-toggle'), false, 'Parent does not show the Diff summary beside its title');
     assert.equal(shown('[aria-label^="Pull request "]'), false);
-    assert.equal(shown('#thread-prompt-banner-parent-thread-toggle'), true);
+    assert.equal(shown('#thread-prompt-banner-parent-thread-toggle'), false, 'the native parent icon is not a second title');
     assert.equal(node.querySelector<HTMLElement>('#thread-prompt-banner-parent-thread-body')!.hidden, false);
     f.click('[data-bb-chat-ui-info-native-dismiss]'); await f.tick();
     assert.equal(shown('#thread-prompt-banner-git-toggle'), true, 'closing restores the native card');
@@ -2873,5 +2873,114 @@ test("Parent and PR popovers from the shared context card hide the other familie
     assert.equal(shown('#thread-prompt-banner-git-toggle'), false);
     assert.equal(shown('#thread-prompt-banner-parent-thread-toggle'), false);
     assert.equal(shown('#thread-prompt-banner-parent-thread-body'), false, 'PR does not reveal the parent body');
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("Parent popover shows the common title and parent link without the native icon row, divider, or opaque body", async () => {
+  const f = fixture();
+  const utilities = f.document.createElement("style");
+  utilities.textContent = ".border-t { border-top-width:1px; border-top-style:solid; } .border-border { border-top-color:rgb(228, 228, 231); } .border-transparent { border-top-color:transparent; } .bg-popover { background-color:rgb(255, 255, 255); } .dark .bg-popover { background-color:rgb(24, 24, 27); }";
+  f.document.head.append(utilities);
+  const source = f.document.querySelector("[data-bb-chat-ui-info-settings]")!;
+  source.insertAdjacentHTML("beforeend", '<span data-bb-chat-ui-info-icon="parent"><svg data-family="parent"></svg></span>');
+  const card = f.document.querySelector<HTMLElement>('section[aria-label="Thread context before sending"]')!;
+  const sectionParent = card.parentElement;
+  const shared = (summary: string) => `<div class="flex items-center gap-0.5 text-xs p-1"><button type="button" id="thread-prompt-banner-parent-thread-toggle" aria-expanded="false" aria-controls="thread-prompt-banner-parent-thread-body" aria-label="Parent thread VAU-2 · 그래프 ㄱ자 코너 리사이즈 핸들"><svg data-icon="UserRound" aria-hidden="true"></svg></button><a href="https://example.com/pr/12" aria-label="Pull request 12: Open"><span>PR #12</span></a><button type="button" id="thread-prompt-banner-git-toggle" aria-expanded="false" aria-controls="thread-prompt-banner-git-body" aria-label="Changed files: Uncommitted, ${summary}"><span>${summary}</span></button></div><section id="thread-prompt-banner-parent-thread-body" role="region" aria-hidden="true" class="grid overflow-hidden pointer-events-none grid-rows-[0fr] opacity-0 border-t border-transparent"><div class="overflow-hidden bg-popover"><div class="px-3 pb-2 pt-1.5">This thread is a child of <a href="/threads/vau-2"><span>VAU-2 · 그래프 ㄱ자 코너 리사이즈 핸들</span></a>.</div><div class="px-1 pb-1"><button type="button" aria-expanded="true" aria-controls="thread-prompt-banner-parent-thread-body" aria-label="Collapse parent thread">Collapse</button></div></div></section><section id="thread-prompt-banner-git-body" role="region" aria-hidden="true" class="grid overflow-hidden border-t border-transparent"><div class="overflow-hidden bg-popover"><div class="px-3">lib/composer-info.ts</div></div></section>`;
+  const alone = `<div class="flex items-center gap-0.5 text-xs p-1"><div class="flex min-w-0 items-center gap-1.5 text-xs" title="Parent thread Chat UI 전체 이슈 정리"><svg data-icon="UserRound" aria-hidden="true"></svg><span class="min-w-0 truncate">Parent <a href="/threads/parent-only"><span>Chat UI 전체 이슈 정리</span></a></span></div></div>`;
+  const wire = () => {
+    for (const toggle of card.querySelectorAll<HTMLButtonElement>('button[id$="-toggle"]')) {
+      toggle.addEventListener("click", () => {
+        const expanded = toggle.getAttribute("aria-expanded") !== "true";
+        toggle.setAttribute("aria-expanded", String(expanded));
+        const body = card.querySelector<HTMLElement>(`#${toggle.getAttribute("aria-controls")}`);
+        if (!body) return;
+        body.setAttribute("aria-hidden", String(!expanded));
+        body.className = expanded
+          ? "grid overflow-hidden grid-rows-[1fr] border-t border-border opacity-100"
+          : "grid overflow-hidden pointer-events-none grid-rows-[0fr] opacity-0 border-t border-transparent";
+      });
+    }
+  };
+  card.innerHTML = shared("Uncommitted · +162 −21 · 6 files");
+  wire();
+  const style = (node: Element) => f.dom.window.getComputedStyle(node);
+  const stop = injectComposerInfo(f.document);
+  try {
+    const link = () => card.querySelector<HTMLAnchorElement>('#thread-prompt-banner-parent-thread-body a')!;
+    const linkParent = link().parentElement;
+    let navigated = 0;
+    link().addEventListener("click", event => { event.preventDefault(); navigated++; });
+    f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
+    const toggle = card.querySelector<HTMLButtonElement>("#thread-prompt-banner-parent-thread-toggle")!;
+    const body = card.querySelector<HTMLElement>("#thread-prompt-banner-parent-thread-body")!;
+    const fill = body.querySelector<HTMLElement>(".bg-popover")!;
+    assert.equal(style(toggle).display, "none", "the native person-icon toggle is not a second Parent title");
+    assert.equal(style(toggle.parentElement!).display, "none", "the shared segment row does not stay under the title");
+    assert.equal(style(card.querySelector("#thread-prompt-banner-git-toggle")!).display, "none");
+    assert.equal(style(card.querySelector("#thread-prompt-banner-git-body")!).display, "none");
+    assert.equal(style(card.querySelector('a[aria-label^="Pull request "]')!).display, "none");
+    assert.equal(style(body).display, "block");
+    assert.equal(style(body).borderTopWidth, "0px", "the disclosure divider stays off while Parent is open");
+    assert.equal(style(fill).backgroundColor, "rgba(0, 0, 0, 0)", "the native popover fill does not cover the glass");
+    assert.match(body.textContent ?? "", /This thread is a child of/);
+    assert.match(body.textContent ?? "", /VAU-2/);
+    assert.equal((body.textContent ?? "").includes("+162"), false);
+    assert.equal((body.textContent ?? "").includes("lib/composer-info.ts"), false);
+    const heading = card.querySelector("[data-bb-chat-ui-info-close-heading]")!;
+    assert.equal(heading.textContent, "Parent");
+    assert.ok(heading.querySelector('[data-bb-chat-ui-info-title-icon="parent"] [data-family="parent"]'));
+    assert.equal(card.querySelectorAll("[data-bb-chat-ui-info-native-dismiss]").length, 1);
+    assert.equal(style(card.querySelector('[aria-label="Collapse parent thread"]')!.parentElement!).display, "none");
+    assert.equal(link().parentElement, linkParent);
+    link().click();
+    assert.equal(navigated, 1);
+    assert.equal(toggle.getAttribute("aria-expanded"), "true");
+    assert.equal(card.querySelector("#thread-prompt-banner-git-toggle")!.getAttribute("aria-expanded"), "false");
+
+    card.querySelector("#thread-prompt-banner-git-toggle span")!.textContent = "Uncommitted · +200 −1 · 2 files";
+    await f.tick();
+    assert.equal(style(card.querySelector("#thread-prompt-banner-git-toggle")!).display, "none");
+    assert.equal(style(fill).backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent?.includes("+200"));
+    f.document.documentElement.classList.add("dark");
+    assert.equal(style(fill).backgroundColor, "rgba(0, 0, 0, 0)", "dark mode keeps the body fill transparent");
+    f.document.documentElement.classList.remove("dark");
+
+    card.innerHTML = shared("Uncommitted · +200 −1 · 2 files");
+    wire();
+    await f.tick();
+    const nextToggle = card.querySelector<HTMLButtonElement>("#thread-prompt-banner-parent-thread-toggle")!;
+    const nextBody = card.querySelector<HTMLElement>("#thread-prompt-banner-parent-thread-body")!;
+    assert.equal(nextToggle.getAttribute("aria-expanded"), "true", "a native rerender keeps the parent disclosure open");
+    assert.equal(style(nextToggle).display, "none");
+    assert.equal(style(nextBody).borderTopWidth, "0px");
+    assert.equal(style(nextBody.querySelector(".bg-popover")!).backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.match(nextBody.textContent ?? "", /This thread is a child of/);
+    assert.equal(card.parentElement, sectionParent);
+
+    f.click('[data-bb-chat-ui-info-native-dismiss]');
+    assert.equal(card.hasAttribute("data-bb-chat-ui-info-open"), false);
+    assert.notEqual(style(card.querySelector("#thread-prompt-banner-parent-thread-toggle")!).display, "none", "closing restores the native icon row");
+    assert.equal(style(card.querySelector(".bg-popover")!).backgroundColor, "rgb(255, 255, 255)");
+    assert.equal(card.querySelector("#thread-prompt-banner-parent-thread-toggle")!.getAttribute("aria-expanded"), "false");
+
+    card.innerHTML = alone;
+    await f.tick();
+    f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
+    const inlineLink = card.querySelector<HTMLAnchorElement>('a[href="/threads/parent-only"]')!;
+    const inlineParent = inlineLink.parentElement!;
+    assert.equal(style(card.querySelector("svg[data-icon='UserRound']")!).display, "none", "parent-only does not repeat the native person icon");
+    assert.equal(style(inlineParent).fontSize, "0px", "parent-only does not repeat the native Parent verb");
+    assert.equal(style(inlineLink).fontSize, "12px");
+    assert.notEqual(style(inlineLink).display, "none");
+    assert.equal(inlineLink.parentElement, inlineParent);
+    assert.match(card.querySelector("[data-bb-chat-ui-info-close-heading]")?.textContent ?? "", /^Parent$/);
+    assert.equal(card.querySelectorAll("[data-bb-chat-ui-info-native-dismiss]").length, 1);
+    f.click('[data-bb-chat-ui-info-native-dismiss]');
+    assert.equal(card.querySelector("[data-bb-chat-ui-info-close-heading]"), null);
+    assert.equal(card.innerHTML, alone);
+    stop();
+    assert.equal(card.innerHTML, alone);
+    assert.equal(card.parentElement, sectionParent);
   } finally { stop(); f.dom.window.close(); }
 });
