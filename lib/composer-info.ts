@@ -1,4 +1,4 @@
-import { exposedInfo, infoKinds, listedInfo, type InfoKind } from "./composer-info-settings.ts";
+import { exposedInfo, infoKinds, infoLayout, listedInfo, type InfoKind } from "./composer-info-settings.ts";
 import { HEAD_DIFF_MARK, openChangesPanel, type HeadDiffDetail } from "./workspace-diff-pill.ts";
 import type { WorkspaceDiffSnapshot } from "./workspace-diff-data.ts";
 import { commitIcon, fileStatusIcon } from "./composer-diff-icons.ts";
@@ -14,6 +14,7 @@ const OPEN = `${MARK}-open`;
 const SOURCE = `${MARK}-settings`;
 const REQUEST = ['tool-use-ask', 'plugin-request-banner', 'plan-review-request', 'approval-banner', 'user-question-banner', 'plan-review-banner'].map(id => `[data-testid="${id}"]`).join(", ");
 const QUESTION = ['tool-use-ask', 'plugin-request-banner', 'user-question-banner'].map(id => `[data-testid="${id}"]`).join(", ");
+const HOST_JUMP = 'button[aria-label="Scroll to latest event"]';
 const NATIVE = `section[aria-label], .agentation-staging-shell, [${MARK}-kind]`;
 const WORKFLOW_COLLAPSE = 'button[aria-label^="Collapse "][aria-label$=" workflows"][aria-controls]';
 const ARCHIVED = '[aria-label="Thread archived"], [aria-label="Thread is archived"], [aria-label="Archived thread"]';
@@ -21,7 +22,7 @@ const UNAVAILABLE = ["Environment unavailable", "Machine removed", "Machine remo
 const DETAIL = `${STACK}[${MARK}-stack] [${UNIT}][${OPEN}]:not([hidden])`;
 const NATIVE_DETAIL = `${DETAIL}:is(${["Thread context before sending", "Child threads", "Prompt mode", "Goal", "To-do list", "Workflow", "Background commands", "Machine status", "Thread history", "Model fallback"].map(label => `section[aria-label="${label}"]`).join(",")})`;
 
-// The orb is always reachable. Fit measured pills into one row, with essentials first.
+// The all-information button is always reachable. Fit measured pills into one row, with essentials first.
 export function fitComposerInfo(items: readonly { key: string; width: number }[], width: number): string[] {
   let used = 0;
   const result: string[] = [];
@@ -105,9 +106,31 @@ ${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] > :is(svg, [data-i
 [${MARK}-diff-previous]::before { content:attr(${MARK}-diff-value); }
 [${MARK}-queue-drop] { position:fixed; width:12px; height:12px; border-radius:50%; pointer-events:none; z-index:54; background:color-mix(in oklab,var(--bb-chat-ui-info-face) 60%,var(--foreground) 40%); backdrop-filter:blur(14px) saturate(1.25); box-shadow:inset 0 1px 3px var(--bb-chat-ui-info-edge),0 2px 8px -2px var(--bb-chat-ui-info-shadow); }
 [${MARK}-all] { position:relative; width:32px; padding:0; }
-[${MARK}-bar][${MARK}-jump] { padding-right:40px; }
-[${MARK}-orb] { display:block; width:28px; height:28px; overflow:visible; pointer-events:none; color:var(--foreground); }
-[${MARK}-orb] circle { fill:currentColor; }
+[${MARK}-glyph] { display:block; width:16px; height:16px; pointer-events:none; color:var(--subtle-foreground); transition:opacity 200ms, scale 280ms cubic-bezier(.2,.9,.22,1.25); }
+[${MARK}-all]:hover [${MARK}-glyph], [${MARK}-all][aria-expanded=true] [${MARK}-glyph] { color:var(--foreground); }
+[${MARK}-count] { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; opacity:0; scale:.6; pointer-events:none; transition:opacity 200ms, scale 280ms cubic-bezier(.2,.9,.22,1.25); }
+[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-all] { margin-left:auto; transition:width 280ms cubic-bezier(.22,1,.36,1), transform 260ms cubic-bezier(.2,.9,.22,1.25); }
+[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-all][${MARK}-folded] { width:40px; }
+[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-all][${MARK}-folded="wide"] { width:48px; }
+[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-all][${MARK}-folded] [${MARK}-glyph] { opacity:0; scale:.5; }
+[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-all][${MARK}-folded] [${MARK}-count] { opacity:1; scale:1; }
+[${MARK}-dock] { display:inline-flex; flex:none; align-items:center; height:32px; margin-left:auto; padding:0 1px; border-radius:999px; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); }
+[${MARK}-dock][hidden] { display:none; }
+[${MARK}-dock] > [${MARK}-all], [${MARK}-dock] > [${MARK}-jump] { width:30px; height:30px; background:transparent !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; box-shadow:none !important; }
+[${MARK}-dock] > [${MARK}-all]:hover, [${MARK}-dock] > [${MARK}-all]:active { transform:none; }
+[${MARK}-dock] > [${MARK}-all][aria-expanded=true] { box-shadow:inset 0 0 0 1px var(--border) !important; }
+[${MARK}-dock-sep] { flex:none; width:0; height:16px; background:var(--border); transition:width 280ms cubic-bezier(.22,1,.36,1), margin 280ms cubic-bezier(.22,1,.36,1); }
+[${MARK}-dock][${MARK}-jumping] > [${MARK}-dock-sep] { width:1px; margin:0 .5px; }
+[${MARK}-jump] { display:inline-flex; flex:none; align-items:center; justify-content:center; gap:5px; padding:0; border:0; border-radius:999px; font-size:12px !important; line-height:18px; white-space:nowrap; color:var(--foreground); cursor:pointer; }
+[${MARK}-jump] svg { width:16px; height:16px; flex-shrink:0; }
+[${MARK}-jump][hidden] { display:inline-flex !important; visibility:hidden; opacity:0; pointer-events:none; }
+[${MARK}-dock] > [${MARK}-jump] { overflow:hidden; transition:width 280ms cubic-bezier(.22,1,.36,1), opacity 200ms, visibility 0s; }
+[${MARK}-dock] > [${MARK}-jump][hidden] { width:0; transition:width 280ms cubic-bezier(.22,1,.36,1), opacity 200ms, visibility 0s 280ms; }
+[${MARK}-dock] [${MARK}-jump-label] { display:none; }
+[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-jump] { position:absolute; left:50%; bottom:40px; z-index:2; height:32px; padding:0 12px 0 9px; translate:-50% 0; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); transition:opacity 200ms, translate 300ms cubic-bezier(.2,.9,.22,1.25), visibility 0s; }
+[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-jump][hidden] { translate:-50% 8px; transition:opacity 200ms, translate 300ms cubic-bezier(.2,.9,.22,1.25), visibility 0s 300ms; }
+[${MARK}-jump]:focus-visible { outline:2px solid var(--ring); outline-offset:3px; }
+[data-bb-chat-ui-info-jump-source] { visibility:hidden !important; pointer-events:none !important; }
 [${MARK}-badge] { position:absolute; right:-3px; top:-4px; font-size:9px; min-width:14px; line-height:14px; padding:0 3px; border-radius:999px; background:var(--bb-chat-ui-info-face); color:var(--subtle-foreground); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)); }
 [${MARK}-avatar], [${MARK}-badge] { backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); }
 [${MARK}-trigger="children"] { padding:0 7px 0 0; min-height:34px; border-radius:0; background:transparent !important; backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:none !important; }
@@ -292,31 +315,66 @@ export function injectComposerInfo(document: Document): () => void {
     orb.type = "button";
     orb.setAttribute(`${MARK}-all`, "");
     orb.setAttribute("aria-expanded", "false");
-    const symbol = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    symbol.setAttribute(`${MARK}-orb`, "");
-    symbol.setAttribute("aria-hidden", "true");
-    symbol.setAttribute("viewBox", "0 0 32 32");
-    const particles = Array.from({ length:32 }, (_, index) => {
-      const y = 1 - 2 * (index + .5) / 32;
-      const angle = index * Math.PI * (3 - Math.sqrt(5));
-      const ring = Math.sqrt(1 - y * y);
-      return { x:ring * Math.cos(angle), y, z:ring * Math.sin(angle) };
-    }).sort((a,b) => a.z - b.z).map(point => {
-      const circle = document.createElementNS(symbol.namespaceURI, "circle");
-      const perspective = 1 + point.z * .12, depth = (point.z + 1) / 2;
-      const x = 16 + point.x * 12 * perspective, y = 16 + point.y * 12 * perspective;
-      const opacity = .18 + depth * .72;
-      circle.setAttribute("cx", String(x)); circle.setAttribute("cy", String(y));
-      circle.setAttribute("r", String(.35 + depth * .35)); circle.setAttribute("opacity", String(opacity));
-      symbol.append(circle);
-      return { ...point, circle, screenX:x, screenY:y, opacity };
-    });
+    const svg = (paths: string[], attributes: Record<string, string> = {}) => {
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      for (const [name, value] of Object.entries({ viewBox:"0 0 24 24", fill:"none", stroke:"currentColor", "stroke-width":"1.5", "stroke-linecap":"round", "stroke-linejoin":"round", "aria-hidden":"true", ...attributes })) icon.setAttribute(name, value);
+      for (const d of paths) { const path = document.createElementNS(icon.namespaceURI, "path"); path.setAttribute("d", d); icon.append(path); }
+      return icon;
+    };
+    // Approved glyphs: a filter for the right capsule, stacked layers for the centred choice.
+    const glyphs = { dock:["M3 6h18M7 12h10M10 18h4"], center:["m12 3 9 5-9 5-9-5z", "m3 13 9 5 9-5"] };
+    let glyph = svg(glyphs.dock, { [`${MARK}-glyph`]:"dock" });
     const badge = document.createElement("span");
     badge.setAttribute(`${MARK}-badge`, "");
     badge.setAttribute("aria-hidden", "true");
-    orb.append(symbol, badge);
-    bar.append(orb, pills);
+    badge.hidden = true;
+    const foldedCount = document.createElement("span");
+    foldedCount.setAttribute(`${MARK}-count`, "");
+    foldedCount.setAttribute("aria-hidden", "true");
+    orb.append(glyph, badge);
+    const dock = document.createElement("span");
+    dock.setAttribute(`${MARK}-dock`, "");
+    const dockSep = document.createElement("span");
+    dockSep.setAttribute(`${MARK}-dock-sep`, "");
+    dockSep.setAttribute("aria-hidden", "true");
+    const jump = document.createElement("button");
+    jump.type = "button";
+    jump.hidden = true;
+    jump.setAttribute(`${MARK}-jump`, "");
+    jump.setAttribute("aria-label", "맨 아래로 이동"); jump.title = "맨 아래로 이동";
+    const jumpLabel = document.createElement("span");
+    jumpLabel.setAttribute(`${MARK}-jump-label`, ""); jumpLabel.textContent = "최신으로";
+    jump.append(svg(["M12 5v14", "m19 12-7 7-7-7"]), jumpLabel);
+    bar.append(pills);
     stack.append(bar);
+    let layout: "dock" | "center" | null = null;
+    const applyLayout = (next: "dock" | "center") => {
+      if (layout === next) return;
+      layout = next;
+      bar.setAttribute(`${MARK}-layout`, next);
+      const nextGlyph = svg(glyphs[next], { [`${MARK}-glyph`]:next });
+      glyph.replaceWith(nextGlyph); glyph = nextGlyph;
+      if (next === "dock") { if (!badge.isConnected) orb.append(badge); foldedCount.remove(); dock.append(orb, dockSep, jump); pills.after(dock); }
+      else { dock.remove(); badge.remove(); orb.append(foldedCount); pills.after(orb, jump); }
+    };
+    applyLayout("dock");
+    // The host keeps its own scroll logic; the visible control forwards to it.
+    let jumpSource: HTMLButtonElement | null = null;
+    let jumpVisible = false;
+    const jumpWatch = new view!.MutationObserver(() => schedule());
+    const syncJump = () => {
+      const host = readOnlyLabel === null && !bar.hidden ? stack.closest("[data-scroll-footer]")?.querySelector<HTMLButtonElement>(HOST_JUMP) ?? null : null;
+      if (host !== jumpSource) {
+        jumpSource?.removeAttribute(`${MARK}-jump-source`);
+        jumpWatch.disconnect();
+        jumpSource = host;
+        if (host) { host.setAttribute(`${MARK}-jump-source`, ""); jumpWatch.observe(host, { attributes:true, attributeFilter:["class", "disabled"] }); }
+      }
+      jumpVisible = !!host && !host.disabled && !host.classList.contains("invisible");
+      jump.hidden = !jumpVisible || layout === "center" && active !== null;
+      dock.toggleAttribute(`${MARK}-jumping`, jumpVisible);
+    };
+    jump.addEventListener("click", () => jumpSource?.click());
     let items: InfoItem[] = [];
     let readOnlyLabel: string | null = null;
     let listed = listedInfo();
@@ -373,6 +431,7 @@ export function injectComposerInfo(document: Document): () => void {
       hoverOpenTimer = hoverCloseTimer = undefined;
     };
     let signature = "";
+    let catalogCount = 0;
     let childStates = new Map<string, ChildState>();
     let queueSnapshot:{ count:number; seenIds:Set<string>; pendingRows:number; pendingCount:number } | null = null;
     const queueAnimations = new Set<Animation>();
@@ -599,27 +658,18 @@ export function injectComposerInfo(document: Document): () => void {
     stack.addEventListener("touchcancel", endTouch);
     const editing = () => stack.querySelector('[data-queued-message-inline-editor]') !== null;
     const reduced = () => view!.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    const orbReactions = new Set<Animation>();
+    let reaction: Animation | null = null;
+    const slot = () => layout === "dock" ? dock : orb;
     const pulse = () => {
-      for (const animation of orbReactions) { animation.cancel(); entryAnimations.delete(animation); }
-      orbReactions.clear();
-      if (reduced() || entering.has(orb) || orb.hidden || bar.hidden) return;
-      for (const point of particles) {
-        const frames = Array.from({ length:7 }, (_, index) => {
-          const progress = index / 6, envelope = Math.sin(Math.PI * progress);
-          if (!index || index === 6) return { transform:"none", opacity:point.opacity, offset:progress };
-          const wave = Math.sin(Math.acos(point.y) * 6 - progress * Math.PI * 2) * envelope * .12;
-          const turn = envelope * .3;
-          const x = point.x * Math.cos(turn) - point.z * Math.sin(turn);
-          const z = point.z * Math.cos(turn) + point.x * Math.sin(turn);
-          const radius = 12 * (1 + wave), perspective = 1 + z * .12;
-          return { transform:`translate(${16 + x * radius * perspective - point.screenX}px,${16 + point.y * radius * perspective - point.screenY}px)`, opacity:Math.min(1, point.opacity + envelope * .15 + wave), offset:progress };
-        });
-        const animation = point.circle.animate?.(frames, { duration:520, easing:"linear" });
-        if (!animation) continue;
-        orbReactions.add(animation); entryAnimations.add(animation);
-        animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); orbReactions.delete(animation); };
-      }
+      reaction?.cancel();
+      reaction = null;
+      if (reduced() || entering.has(slot()) || orb.hidden || bar.hidden) return;
+      const animation = glyph.animate?.([
+        { transform:"none" }, { transform:"scale(.78) rotate(-10deg)" }, { transform:"scale(1.08)" }, { transform:"none" },
+      ], { duration:380, easing:"cubic-bezier(.22,1,.36,1)" });
+      if (!animation) return;
+      reaction = animation; entryAnimations.add(animation);
+      animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); if (reaction === animation) reaction = null; };
     };
     const mark = (node: HTMLElement, attr: string, collection: Set<HTMLElement>) => {
       collection.add(node);
@@ -702,7 +752,7 @@ export function injectComposerInfo(document: Document): () => void {
     };
     const queueAddition = (delay:number) => {
       const pill = buttons.get("queue");
-      const target = pill && !pill.hidden ? pill : orb;
+      const target = pill && !pill.hidden ? pill : slot();
       if (bar.hidden || reduced() || !target.animate) return;
       const shell = stack.closest("[data-promptbox-shell]");
       const origin = shell?.querySelector('[data-promptbox-submit-action][type="submit"]')
@@ -1014,6 +1064,7 @@ export function injectComposerInfo(document: Document): () => void {
       menu = null;
       active = null;
       activeNode = null;
+      syncJump();
       syncNativeControls();
       updateScrollHints();
       orb.setAttribute("aria-expanded", "false");
@@ -1052,6 +1103,10 @@ export function injectComposerInfo(document: Document): () => void {
       } else alert?.remove();
     };
     const open = (key: InfoKind | "all", trigger: HTMLElement, selected?: InfoItem, preview = false) => {
+      openDetail(key, trigger, selected, preview);
+      syncJump();
+    };
+    const openDetail = (key: InfoKind | "all", trigger: HTMLElement, selected?: InfoItem, preview = false) => {
       if (editing() || stack.hasAttribute(`${MARK}-request`)) return;
       if (key !== "all" && !listed.includes(key)) return;
       cancelHover();
@@ -1208,13 +1263,31 @@ export function injectComposerInfo(document: Document): () => void {
       });
       for (const [key, exit] of exits) if (!buttons.has(key)) widths.push({ key, width:exit.node.offsetWidth });
       const width = stack.getBoundingClientRect().width;
-      const visible = new Set(readOnlyLabel ? ["status"] : fitComposerInfo(widths, width > 0 ? width - (bar.hasAttribute(`${MARK}-jump`) ? 40 : 0) : Number.POSITIVE_INFINITY));
+      // The capsule grows by 32px for latest-event; the centred button by 8px per folded digit.
+      const room = (extra: number) => width > 0 ? width - extra : Number.POSITIVE_INFINITY;
+      const hiddenCount = (shown: Set<string>) => [...buttons.keys()].filter(key => !shown.has(key)).length;
+      let visible = new Set(readOnlyLabel ? ["status"] : fitComposerInfo(widths, room(layout === "dock" && jumpVisible ? 32 : 0)));
+      if (!readOnlyLabel && layout === "center" && hiddenCount(visible)) {
+        visible = new Set(fitComposerInfo(widths, room(8)));
+        if (hiddenCount(visible) > 9) visible = new Set(fitComposerInfo(widths, room(16)));
+      }
+      // Write only changes: the document observer would otherwise schedule this fit again.
+      const folded = readOnlyLabel ? 0 : hiddenCount(visible);
+      const text = (node: HTMLElement, value: string) => { if (node.textContent !== value) node.textContent = value; };
+      text(badge, `+${folded}`); text(foldedCount, `+${folded}`); badge.hidden = !folded;
+      const foldedSize = folded > 9 ? "wide" : folded ? "" : null;
+      if (orb.getAttribute(`${MARK}-folded`) !== foldedSize) {
+        if (foldedSize === null) orb.removeAttribute(`${MARK}-folded`); else orb.setAttribute(`${MARK}-folded`, foldedSize);
+      }
+      const label = `전체 정보 ${catalogCount}개${folded ? ` · 접힘 ${folded}개` : ""}`;
+      if (orb.getAttribute("aria-label") !== label) { orb.setAttribute("aria-label", label); orb.title = label; }
       for (const [key, button] of buttons) {
         if (visible.has(key)) cancelExit(key);
         else if (previouslyVisible.has(button) && !exits.has(key)) leave(key, button);
         button.hidden = !visible.has(key);
       }
-      const moving = [...buttons.values(), orb].filter(button => !button.hidden && !bar.hidden);
+      // The all-information slot is anchored to the right edge and never slides.
+      const moving = [...buttons.values()].filter(button => !button.hidden && !bar.hidden);
       for (const button of moving) {
         const before = positions.get(button), after = button.offsetLeft;
         if (before !== undefined && before !== after && motion && !reduced() && !widthAnimations.size) {
@@ -1231,8 +1304,8 @@ export function injectComposerInfo(document: Document): () => void {
       for (const button of positions.keys()) if (!moving.includes(button as HTMLButtonElement)) { positions.delete(button); moves.get(button)?.cancel(); moves.delete(button); }
       if (bar.hidden) return;
       let entryDelay = 0;
-      for (const button of [orb, ...Array.from(pills.children) as HTMLElement[]]) {
-        const key = button === orb ? "all" : button.getAttribute(`${MARK}-trigger`) as InfoKind;
+      for (const button of [...Array.from(pills.children) as HTMLElement[], slot()]) {
+        const key = button === slot() ? "all" : button.getAttribute(`${MARK}-trigger`) as InfoKind;
         if (button.hidden || appeared.has(key)) continue;
         appeared.add(key);
         if (reduced()) continue;
@@ -1277,7 +1350,6 @@ export function injectComposerInfo(document: Document): () => void {
         const mask = `url("data:image/svg+xml,${encodeURIComponent(new view!.XMLSerializer().serializeToString(feedback))}")`;
         if (stack.style.getPropertyValue("--bb-chat-ui-feedback-icon") !== mask) stack.style.setProperty("--bb-chat-ui-feedback-icon", mask);
       }
-      bar.toggleAttribute(`${MARK}-jump`, stack.closest('[data-scroll-footer]')?.querySelector('button[aria-label="Scroll to latest event"]') !== null && !!stack.closest('[data-scroll-footer]'));
       const found: InfoItem[] = [];
       const currentOwned = new Set<HTMLElement>();
       const currentWrappers = new Set<HTMLElement>();
@@ -1309,8 +1381,7 @@ export function injectComposerInfo(document: Document): () => void {
       const nextReadOnlyLabel = status ? source.getAttribute(`${MARK}-read-only-label`) ?? (status.node.matches(ARCHIVED) || status.node.querySelector(ARCHIVED) ? "Archived thread" : unavailable?.getAttribute("aria-label") ?? null) : null;
       if (readOnlyLabel !== nextReadOnlyLabel) { readOnlyLabel = nextReadOnlyLabel; cancelQueueMotion(); cancelExit(); close(false, true); }
       bar.toggleAttribute(`${MARK}-archived`, readOnlyLabel !== null);
-      if (readOnlyLabel) bar.removeAttribute(`${MARK}-jump`);
-      orb.hidden = readOnlyLabel !== null;
+      orb.hidden = dock.hidden = readOnlyLabel !== null;
       syncPanelActions();
       if (!items.some(item => item.key === "diff")) {
         try {
@@ -1348,6 +1419,8 @@ export function injectComposerInfo(document: Document): () => void {
       if (active && active !== "all" && !listed.includes(active)) close();
       if (!listed.length) close();
       bar.hidden = request || !listed.length && !editing();
+      applyLayout(infoLayout(settings));
+      syncJump();
       const diff = readDiff();
       const unavailableDiff = stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(`${HEAD_DIFF_MARK}-state`) === "unavailable";
       const exposed: InfoKind[] = readOnlyLabel ? ["status"] : exposedInfo(settings).filter(key => key !== "diff" || !unavailableDiff && diff?.presentation?.visible !== false);
@@ -1418,10 +1491,7 @@ export function injectComposerInfo(document: Document): () => void {
           close(); open(key, orb);
           (bar.querySelector<HTMLElement>(`[${MARK}-menu]`) ?? stack.querySelector<HTMLElement>(`[${OPEN}]`))?.querySelector<HTMLElement>('button, a, input, [tabindex="0"]')?.focus();
         }
-        const count = catalog().length;
-        badge.textContent = String(count);
-        orb.setAttribute("aria-label", `전체 정보 ${count}개`);
-        orb.title = `전체 정보 · ${count}개`;
+        catalogCount = catalog().length;
       }
       fit(!widthChange);
       const queue = items.find(item => item.key === "queue");
@@ -1485,6 +1555,8 @@ export function injectComposerInfo(document: Document): () => void {
       entryAnimations.clear();
       resize?.disconnect();
       edgeResize?.disconnect();
+      jumpWatch.disconnect();
+      jumpSource?.removeAttribute(`${MARK}-jump-source`);
       stack.removeEventListener("scroll", updateScrollHints, true);
       stack.removeEventListener("animationend", updateScrollHints, true);
       stack.removeEventListener("animationcancel", updateScrollHints, true);

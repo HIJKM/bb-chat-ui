@@ -481,8 +481,9 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   const stop = injectComposerInfo(f.document);
   const pills = () => entries.filter(entry => entry.key !== 'orb' && entry.options.duration === 460);
   const bar=f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
-  assert.ok(bar.firstElementChild?.matches('[data-bb-chat-ui-info-all]'),'the all-information button is the leftmost flex item');
-  assert.equal(f.dom.window.getComputedStyle(bar.firstElementChild!).position,'relative','the orb occupies a stable slot and anchors its own count badge');
+  const dock=bar.querySelector('[data-bb-chat-ui-info-dock]')!;
+  for (const pill of bar.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(dock) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING,'the all-information capsule closes the row on the right');
+  assert.equal(f.dom.window.getComputedStyle(f.document.querySelector('[data-bb-chat-ui-info-all]')!).position,'relative','the all-information button anchors its own count badge');
   const visible = ['diff', 'goal', 'todos', 'queue', 'pullRequest', 'other'];
   assert.deepEqual(pills().map(entry => entry.key), visible);
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-avatar][data-new]'), 'avatars retain their existing individual bubbles');
@@ -492,9 +493,9 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   ]);
   assert.deepEqual(pills()[0].frames.map(frame => frame.offset), [0,.35,.65,.82,1], 'stretch, landing squash and gentle recovery fit inside one quick entrance');
   assert.equal(pills()[0].options.duration, 460);
-  assert.deepEqual(pills().map(entry => entry.options.delay), [45,225,270,315,360,405], 'visible pills and child avatars follow the leftmost orb in 45ms steps');
+  assert.deepEqual(pills().map(entry => entry.options.delay), [0,180,225,270,315,360], 'visible pills and child avatars enter from the left in 45ms steps');
   assert.ok(pills().every(entry => entry.options.fill === 'backwards'), 'delayed pills hold their starting pose until their turn');
-  assert.deepEqual([...f.document.querySelectorAll<HTMLElement>('[data-bb-chat-ui-info-avatar][data-new]')].map(avatar => avatar.style.animationDelay), ['90ms','135ms','180ms']);
+  assert.deepEqual([...f.document.querySelectorAll<HTMLElement>('[data-bb-chat-ui-info-avatar][data-new]')].map(avatar => avatar.style.animationDelay), ['45ms','90ms','135ms']);
   assert.equal(pills()[0].frames[0].easing, 'cubic-bezier(.36,0,.18,1)');
   assert.equal(pills()[0].frames[1].easing, 'cubic-bezier(.36,0,.18,1)', 'each segment slows to zero at the turn and the end');
   assert.match(composerInfoCss, /animation:bb-info-droplet 460ms cubic-bezier\(\.36,0,\.18,1\) backwards/);
@@ -509,15 +510,14 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   await f.tick();
   f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
   assert.deepEqual(pills().map(entry => entry.key), visible, 'refresh, re-enable and resize do not replay entry motion');
-  assert.equal(entries.filter(entry => entry.key === 'orb' && entry.options.duration === 460).length,1,'the all-information button enters once before the pills');
-  assert.equal(entries.find(entry => entry.key === 'orb')?.options.delay,0);
-  assert.ok(entries.filter(entry => entry.key === 'orb' && entry.options.duration !== 460).every(entry => entry.options.duration === 520), 'activity reactions settle quickly too');
+  assert.equal(entries.filter(entry => entry.key === 'orb' && entry.options.duration === 460).length,1,'the all-information capsule enters once after the pills');
+  assert.equal(entries.find(entry => entry.key === 'orb' && entry.options.duration === 460)?.options.delay,405);
   stop();
   assert.ok(pills().every(entry => entry.cancelled), 'in-progress entry animations are cancelled on unload');
   f.dom.window.close();
 });
 
-test("the particle orb reacts briefly to information and disclosure events, staying still between them", async () => {
+test("the all-information glyph reacts briefly to information and disclosure events, staying still between them", async () => {
   for (const reduced of [false, true]) {
     const f=fixture();
     Object.defineProperty(f.dom.window,'matchMedia',{value:() => ({matches:reduced})});
@@ -529,34 +529,31 @@ test("the particle orb reacts briefly to information and disclosure events, stay
     f.dom.window.SVGElement.prototype.animate=f.dom.window.HTMLElement.prototype.animate;
     const stop=injectComposerInfo(f.document);
     try {
-      const orb=f.document.querySelector<SVGSVGElement>('[data-bb-chat-ui-info-orb]')!;
-      const css=f.dom.window.getComputedStyle(orb);
-      assert.equal(css.width,'28px'); assert.equal(css.height,'28px');
-      assert.equal(orb.querySelectorAll('circle').length,32,'the sphere uses fewer, more spaced-out projected points');
-      assert.ok(new Set([...orb.querySelectorAll('circle')].map(point=>point.getAttribute('opacity'))).size > 1,'depth changes point brightness');
-      assert.equal(orb.querySelectorAll('img, image').length,0,'no downloaded asset is bundled');
-      assert.ok(!css.animation || css.animation==='none','the resting orb has no continuous animation');
-      const reactions=() => records.filter(record=>record.node.parentElement===orb);
-      assert.equal(reactions().length,0,'entry uses the button droplet, without an extra orb reaction');
+      const glyph=() => f.document.querySelector<SVGSVGElement>('[data-bb-chat-ui-info-glyph]')!;
+      const css=f.dom.window.getComputedStyle(glyph());
+      assert.equal(css.width,'16px'); assert.equal(css.height,'16px');
+      assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-all] img, [data-bb-chat-ui-info-all] image').length,0,'no downloaded asset is bundled');
+      assert.ok(!css.animation || css.animation==='none','the resting glyph has no continuous animation');
+      const reactions=() => records.filter(record=>record.node.matches('[data-bb-chat-ui-info-glyph]'));
+      assert.equal(reactions().length,0,'entry uses the capsule droplet, without an extra glyph reaction');
       for (const record of records) record.animation.onfinish?.(new f.dom.window.Event('finish') as unknown as AnimationPlaybackEvent);
       f.click('[data-bb-chat-ui-info-all]');
-      assert.equal(reactions().length,reduced?0:32,'opening a popover briefly moves every particle');
+      assert.equal(reactions().length,reduced?0:1,'opening a popover briefly moves the glyph');
       f.click('[data-bb-chat-ui-info-all]');
-      assert.equal(reactions().length,reduced?0:64,'closing briefly moves the orb too');
+      assert.equal(reactions().length,reduced?0:2,'closing briefly moves it too');
       if(!reduced) assert.equal(reactions()[0].cancelled,true,'rapid events replace the prior motion instead of stacking it');
       f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent='+18 −4 · 3 files';
       await f.tick();
-      assert.equal(reactions().length,reduced?0:96,'a changed pill gives the orb one activity reaction');
+      assert.equal(reactions().length,reduced?0:3,'a changed pill gives the glyph one activity reaction');
       const count=reactions().length;
       await f.tick(); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
       assert.equal(reactions().length,count,'idle and layout updates do not restart activity');
       if(!reduced) {
-        assert.ok(reactions().every(record=>record.options.duration===520 && !record.options.iterations));
-        assert.equal(reactions().at(-1)!.frames.at(-1)!.transform,'none','the sphere settles back to rest');
-        assert.ok(new Set(reactions().slice(0,32).map(record=>record.frames[3].transform)).size > 1,'the wave displaces points across the surface instead of scaling a flat icon');
+        assert.ok(reactions().every(record=>record.options.duration===380 && !record.options.iterations));
+        assert.deepEqual(reactions()[0].frames.map(frame=>frame.transform),['none','scale(.78) rotate(-10deg)','scale(1.08)','none'],'the glyph dips, overshoots and settles back');
       }
       stop();
-      assert.ok(reactions().every(record=>record.cancelled),'unload cancels remaining orb motion');
+      assert.ok(reactions().every(record=>record.cancelled),'unload cancels remaining glyph motion');
     } finally {stop();f.dom.window.close();}
   }
 });
@@ -1907,7 +1904,7 @@ test("entering another thread replays the sequence even when the composer DOM is
     return {cancel(){}} as Animation;
   };
   const stop=injectComposerInfo(f.document);
-  const sequence = ['all','diff','goal','todos','queue','pullRequest','other'];
+  const sequence = ['diff','goal','todos','queue','pullRequest','other','all'];
   assert.deepEqual(animated,sequence);
   source.setAttribute('data-bb-chat-ui-info-thread','thread-b'); await f.tick();
   assert.deepEqual(animated,[...sequence,...sequence]);
@@ -2283,7 +2280,7 @@ test("every queued addition sends a droplet, including equal-count replacement a
   add('e'); count.textContent='4'; await f.tick();
   assert.equal(flights().length,4);
   const finishOrb = flights()[3].animation.onfinish as (() => void) | null; finishOrb?.();
-  assert.equal(records.filter(record => record.options.duration===150).at(-1)?.node,f.document.querySelector('[data-bb-chat-ui-info-all]'));
+  assert.equal(records.filter(record => record.options.duration===150).at(-1)?.node,f.document.querySelector('[data-bb-chat-ui-info-dock]'),'without a queue pill the right capsule absorbs the droplet');
   settings.setAttribute('data-bb-chat-ui-info-thread','other-thread'); await f.tick();
   assert.equal(flights().length,4,'thread changes reset the baseline');
   assert.ok(flights().filter(record => record.node.isConnected).length===0,'scope changes remove flying droplets');
@@ -2398,4 +2395,112 @@ test("queue rerendering does not turn existing messages into extra droplets", as
   add('f'); add('g'); count.textContent='7'; await f.tick();
   assert.equal(flights,5,'two real messages still receive two droplets');
   stop();f.dom.window.close();
+});
+
+function jumpFixture(settings: Record<string, unknown> = {}) {
+  const f = fixture();
+  f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify(settings));
+  const jump = f.document.createElement('button');
+  jump.setAttribute('aria-label', 'Scroll to latest event'); jump.className = 'invisible';
+  let jumps = 0; jump.addEventListener('click', () => jumps++);
+  f.document.querySelector('.chat-prompt-box')!.append(jump);
+  const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+  let width = 248;
+  stack.getBoundingClientRect = () => ({ width } as DOMRect);
+  Object.defineProperty(f.dom.window.HTMLElement.prototype, 'offsetWidth', { configurable:true, get() { return this.hasAttribute('data-bb-chat-ui-info-trigger') ? 64 : 0; } });
+  const shown = () => [...f.document.querySelectorAll<HTMLElement>('[data-bb-chat-ui-info-trigger]')].filter(button => !button.hidden).length;
+  const folded = () => [...f.document.querySelectorAll<HTMLElement>('[data-bb-chat-ui-info-trigger]')].filter(button => button.hidden).length;
+  return { ...f, jump, stack, jumps:() => jumps, setWidth:(next:number) => { width = next; }, shown, folded };
+}
+
+test("the default right capsule joins the all-information button and an expanding latest-event button", async () => {
+  const f = jumpFixture();
+  const stop = injectComposerInfo(f.document);
+  try {
+    const bar = f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
+    const dock = bar.querySelector<HTMLElement>(':scope > [data-bb-chat-ui-info-dock]')!;
+    assert.ok(dock, 'the capsule sits directly in the information row');
+    assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'), 'dock');
+    const all = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-all]')!;
+    const proxy = f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-jump]')!;
+    assert.equal(all.parentElement, dock); assert.equal(proxy.parentElement, dock);
+    assert.ok(all.compareDocumentPosition(proxy) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'latest-event extends to the right of the all-information button');
+    for (const pill of f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(dock) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'the capsule ends the row');
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-orb]'), null, 'the particle orb is replaced by the approved glyph');
+    assert.ok(all.querySelector('svg[data-bb-chat-ui-info-glyph="dock"]'));
+    assert.equal(proxy.hidden, true, 'an invisible host button keeps the capsule closed');
+    assert.equal(dock.hasAttribute('data-bb-chat-ui-info-jumping'), false);
+    assert.equal(f.shown(), 3, 'without latest-event only the 32px capsule is reserved');
+    const badge = all.querySelector<HTMLElement>('[data-bb-chat-ui-info-badge]')!;
+    assert.equal(badge.textContent, `+${f.folded()}`, 'the badge counts folded pills');
+    assert.equal(badge.hidden, false);
+    assert.equal(f.jump.hasAttribute('data-bb-chat-ui-info-jump-source'), true, 'the host button stays mounted for its own scroll logic');
+    assert.equal(f.dom.window.getComputedStyle(f.jump).visibility, 'hidden');
+    f.jump.classList.remove('invisible'); await f.tick();
+    assert.equal(proxy.hidden, false);
+    assert.ok(dock.hasAttribute('data-bb-chat-ui-info-jumping'));
+    assert.equal(f.shown(), 2, 'the expanded capsule reserves another 32px');
+    assert.equal(badge.textContent, `+${f.folded()}`);
+    proxy.click();
+    assert.equal(f.jumps(), 1, 'the capsule forwards to the host scroll action');
+    f.jump.classList.add('invisible'); await f.tick();
+    assert.equal(proxy.hidden, true); assert.equal(f.shown(), 3);
+    f.setWidth(2000); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+    assert.equal(f.folded(), 0); assert.equal(badge.hidden, true, 'nothing folded leaves only the glyph');
+  } finally { stop(); }
+  assert.equal(f.jump.hasAttribute('data-bb-chat-ui-info-jump-source'), false, 'unload restores the host button');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'), null);
+  f.dom.window.close();
+});
+
+test("the centred choice pins the all-information button right and floats a latest-event chip above the row", async () => {
+  const f = jumpFixture({ infoButtonLayout:'가운데 최신으로' });
+  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  const stop = injectComposerInfo(f.document);
+  try {
+    const bar = f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
+    assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'), 'center');
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'), null);
+    const all = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-all]')!;
+    const proxy = f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-jump]')!;
+    assert.equal(all.parentElement, bar); assert.equal(proxy.parentElement, bar);
+    for (const pill of f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(all) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+    assert.ok(all.querySelector('svg[data-bb-chat-ui-info-glyph="center"]'));
+    assert.match(proxy.textContent ?? '', /최신으로/);
+    assert.ok(proxy.querySelector('svg'), 'the chip keeps an arrow');
+    assert.equal(proxy.hidden, true);
+    assert.equal(f.shown(), 2, 'a folded count widens the button by 8px before fitting');
+    assert.ok(all.hasAttribute('data-bb-chat-ui-info-folded'));
+    assert.equal(all.querySelector('[data-bb-chat-ui-info-count]')!.textContent, `+${f.folded()}`);
+    f.jump.classList.remove('invisible'); await f.tick();
+    assert.equal(proxy.hidden, false);
+    assert.equal(f.shown(), 2, 'the chip above the row never takes pill width');
+    f.click('[data-bb-chat-ui-info-all]');
+    assert.equal(proxy.hidden, true, 'an open popover covers the chip area, so the chip steps aside');
+    f.click('[data-bb-chat-ui-info-all]');
+    assert.equal(proxy.hidden, false);
+    proxy.click(); assert.equal(f.jumps(), 1);
+    f.setWidth(2000); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+    assert.equal(all.hasAttribute('data-bb-chat-ui-info-folded'), false);
+    source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ infoButtonLayout:'오른쪽 캡슐' })); await f.tick();
+    const dock = f.document.querySelector('[data-bb-chat-ui-info-dock]')!;
+    assert.ok(dock, 'a settings change applies to the open composer');
+    assert.equal(all.parentElement, dock); assert.equal(proxy.parentElement, dock);
+    assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'), 'dock');
+    source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ infoButtonLayout:'가운데 최신으로' })); await f.tick();
+    assert.equal(all.parentElement, bar);
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'), null);
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("read-only rows and input requests leave the host latest-event button unmanaged", async () => {
+  const f = jumpFixture();
+  const stop = injectComposerInfo(f.document);
+  try {
+    assert.ok(f.jump.hasAttribute('data-bb-chat-ui-info-jump-source'));
+    f.document.querySelector('.space-y-2')!.insertAdjacentHTML('beforeend', '<section aria-label="Thread history"><div aria-label="Archived thread"></div></section>');
+    await f.tick();
+    assert.equal(f.jump.hasAttribute('data-bb-chat-ui-info-jump-source'), false, 'the full-width state does not hide the host scroll button');
+    assert.equal(f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-dock]')!.hidden, true);
+  } finally { stop(); f.dom.window.close(); }
 });

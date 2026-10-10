@@ -411,6 +411,8 @@ function asElement(target: EventTarget | null): Element | null {
 
 function composerInfoButtonFrom(target: EventTarget | null): Element | null {
   const button = asElement(target)?.closest("button");
+  // The latest-event proxy forwards to the host jump, which owns that haptic.
+  if (button?.closest("[data-bb-chat-ui-info-jump]")) return null;
   return button?.closest("[data-bb-chat-ui-info-bar], [data-bb-chat-ui-info-unit]") ? button : null;
 }
 

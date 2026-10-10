@@ -436,3 +436,32 @@ test("removes the send listeners when the script stops", () => {
   assert.equal(disconnected, true);
   assert.deepEqual([...listeners.values()].flat(), []);
 });
+
+test("the composer latest-event proxy buzzes once through the forwarded host jump", t => {
+  const dom = new JSDOM(`<div data-bb-chat-ui-info-bar><span data-bb-chat-ui-info-dock><button data-bb-chat-ui-info-all>All</button><button data-bb-chat-ui-info-jump><span>최신으로</span></button></span></div>
+    <button aria-label="Scroll to latest event" data-bb-chat-ui-info-jump-source>Jump</button>`);
+  const originalElement = globalThis.Element;
+  const originalButton = globalThis.HTMLButtonElement;
+  globalThis.Element = dom.window.Element;
+  globalThis.HTMLButtonElement = dom.window.HTMLButtonElement;
+  t.after(() => { globalThis.Element = originalElement; globalThis.HTMLButtonElement = originalButton; dom.window.close(); });
+  const messages: unknown[] = [];
+  Object.assign(dom.window, { bb:{ native:{ capabilities:["haptic"], post:(message:unknown) => messages.push(message) } } });
+  const listeners = new Map<string, (event:Event) => void>();
+  const document = {
+    body:null, defaultView:dom.window,
+    addEventListener:(type:string, listener:(event:Event) => void) => listeners.set(type, listener),
+    removeEventListener:(type:string) => listeners.delete(type),
+  } as unknown as Document;
+  const stop = injectSendHaptic(document);
+  t.after(stop);
+  const proxy = dom.window.document.querySelector('[data-bb-chat-ui-info-jump] span')!;
+  const host = dom.window.document.querySelector('[aria-label="Scroll to latest event"]')!;
+  listeners.get('pointerup')!({ target:proxy, isPrimary:true, pointerType:'touch' } as unknown as Event);
+  listeners.get('click')!({ target:proxy, isTrusted:true } as unknown as Event);
+  assert.equal(messages.length, 0, 'the proxy itself does not add an information buzz');
+  listeners.get('click')!({ target:host, isTrusted:false } as unknown as Event);
+  assert.deepEqual(messages, [{ type:'haptic', kind:'impact-light' }], 'the forwarded host click keeps the one jump haptic');
+  listeners.get('click')!({ target:dom.window.document.querySelector('[data-bb-chat-ui-info-all]'), isTrusted:true } as unknown as Event);
+  assert.equal(messages.length, 2, 'the all-information button in the capsule still buzzes');
+});
