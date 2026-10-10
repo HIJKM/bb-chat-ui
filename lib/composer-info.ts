@@ -633,7 +633,8 @@ export function injectComposerInfo(document: Document): () => void {
           bodyFades.set(scroller, pair);
           edgeResize?.observe(scroller);
         }
-        stack.append(pair.above, pair.below);
+        const loose = [pair.above, pair.below].filter(node => node.parentElement !== stack);
+        if (loose.length) stack.append(...loose);
         const edges = scrollOverflowEdges({ scrollTop: scroller.scrollTop, clientHeight: scroller.clientHeight, scrollHeight: scroller.scrollHeight });
         const rect = scroller.getBoundingClientRect();
         const height = Math.min(24, Math.max(0, rect.height) / 4);
@@ -672,6 +673,7 @@ export function injectComposerInfo(document: Document): () => void {
           for (const child of Array.from(root.children)) edgeResize?.observe(child);
           if (scroller && scroller !== root) edgeResize?.observe(scroller);
         }
+        for (const body of bodyFades.keys()) edgeResize?.observe(body);
       }
       scrollHints.forEach(hint => { hint.hidden = true; });
       // Hints are siblings of the card and do not share its entrance opacity or

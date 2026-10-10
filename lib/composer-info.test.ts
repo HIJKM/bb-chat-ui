@@ -1957,6 +1957,101 @@ test("plan review body sits in the card and fades only the scroll directions tha
   } finally { stop(); f.dom.window.close(); }
 });
 
+function manualFrames(view: Window) {
+  const frames: Array<FrameRequestCallback | null> = [];
+  view.requestAnimationFrame = callback => {
+    frames.push(callback);
+    return frames.length;
+  };
+  view.cancelAnimationFrame = handle => { frames[handle - 1] = null; };
+  return {
+    async pump(count: number) {
+      for (let i = 0; i < count; i += 1) {
+        for (let step = 0; step < 8; step += 1) await Promise.resolve();
+        const batch = frames.splice(0).filter((callback): callback is FrameRequestCallback => callback !== null);
+        if (batch.length === 0) break;
+        for (const callback of batch) callback(0);
+      }
+      for (let step = 0; step < 8; step += 1) await Promise.resolve();
+    },
+  };
+}
+
+test("a stationary plan card does not reinsert body fades", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector("[data-promptbox-shell] > .grid")!;
+  const card = f.document.createElement("section");
+  card.setAttribute("data-testid", "plan-review-banner");
+  card.innerHTML = '<div data-testid="plan-review-request"><div class="overflow-auto">Plan body</div></div>';
+  stack.prepend(card);
+  const frames = manualFrames(f.dom.window);
+  let inserted = 0;
+  const watcher = new f.dom.window.MutationObserver(records => {
+    for (const record of records) for (const node of record.addedNodes) {
+      if (node instanceof f.dom.window.Element && node.hasAttribute("data-bb-chat-ui-info-body-fade")) inserted += 1;
+    }
+  });
+  watcher.observe(f.document.body, { childList: true, subtree: true });
+  const stop = injectComposerInfo(f.document);
+  try {
+    await frames.pump(8);
+    const hints = [...f.document.querySelectorAll<HTMLElement>("[data-bb-chat-ui-info-body-fade]")];
+    assert.equal(hints.length, 2);
+    const settled = inserted;
+    await frames.pump(4);
+    assert.equal(inserted, settled, "idle frames do not add body fades again");
+    const moved = hints[0];
+    f.document.body.append(moved);
+    await frames.pump(2);
+    assert.equal(moved.parentElement, stack, "a hint with a different parent is attached again");
+    const reattached = inserted;
+    await frames.pump(4);
+    assert.equal(inserted, reattached, "reattaching once does not resume the idle loop");
+  } finally { watcher.disconnect(); stop(); f.dom.window.close(); }
+});
+
+test("a request card keeps measuring body fades after the popover observer resets", async () => {
+  const f = fixture();
+  class RecordingResizeObserver {
+    static instances: RecordingResizeObserver[] = [];
+    targets = new Set<Element>();
+    callback: () => void;
+    constructor(callback: () => void) {
+      this.callback = callback;
+      RecordingResizeObserver.instances.push(this);
+    }
+    observe(target: Element) { this.targets.add(target); }
+    unobserve(target: Element) { this.targets.delete(target); }
+    disconnect() { this.targets.clear(); }
+  }
+  f.dom.window.ResizeObserver = RecordingResizeObserver as unknown as typeof ResizeObserver;
+  const frames = manualFrames(f.dom.window);
+  const stop = injectComposerInfo(f.document);
+  try {
+    f.click("[data-bb-chat-ui-info-all]");
+    const stack = f.document.querySelector<HTMLElement>("[data-promptbox-shell] > .grid")!;
+    const card = f.document.createElement("section");
+    card.setAttribute("data-testid", "plan-review-banner");
+    card.innerHTML = '<div data-testid="plan-review-request"><div class="overflow-auto">Plan body</div></div>';
+    let height = 288;
+    const scroller = card.querySelector<HTMLElement>(".overflow-auto")!;
+    const rect = (x: number, y: number, width: number, boxHeight: number) => new f.dom.window.DOMRect(x, y, width, boxHeight);
+    stack.getBoundingClientRect = () => rect(0, 40, 400, 800);
+    scroller.getBoundingClientRect = () => rect(24, 180, 320, height);
+    stack.prepend(card);
+    await frames.pump(4);
+    const below = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-body-fade="below"]')!;
+    assert.equal(below.style.top, "404px");
+    assert.equal(below.style.height, "24px");
+    const observed = RecordingResizeObserver.instances.some(observer => observer.targets.has(scroller));
+    assert.equal(observed, true, "the body scroller stays observed after the menu observer disconnects");
+    height = 80;
+    for (const observer of RecordingResizeObserver.instances) if (observer.targets.has(scroller)) observer.callback();
+    assert.equal(below.style.height, "20px");
+    assert.equal(below.style.top, "200px", "a body viewport resize moves the fade");
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("two plugin notices are separately reachable, and unloading keeps a queue edit open", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
