@@ -15,6 +15,8 @@ const SOURCE = `${MARK}-settings`;
 const REQUEST = ['tool-use-ask', 'plugin-request-banner', 'plan-review-request', 'approval-banner', 'user-question-banner', 'plan-review-banner'].map(id => `[data-testid="${id}"]`).join(", ");
 const QUESTION = ['tool-use-ask', 'plugin-request-banner', 'user-question-banner'].map(id => `[data-testid="${id}"]`).join(", ");
 const HOST_JUMP = 'button[aria-label="Scroll to latest event"]';
+// Child avatars are 30px circles overlapping by 8px, so each circle adds 22px.
+const AVATAR_STEP = 22;
 const NATIVE = `section[aria-label], .agentation-staging-shell, [${MARK}-kind]`;
 const WORKFLOW_COLLAPSE = 'button[aria-label^="Collapse "][aria-label$=" workflows"][aria-controls]';
 const ARCHIVED = '[aria-label="Thread archived"], [aria-label="Thread is archived"], [aria-label="Archived thread"]';
@@ -432,6 +434,8 @@ export function injectComposerInfo(document: Document): () => void {
     };
     let signature = "";
     let catalogCount = 0;
+    let avatarCap = 3;
+    let childTotal = 0;
     let childStates = new Map<string, ChildState>();
     let queueSnapshot:{ count:number; seenIds:Set<string>; pendingRows:number; pendingCount:number } | null = null;
     const queueAnimations = new Set<Animation>();
@@ -957,10 +961,10 @@ export function injectComposerInfo(document: Document): () => void {
         let children: ChildSummary[] = [];
         try { children = JSON.parse(stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`) ?? "[]"); } catch { /* Host card remains usable. */ }
         if (!children.length) children = [{ id:"native", title:describe(item).replace(/^.*?:\s*/, ""), state:describe(item).startsWith("Active child") ? "run" : "wait" }];
-        childCount = children.length;
+        childCount = childTotal = children.length;
         const stateOf = (child: ChildSummary): ChildState => child.state ?? (child.running ? "run" : "done");
         const nextStates = new Map(children.map(child => [child.id, stateOf(child)]));
-        for (const [index, child] of children.slice(-3).entries()) {
+        for (const [index, child] of children.slice(-avatarCap).entries()) {
           const avatar = document.createElement("span");
           avatar.setAttribute(`${MARK}-avatar`, "");
           avatar.title = child.providerId ? `${child.title} · ${child.providerId}` : child.title;
@@ -990,8 +994,8 @@ export function injectComposerInfo(document: Document): () => void {
           ], { duration:360 });
           avatars.append(avatar);
         }
-        if (children.length > 3) {
-          text.textContent = `+${children.length - 3}`;
+        if (children.length > avatarCap) {
+          text.textContent = `+${children.length - avatarCap}`;
           text.setAttribute(`${MARK}-avatar-more`, "");
           text.style.zIndex = "4";
           avatars.append(text);
@@ -1266,11 +1270,29 @@ export function injectComposerInfo(document: Document): () => void {
       // The capsule grows by 32px for latest-event; the centred button by 8px per folded digit.
       const room = (extra: number) => width > 0 ? width - extra : Number.POSITIVE_INFINITY;
       const hiddenCount = (shown: Set<string>) => [...buttons.keys()].filter(key => !shown.has(key)).length;
-      let visible = new Set(readOnlyLabel ? ["status"] : fitComposerInfo(widths, room(layout === "dock" && jumpVisible ? 32 : 0)));
-      if (!readOnlyLabel && layout === "center" && hiddenCount(visible)) {
-        visible = new Set(fitComposerInfo(widths, room(8)));
-        if (hiddenCount(visible) > 9) visible = new Set(fitComposerInfo(widths, room(16)));
+      const place = () => {
+        let shown = new Set(readOnlyLabel ? ["status"] : fitComposerInfo(widths, room(layout === "dock" && jumpVisible ? 32 : 0)));
+        if (!readOnlyLabel && layout === "center" && hiddenCount(shown)) {
+          shown = new Set(fitComposerInfo(widths, room(8)));
+          if (hiddenCount(shown) > 9) shown = new Set(fitComposerInfo(widths, room(16)));
+        }
+        return shown;
+      };
+      // Child Thread keeps three avatars when there is room, then two or one before folding.
+      const childEntry = readOnlyLabel ? null : widths.find(item => item.key === "children");
+      const childItem = items.find(item => item.key === "children");
+      if (childEntry && childItem) {
+        const circles = (cap: number) => Math.min(cap, childTotal) + (childTotal > cap ? 1 : 0);
+        const base = childEntry.width;
+        let cap = 3;
+        for (; cap > 1; cap--) {
+          childEntry.width = base + AVATAR_STEP * (circles(cap) - circles(avatarCap));
+          if (place().has("children")) break;
+        }
+        childEntry.width = base + AVATAR_STEP * (circles(cap) - circles(avatarCap));
+        if (cap !== avatarCap) { avatarCap = cap; decorate(buttons.get("children")!, childItem, true); }
       }
+      const visible = place();
       // Write only changes: the document observer would otherwise schedule this fit again.
       const folded = readOnlyLabel ? 0 : hiddenCount(visible);
       const text = (node: HTMLElement, value: string) => { if (node.textContent !== value) node.textContent = value; };

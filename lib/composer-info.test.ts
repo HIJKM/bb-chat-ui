@@ -2504,3 +2504,48 @@ test("read-only rows and input requests leave the host latest-event button unman
     assert.equal(f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-dock]')!.hidden, true);
   } finally { stop(); f.dom.window.close(); }
 });
+
+test("the Child Thread stack shows three, two or one latest avatars by the room left, with an exact overflow count", async () => {
+  const f = jumpFixture();
+  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  const children = Array.from({ length:7 }, (_, index) => ({ id:`child-${index}`, title:`Review ${index}`, state:'run' }));
+  let count = 6;
+  const publish = () => source.setAttribute('data-bb-chat-ui-info-children', JSON.stringify(children.slice(0, count)));
+  publish();
+  // 30px circles overlap by 8px; the children pill has 7px right padding and the Diff pill is 140px.
+  Object.defineProperty(f.dom.window.HTMLElement.prototype, 'offsetWidth', { configurable:true, get() {
+    const key = this.getAttribute('data-bb-chat-ui-info-trigger');
+    if (key === 'children') return 7 + 30 + 22 * (this.querySelectorAll('[data-bb-chat-ui-info-avatar], [data-bb-chat-ui-info-avatar-more]').length - 1);
+    return key === 'diff' ? 140 : key ? 64 : 0;
+  } });
+  const stop = injectComposerInfo(f.document);
+  const pill = () => f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-trigger="children"]')!;
+  const shown = () => [...pill().querySelectorAll('[data-bb-chat-ui-info-avatar]')].map(node => node.getAttribute('data-child'));
+  const more = () => pill().querySelector('[data-bb-chat-ui-info-avatar-more]')?.textContent ?? null;
+  const resize = async (width:number) => { f.setWidth(width); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick(); };
+  try {
+    await resize(400);
+    assert.deepEqual(shown(), ['child-3','child-4','child-5']); assert.equal(more(), '+3');
+    await resize(280);
+    assert.deepEqual(shown(), ['child-4','child-5'], 'a narrower row keeps the two latest avatars');
+    assert.equal(more(), '+4'); assert.equal(pill().hidden, false);
+    await resize(255);
+    assert.deepEqual(shown(), ['child-5']); assert.equal(more(), '+5');
+    assert.equal(f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-trigger="diff"]')!.hidden, false, 'Code Diff stays beside the shortened stack');
+    assert.match(pill().getAttribute('aria-label') ?? '', /6개/, 'the label keeps the full child count');
+    count = 7; publish(); await f.tick();
+    assert.deepEqual(shown(), ['child-6']); assert.equal(more(), '+6', 'new data keeps the current room limit');
+    await resize(291);
+    assert.equal(shown().length, 3, 'exact room returns all three');
+    f.jump.classList.remove('invisible'); await f.tick();
+    assert.deepEqual(shown(), ['child-6'], 'the expanded capsule takes room from the stack first');
+    assert.equal(more(), '+6');
+    f.jump.classList.add('invisible'); await f.tick();
+    assert.equal(shown().length, 3); assert.equal(more(), '+4');
+    count = 2; publish(); await resize(255);
+    assert.deepEqual(shown(), ['child-0','child-1'], 'two faces take the same room as one face and +1');
+    assert.equal(more(), null, 'no overflow circle when every child is shown');
+    await resize(200);
+    assert.equal(pill().hidden, true, 'without room even for one avatar the stack folds into the menu');
+  } finally { stop(); f.dom.window.close(); }
+});
