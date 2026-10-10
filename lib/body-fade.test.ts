@@ -162,7 +162,7 @@ test("body fades follow the visible edge at the top, middle, end, and while movi
   assert.equal(moving.below.show, false);
 });
 
-/** jsdom drops `background:linear-gradient(..., var(--bb-chat-ui-info-face), ...)` from CSSOM, so the applied sheet text is the check that fails if that face comes back. */
+/** jsdom drops a gradient that contains a custom property, so the applied sheet text is the check. */
 function appliedStyleRules(css: string) {
   const rules: { selector: string; body: string }[] = [];
   const text = css.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -184,7 +184,7 @@ function appliedStyleRules(css: string) {
   return rules;
 }
 
-test("a body fade blurs and masks without painting a second card face", () => {
+test("a body fade paints the card's opaque surface across the blur, not a second glass face", () => {
   const dom = new JSDOM("<!doctype html><html><head></head><body></body></html>");
   const style = dom.window.document.createElement("style");
   style.textContent = composerInfoCss;
@@ -195,24 +195,32 @@ test("a body fade blurs and masks without painting a second card face", () => {
   const fadeRules = applied.filter(rule => rule.selector.includes("data-bb-chat-ui-info-body-fade"));
   const omRules = [...sheet.cssRules].filter((rule): rule is CSSStyleRule => rule instanceof dom.window.CSSStyleRule);
   const fadeOm = omRules.filter(rule => rule.selectorText.includes("data-bb-chat-ui-info-body-fade"));
+  const compact = (value: string) => value.replace(/\s+/g, "");
+  const opaque = (weight: "68%" | "76%") =>
+    `color-mix(in oklch,oklch(from var(--bb-chat-ui-glass-base,var(--background)) min(1,calc(l + 0.075)) c h) ${weight},var(--bb-chat-ui-glass-base,var(--background)))`.replace(/\s+/g, "");
   try {
-    assert.ok(fadeRules.length >= 4, fadeRules.map(rule => rule.selector).join("\n"));
     for (const rule of fadeRules) {
-      for (const declaration of rule.body.split(";").map(part => part.trim()).filter(Boolean)) {
-        const name = declaration.slice(0, declaration.indexOf(":")).trim().toLowerCase();
-        assert.equal(name === "background" || name.startsWith("background-"), false, `${rule.selector} ${declaration}`);
-      }
       assert.doesNotMatch(rule.body, /--bb-chat-ui-info-face/, rule.selector);
+      assert.doesNotMatch(rule.body, /\/\s*0\.6[86]/, `${rule.selector} uses the translucent glass face`);
     }
     const base = fadeRules.find(rule => rule.selector === "[data-bb-chat-ui-info-body-fade]");
     assert.ok(base);
+    assert.ok(compact(base.body).includes(`--bb-chat-ui-body-fade-solid:${opaque("68%")}`), base.body);
+    assert.ok(compact(base.body).includes("background:var(--bb-chat-ui-body-fade-solid)"), base.body);
     assert.match(base.body, /backdrop-filter:blur\(5px\)/);
     assert.match(base.body, /-webkit-backdrop-filter:blur\(5px\)/);
-    for (const edge of ["above", "below"]) {
+    const dark = fadeRules.find(rule => rule.selector === ".dark [data-bb-chat-ui-info-body-fade]");
+    assert.ok(dark, "dark theme keeps its own opaque surface");
+    assert.ok(compact(dark.body).includes(`--bb-chat-ui-body-fade-solid:${opaque("76%")}`), dark.body);
+    const mask = {
+      above: "linear-gradient(to bottom,black 0px,black 8px,transparent 24px)",
+      below: "linear-gradient(to top,black 0px,black 8px,transparent 24px)",
+    };
+    for (const edge of ["above", "below"] as const) {
       const rule = fadeRules.find(item => item.selector.includes(`body-fade="${edge}"`));
       assert.ok(rule, edge);
-      assert.match(rule.body, /mask-image:linear-gradient/);
-      assert.match(rule.body, /-webkit-mask-image:linear-gradient/);
+      assert.ok(rule.body.includes(`mask-image:${mask[edge]}`), rule.body);
+      assert.ok(rule.body.includes(`-webkit-mask-image:${mask[edge]}`), rule.body);
     }
     const hint = applied.find(rule => rule.selector.includes('scroll-hint="top"'));
     assert.ok(hint, "the popover scroll hint is a different surface");
@@ -220,12 +228,6 @@ test("a body fade blurs and masks without painting a second card face", () => {
     const baseOm = fadeOm.find(rule => rule.selectorText === "[data-bb-chat-ui-info-body-fade]");
     assert.ok(baseOm);
     assert.match(baseOm.style.getPropertyValue("backdrop-filter"), /blur\(5px\)/);
-    assert.equal(baseOm.style.getPropertyValue("background"), "");
-    for (const edge of ["above", "below"]) {
-      const rule = fadeOm.find(item => item.selectorText.includes(`body-fade="${edge}"`));
-      assert.ok(rule, edge);
-      assert.match(rule.style.getPropertyValue("mask-image"), /linear-gradient/);
-      assert.equal(rule.style.getPropertyValue("background-image"), "");
-    }
+    // jsdom drops background when the custom property's color-mix is not a computed color. The sheet text above is the check.
   } finally { dom.window.close(); }
 });

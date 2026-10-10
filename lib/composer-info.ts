@@ -236,11 +236,12 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-stack] [data-testid="plan-review-request"] { position:relative; background:transparent !important; border:0 !important; border-radius:0 !important; overflow:visible !important; box-shadow:none !important; }
 [${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto { padding-left:0 !important; padding-right:0 !important; }
 [${MARK}-stack] [data-testid="plan-review-request"] > p { border-top:0 !important; padding-left:0 !important; padding-right:0 !important; }
-[${MARK}-body-fade] { position:absolute; pointer-events:none; z-index:4; backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); }
+/* Opaque mix of the lifted surface over the theme base. A second translucent face lightens the edge, and blur(5px) otherwise smears text into that edge. The 8px hold covers the blur kernel; 24px is the fade band. */
+[${MARK}-body-fade] { --bb-chat-ui-body-fade-solid:color-mix(in oklch, oklch(from var(--bb-chat-ui-glass-base, var(--background)) min(1, calc(l + 0.075)) c h) 68%, var(--bb-chat-ui-glass-base, var(--background))); position:absolute; pointer-events:none; z-index:4; background:var(--bb-chat-ui-body-fade-solid); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); }
+.dark [${MARK}-body-fade] { --bb-chat-ui-body-fade-solid:color-mix(in oklch, oklch(from var(--bb-chat-ui-glass-base, var(--background)) min(1, calc(l + 0.075)) c h) 76%, var(--bb-chat-ui-glass-base, var(--background))); }
 [${MARK}-body-fade][hidden] { display:none; }
-/* The card already paints this face. A second gradient on the blur lightens the edge. */
-[${MARK}-body-fade="above"] { mask-image:linear-gradient(to bottom,black,transparent); -webkit-mask-image:linear-gradient(to bottom,black,transparent); }
-[${MARK}-body-fade="below"] { mask-image:linear-gradient(to top,black,transparent); -webkit-mask-image:linear-gradient(to top,black,transparent); }
+[${MARK}-body-fade="above"] { mask-image:linear-gradient(to bottom,black 0px,black 8px,transparent 24px); -webkit-mask-image:linear-gradient(to bottom,black 0px,black 8px,transparent 24px); }
+[${MARK}-body-fade="below"] { mask-image:linear-gradient(to top,black 0px,black 8px,transparent 24px); -webkit-mask-image:linear-gradient(to top,black 0px,black 8px,transparent 24px); }
 [data-promptbox-shell]:has(> [${MARK}-request]) [data-follow-up-composer-anchor] { display:none !important; }
 [data-scroll-footer]:has([${MARK}-request]) button[aria-label="Scroll to latest event"] { display:none !important; }
 [${MARK}-stack] [${MARK}-supplements] { display:contents; }
