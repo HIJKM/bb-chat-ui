@@ -203,6 +203,10 @@ ${DETAIL}[aria-label="Queued messages"] > div:has(> button[aria-label="Collapse 
 ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] { display:none !important; }
 [${MARK}-stack] :is(${QUESTION}) { border-radius:18px !important; overflow:hidden; transform-origin:center bottom; animation:bb-info-enter 260ms cubic-bezier(.22,1,.36,1); }
 [${MARK}-stack] [data-testid="plugin-request-banner"] > [data-testid="plugin-interaction-shell"] { border-radius:18px !important; overflow:hidden; }
+/* Native envelopes are a 6% recessed wash with no blur. Frost the visible card once.
+   The plugin-request wrapper only carries the entrance, so a second blur there would stack. */
+[${MARK}-stack] :is([data-testid="tool-use-ask"], [data-testid="user-question-banner"], [data-testid="approval-banner"], [data-testid="plan-review-banner"]),
+[${MARK}-stack] [data-testid="plugin-request-banner"] > [data-testid="plugin-interaction-shell"] { background:var(--bb-chat-ui-info-face) !important; border-color:transparent !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 12px 32px -14px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; }
 [data-promptbox-shell]:has(> [${MARK}-request]) [data-follow-up-composer-anchor] { display:none !important; }
 [data-scroll-footer]:has([${MARK}-request]) button[aria-label="Scroll to latest event"] { display:none !important; }
 [${MARK}-stack] [${MARK}-supplements] { display:contents; }

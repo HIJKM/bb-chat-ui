@@ -1456,6 +1456,110 @@ test("composer question cards have rounded corners and a gentle entrance without
   }
 });
 
+function glassSource(document: Document): string {
+  return document.getElementById("bb-chat-ui-composer-info")?.textContent ?? "";
+}
+
+function glassRule(document: Document, element: Element): CSSStyleRule | undefined {
+  for (const sheet of [...document.styleSheets]) {
+    for (const rule of [...sheet.cssRules]) {
+      if (!(rule instanceof (document.defaultView as { CSSStyleRule: typeof CSSStyleRule }).CSSStyleRule)) continue;
+      if (!rule.selectorText || !element.matches(rule.selectorText)) continue;
+      if (rule.style.getPropertyValue("backdrop-filter") === "blur(14px) saturate(1.25)") return rule;
+    }
+  }
+  return undefined;
+}
+
+const NATIVE_CARD_CSS = `.bg-surface-recessed { background-color: color-mix(in oklab, black 6%, transparent); } .bg-card { background-color: white; } .border { border: 1px solid #ccc; }`;
+
+test("composer question cards frost once with the theme glass and keep nested answers native", async () => {
+  const surfaces = [
+    ["user-question-banner", "section", "bg-surface-recessed border"],
+    ["tool-use-ask", "div", "bg-card border"],
+    ["approval-banner", "section", "bg-surface-recessed border"],
+    ["plan-review-banner", "section", "bg-surface-recessed border"],
+  ] as const;
+  for (const [id, tag, cls] of surfaces) {
+    const f = fixture();
+    const native = f.document.createElement("style");
+    native.textContent = NATIVE_CARD_CSS;
+    f.document.head.append(native);
+    const stack = f.document.querySelector("[data-promptbox-shell] > .grid")!;
+    const outside = f.document.createElement(tag);
+    outside.setAttribute("data-testid", id);
+    outside.className = cls;
+    f.document.body.append(outside);
+    const card = f.document.createElement(tag);
+    card.setAttribute("data-testid", id);
+    card.className = cls;
+    card.innerHTML = '<p>Which option?</p><button type="button">Option A</button><textarea>Custom answer</textarea><button type="submit">Submit</button>';
+    if (id === "plan-review-banner") card.insertAdjacentHTML("beforeend", '<div data-testid="plan-review-request" class="bg-card">Plan body</div>');
+    stack.prepend(card);
+    const stop = injectComposerInfo(f.document);
+    try {
+      await f.tick();
+      const css = f.dom.window.getComputedStyle(card);
+      const glass = glassRule(f.document, card);
+      assert.ok(glass, id);
+      assert.equal(css.backdropFilter, "blur(14px) saturate(1.25)", id);
+      assert.equal(glass.style.getPropertyValue("background"), "var(--bb-chat-ui-info-face)", id);
+      assert.equal(glass.style.getPropertyPriority("background"), "important", id);
+      assert.match(glassSource(f.document), /-webkit-backdrop-filter:blur\(14px\) saturate\(1\.25\)/);
+      assert.equal(css.borderTopColor, "rgba(0, 0, 0, 0)", `${id} uses the glass edge instead of a solid border`);
+      assert.ok(css.boxShadow.includes("inset"), id);
+      assert.equal(f.dom.window.getComputedStyle(outside).backdropFilter, "none", `${id} outside the composer stays native`);
+      const nestedPlan = card.querySelector('[data-testid="plan-review-request"]');
+      if (nestedPlan) {
+        assert.equal(f.dom.window.getComputedStyle(nestedPlan).backdropFilter, "none", "the plan body keeps its own fill");
+        assert.equal(glassRule(f.document, nestedPlan), undefined);
+      }
+      f.document.documentElement.classList.add("dark");
+      assert.match(f.dom.window.getComputedStyle(stack).getPropertyValue("--bb-chat-ui-info-face"), /\/\s*0\.76\)/, `${id} dark glass`);
+      f.document.documentElement.classList.remove("dark");
+      assert.match(f.dom.window.getComputedStyle(stack).getPropertyValue("--bb-chat-ui-info-face"), /\/\s*0\.68\)/, `${id} light glass`);
+    } finally { stop(); f.dom.window.close(); }
+  }
+
+  const f = fixture();
+  const native = f.document.createElement("style");
+  native.textContent = NATIVE_CARD_CSS;
+  f.document.head.append(native);
+  const stack = f.document.querySelector("[data-promptbox-shell] > .grid")!;
+  const banner = f.document.createElement("div");
+  banner.setAttribute("data-testid", "plugin-request-banner");
+  banner.innerHTML = '<section data-testid="plugin-interaction-shell" class="bg-surface-recessed border"><form><label>API_TOKEN<input type="password" value="dummy"></label><button type="button">Cancel</button><button type="submit">Add</button></form></section>';
+  stack.prepend(banner);
+  const shell = banner.querySelector("section")!;
+  const button = shell.querySelector("button")!;
+  let clicks = 0;
+  button.addEventListener("click", () => clicks++);
+  const stop = injectComposerInfo(f.document);
+  try {
+    await f.tick();
+    const wrap = f.dom.window.getComputedStyle(banner);
+    const face = f.dom.window.getComputedStyle(shell);
+    assert.equal(wrap.backdropFilter, "none", "the request wrapper must not add a second blur");
+    assert.equal(glassRule(f.document, banner), undefined);
+    assert.equal(wrap.backgroundColor, "rgba(0, 0, 0, 0)");
+    const shellRule = glassRule(f.document, shell);
+    assert.ok(shellRule);
+    assert.equal(face.backdropFilter, "blur(14px) saturate(1.25)");
+    assert.equal(shellRule.style.getPropertyValue("background"), "var(--bb-chat-ui-info-face)");
+    assert.match(glassSource(f.document), /plugin-interaction-shell"\] \{[^}]*-webkit-backdrop-filter:blur\(14px\) saturate\(1\.25\)/);
+    assert.notEqual(face.backgroundColor, "rgba(0, 0, 0, 0.06)");
+    assert.ok(wrap.animation.includes("bb-info-enter 260ms"), "the entrance stays on the wrapper");
+    assert.equal(face.animationName, "none", "the nested shell does not replay the entrance");
+    assert.equal(face.borderRadius, "18px");
+    assert.equal(face.overflow, "hidden");
+    button.click();
+    assert.equal(clicks, 1);
+    assert.equal(shell.querySelector("input")!.value, "dummy");
+    stop();
+    assert.equal(f.dom.window.getComputedStyle(shell).backdropFilter, "none", "unloading restores the native shell");
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("two plugin notices are separately reachable, and unloading keeps a queue edit open", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
