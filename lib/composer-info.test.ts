@@ -2587,3 +2587,27 @@ test("pressing a pill gives it one tiny additive upward bounce without moving it
     } finally { stop(); f.dom.window.close(); }
   }
 });
+
+test("latest-event appears and leaves with a longer eased transition in both layouts", () => {
+  const rule = (selector:string) => composerInfoCss.split('\n').find(line => line.startsWith(`${selector} {`)) ?? '';
+  const timing = (css:string, property:string) => {
+    const match = css.match(new RegExp(`${property} (\\d+)ms(?: (?:[a-z-]+\\([^)]*\\)|[a-z-]+))?(?: (\\d+)ms)?`));
+    return { duration:Number(match?.[1] ?? 0), delay:Number(match?.[2] ?? 0) };
+  };
+  const end = (css:string) => Math.max(...['width','opacity','translate','scale'].map(property => { const t = timing(css, property); return t.duration + t.delay; }));
+  const dock = '[data-bb-chat-ui-info-dock] > [data-bb-chat-ui-info-jump]';
+  const center = '[data-bb-chat-ui-info-bar][data-bb-chat-ui-info-layout="center"] > [data-bb-chat-ui-info-jump]';
+  assert.ok(timing(rule(dock), 'width').duration >= 400, 'the capsule opens slowly enough to read');
+  assert.ok(timing(rule(`${dock}[hidden]`), 'width').duration >= 320, 'and closes without snapping');
+  assert.ok(timing(rule(`${dock}[hidden]`), 'width').delay > 0, 'the arrow fades before the capsule narrows');
+  assert.ok(timing(rule('[data-bb-chat-ui-info-dock-sep]'), 'width').duration >= 400, 'the divider follows the capsule');
+  assert.match(rule(`${dock}[hidden] svg`), /scale:\.6/, 'the arrow shrinks inside the closing capsule');
+  for (const property of ['translate','scale']) assert.ok(timing(rule(center), property).duration >= 400, `the chip ${property} eases in`);
+  assert.match(rule(`${center}[hidden]`), /scale:\.92/, 'the chip grows from slightly smaller');
+  for (const selector of [dock, center]) {
+    const hidden = rule(`${selector}[hidden]`);
+    const visibility = Number(hidden.match(/visibility 0s (\d+)ms/)?.[1] ?? 0);
+    assert.ok(visibility >= end(hidden), `${selector}: it stays visible until the exit finishes`);
+    assert.doesNotMatch(rule(selector) + hidden, /cubic-bezier\(\.2,\.9,\.22,1\.25\)/, 'no springy overshoot on appear or leave');
+  }
+});
