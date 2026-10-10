@@ -1,8 +1,8 @@
 import { createElement, Fragment, useEffect, useMemo, useState } from "react";
 import { experimental_Icon, experimental_ProviderIcon, experimental_useProviders, UrlLink, useBbNavigate, useComposer, useSdk, useSettings } from "@get-bb/plugin-sdk/app";
 import { infoKinds } from "./composer-info-settings.ts";
-import { childState } from "./composer-child.ts";
-import { loadParent, parentEventMatters, type ParentSummary } from "./composer-parent.ts";
+import { childEventRefreshes, childListArgs, childState, visibleChildren } from "./composer-child.ts";
+import { loadParent, type ParentSummary } from "./composer-parent.ts";
 import { createThreadRestorer, type RestoreState } from "./composer-restore.ts";
 
 type Sdk = ReturnType<typeof useSdk>;
@@ -58,13 +58,14 @@ export function ComposerInfoBridge() {
         const childrenPromise = (async () => {
           const children: Children = [];
           for (let offset = 0; !signal.aborted; offset += 100) {
-            const page = await sdk.threads.list({ parentThreadId:threadId, limit:100, offset, signal });
+            const page = await sdk.threads.list(childListArgs(threadId, offset, signal));
             children.push(...page);
             if (page.length < 100) break;
           }
           return children;
         })();
-        const [timeline, children, context] = await Promise.all([timelinePromise, childrenPromise, readOnlyPromise]);
+        const [timeline, listed, context] = await Promise.all([timelinePromise, childrenPromise, readOnlyPromise]);
+        const children = visibleChildren(listed);
         const parent = await loadParent(
           (parentThreadId, parentSignal) => sdk.threads.get({ threadId:parentThreadId, signal:parentSignal }),
           threadId,
@@ -90,12 +91,7 @@ export function ComposerInfoBridge() {
     };
     // Include child changes, and coalesce rapid stream updates into one request.
     const stop = sdk.subscribe({ event:"thread:changed", callback:event => {
-      if (event.changes.some(change => change === "thread-created" || change === "parent-changed")) { schedule(); return; }
-      if (parentId && event.id === parentId) { if (parentEventMatters(event.changes)) schedule(); return; }
-      if (event.id !== threadId && (!event.id || !childIds.has(event.id))) return;
-      if (event.changes.some(change => change !== "events-appended" && change !== "read-state-changed" && change !== "tabs-changed" && change !== "terminals-changed")) { schedule(); return; }
-      const types = event.metadata?.eventTypes;
-      if (event.changes.includes("events-appended") && (!types || types.some(type => ["thread/goal/updated", "thread/goal/cleared", "turn/plan/updated", "thread/extensionState/updated", "turn/completed"].includes(type)))) schedule();
+      if (childEventRefreshes(event, { threadId, parentId, childIds })) schedule();
     } });
     const stopConnection = sdk.subscribe({ event:"realtime:connection", callback:event => {
       if (event.state === "connected" && event.reconnected) schedule();
