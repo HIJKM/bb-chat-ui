@@ -360,7 +360,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (next === "dock") { if (!badge.isConnected) orb.append(badge); foldedCount.remove(); dock.append(orb, dockSep, jump); pills.after(dock); }
       else { dock.remove(); badge.remove(); orb.append(foldedCount); pills.after(orb, jump); }
     };
-    applyLayout("dock");
+    applyLayout("center");
     // The host keeps its own scroll logic; the visible control forwards to it.
     let jumpSource: HTMLButtonElement | null = null;
     let jumpVisible = false;

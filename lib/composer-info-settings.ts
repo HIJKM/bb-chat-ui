@@ -18,11 +18,11 @@ export const infoKinds = [
 
 export type InfoKind = typeof infoKinds[number]["key"];
 export const infoSettingsNotice = "각 정보의 표시 방식을 선택하세요. 상단 표시는 공간이 부족하면 자동으로 전체 정보 버튼 안에 접힙니다. 목록에만 표시는 현재 정보가 없어도 목록에 남습니다. 끄기는 상단과 목록에서 모두 숨깁니다. 정보가 없어도 상단 아이콘 표시를 켜면 상단 표시로 선택한 계열은 빈 상태에서도 아이콘이 남습니다. 입력 요청 중에는 요청만 표시합니다.";
-const layoutChoices = ["오른쪽 캡슐", "가운데 최신으로"] as const;
+const layoutChoices = ["가운데 최신으로", "오른쪽 캡슐"] as const;
 export const composerInfoSettings = Object.fromEntries([["infoButtonLayout", {
   type:"select" as const,
   label:"전체 정보 버튼 배치",
-  description:"오른쪽 캡슐: 전체 정보 버튼과 맨 아래로 버튼을 오른쪽 캡슐 하나에 둡니다. 가운데 최신으로: 전체 정보 버튼은 오른쪽 끝에 두고, 맨 아래로 버튼은 정보 줄 위 가운데 칩으로 띄웁니다.",
+  description:"가운데 최신으로: 전체 정보 버튼은 오른쪽 끝에 두고, 맨 아래로 버튼은 정보 줄 위 가운데 칩으로 띄웁니다. 오른쪽 캡슐: 전체 정보 버튼과 맨 아래로 버튼을 오른쪽 캡슐 하나에 둡니다.",
   options:[...layoutChoices],
   default:layoutChoices[0],
 }], ...infoKinds.map(kind => [kind.setting, {
@@ -49,5 +49,5 @@ export function listedInfo(values: Record<string, unknown> = {}): InfoKind[] {
 }
 
 export function infoLayout(values: Record<string, unknown> = {}): "dock" | "center" {
-  return values.infoButtonLayout === layoutChoices[1] ? "center" : "dock";
+  return values.infoButtonLayout === layoutChoices[1] ? "dock" : "center";
 }

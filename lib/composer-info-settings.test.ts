@@ -24,16 +24,16 @@ test('visibility supports top, catalog-only and off while retaining legacy check
   assert.equal(composerInfoSettings.showEmptyIcons.default, false);
 });
 
-test('the all-information layout defaults to the right capsule and accepts only the two approved choices', () => {
+test('the all-information layout defaults to the centred chip and accepts only the two approved choices', () => {
   const descriptor = composerInfoSettings.infoButtonLayout;
   assert.equal(descriptor.type, 'select');
   assert.equal(descriptor.label, '전체 정보 버튼 배치');
-  assert.deepEqual(descriptor.options, ['오른쪽 캡슐','가운데 최신으로']);
-  assert.equal(descriptor.default, '오른쪽 캡슐');
+  assert.deepEqual(descriptor.options, ['가운데 최신으로','오른쪽 캡슐']);
+  assert.equal(descriptor.default, '가운데 최신으로');
   assert.match(descriptor.description ?? '', /맨 아래로/);
   assert.equal(Object.keys(composerInfoSettings)[0], 'infoButtonLayout', 'the layout choice is listed before the per-family visibility');
-  assert.equal(infoLayout(), 'dock');
+  assert.equal(infoLayout(), 'center');
   assert.equal(infoLayout({ infoButtonLayout:'오른쪽 캡슐' }), 'dock');
   assert.equal(infoLayout({ infoButtonLayout:'가운데 최신으로' }), 'center');
-  for (const value of ['꼬리', 'center', true, 3, null]) assert.equal(infoLayout({ infoButtonLayout:value }), 'dock', String(value));
+  for (const value of ['꼬리', 'dock', true, 3, null]) assert.equal(infoLayout({ infoButtonLayout:value }), 'center', String(value));
 });

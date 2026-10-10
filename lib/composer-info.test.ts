@@ -481,8 +481,8 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   const stop = injectComposerInfo(f.document);
   const pills = () => entries.filter(entry => entry.key !== 'orb' && entry.options.duration === 460);
   const bar=f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
-  const dock=bar.querySelector('[data-bb-chat-ui-info-dock]')!;
-  for (const pill of bar.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(dock) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING,'the all-information capsule closes the row on the right');
+  const all=bar.querySelector('[data-bb-chat-ui-info-all]')!;
+  for (const pill of bar.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(all) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING,'the all-information button closes the row on the right');
   assert.equal(f.dom.window.getComputedStyle(f.document.querySelector('[data-bb-chat-ui-info-all]')!).position,'relative','the all-information button anchors its own count badge');
   const visible = ['diff', 'goal', 'todos', 'queue', 'pullRequest', 'other'];
   assert.deepEqual(pills().map(entry => entry.key), visible);
@@ -510,7 +510,7 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   await f.tick();
   f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
   assert.deepEqual(pills().map(entry => entry.key), visible, 'refresh, re-enable and resize do not replay entry motion');
-  assert.equal(entries.filter(entry => entry.key === 'orb' && entry.options.duration === 460).length,1,'the all-information capsule enters once after the pills');
+  assert.equal(entries.filter(entry => entry.key === 'orb' && entry.options.duration === 460).length,1,'the all-information button enters once after the pills');
   assert.equal(entries.find(entry => entry.key === 'orb' && entry.options.duration === 460)?.options.delay,405);
   stop();
   assert.ok(pills().every(entry => entry.cancelled), 'in-progress entry animations are cancelled on unload');
@@ -2280,7 +2280,7 @@ test("every queued addition sends a droplet, including equal-count replacement a
   add('e'); count.textContent='4'; await f.tick();
   assert.equal(flights().length,4);
   const finishOrb = flights()[3].animation.onfinish as (() => void) | null; finishOrb?.();
-  assert.equal(records.filter(record => record.options.duration===150).at(-1)?.node,f.document.querySelector('[data-bb-chat-ui-info-dock]'),'without a queue pill the right capsule absorbs the droplet');
+  assert.equal(records.filter(record => record.options.duration===150).at(-1)?.node,f.document.querySelector('[data-bb-chat-ui-info-all]'),'without a queue pill the all-information button absorbs the droplet');
   settings.setAttribute('data-bb-chat-ui-info-thread','other-thread'); await f.tick();
   assert.equal(flights().length,4,'thread changes reset the baseline');
   assert.ok(flights().filter(record => record.node.isConnected).length===0,'scope changes remove flying droplets');
@@ -2413,8 +2413,8 @@ function jumpFixture(settings: Record<string, unknown> = {}) {
   return { ...f, jump, stack, jumps:() => jumps, setWidth:(next:number) => { width = next; }, shown, folded };
 }
 
-test("the default right capsule joins the all-information button and an expanding latest-event button", async () => {
-  const f = jumpFixture();
+test("the right capsule choice joins the all-information button and an expanding latest-event button", async () => {
+  const f = jumpFixture({ infoButtonLayout:'오른쪽 캡슐' });
   const stop = injectComposerInfo(f.document);
   try {
     const bar = f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
@@ -2453,8 +2453,8 @@ test("the default right capsule joins the all-information button and an expandin
   f.dom.window.close();
 });
 
-test("the centred choice pins the all-information button right and floats a latest-event chip above the row", async () => {
-  const f = jumpFixture({ infoButtonLayout:'가운데 최신으로' });
+test("the default centred choice pins the all-information button right and floats a latest-event chip above the row", async () => {
+  const f = jumpFixture();
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
   const stop = injectComposerInfo(f.document);
   try {
@@ -2494,7 +2494,7 @@ test("the centred choice pins the all-information button right and floats a late
 });
 
 test("read-only rows and input requests leave the host latest-event button unmanaged", async () => {
-  const f = jumpFixture();
+  const f = jumpFixture({ infoButtonLayout:'오른쪽 캡슐' });
   const stop = injectComposerInfo(f.document);
   try {
     assert.ok(f.jump.hasAttribute('data-bb-chat-ui-info-jump-source'));
@@ -2506,7 +2506,7 @@ test("read-only rows and input requests leave the host latest-event button unman
 });
 
 test("the Child Thread stack shows three, two or one latest avatars by the room left, with an exact overflow count", async () => {
-  const f = jumpFixture();
+  const f = jumpFixture({ infoButtonLayout:'오른쪽 캡슐' });
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
   const children = Array.from({ length:7 }, (_, index) => ({ id:`child-${index}`, title:`Review ${index}`, state:'run' }));
   let count = 6;
