@@ -1046,11 +1046,10 @@ export function injectComposerInfo(document: Document): () => void {
       const removed = document.createElement("span"); removed.className = "text-diff-removed"; removed.textContent = `−${snapshot?.deletions ?? 0}`;
       basis.append("HEAD · ", added, " ", removed, ` · ${detail.files.length} files`);
       overview.append(basis);
-      if (detail.files.length || detail.commitKind || detail.commits.length) container.append(document.createElement("hr"));
+      container.append(document.createElement("hr"));
       const files = document.createElement("div"); files.setAttribute(`${MARK}-diff-files`, "");
-      if (detail.files.length) {
-        const heading = document.createElement("h4"); heading.textContent = `변경 파일 · ${detail.files.length}`; files.append(heading);
-      }
+      const filesHeading = document.createElement("h4"); filesHeading.textContent = `변경 파일 · ${detail.files.length}`; files.append(filesHeading);
+      if (!detail.files.length) { const empty = document.createElement("p"); empty.textContent = "-"; files.append(empty); }
       for (const file of detail.files) {
         const row = document.createElement("div"); row.setAttribute(`${MARK}-diff-file`, "");
         const path = document.createElement("code"); path.textContent = file.path; path.title = file.path;
@@ -1066,9 +1065,9 @@ export function injectComposerInfo(document: Document): () => void {
       }
       container.append(files);
       foldRows(files, "files");
+      container.append(document.createElement("hr"));
+      const heading = document.createElement("h4"); heading.textContent = "커밋"; container.append(heading);
       if (detail.commitKind || detail.commits.length) {
-        if (detail.files.length) container.append(document.createElement("hr"));
-        const heading = document.createElement("h4"); heading.textContent = "커밋"; container.append(heading);
         const label = document.createElement("p");
         label.setAttribute(`${MARK}-diff-meta`, "commits");
         label.title = detail.commitKind
@@ -1090,19 +1089,20 @@ export function injectComposerInfo(document: Document): () => void {
           label.setAttribute("aria-label",label.title);
         }
         overview.append(label);
-        const commits = document.createElement("div"); commits.setAttribute(`${MARK}-diff-commits`, "");
-        for (const commit of [...detail.commits].sort((a,b) => (b.authoredAt ?? 0) - (a.authoredAt ?? 0))) {
-          const row = document.createElement("div"); row.setAttribute(`${MARK}-diff-commit`, "");
-          const graph = document.createElement("span"); graph.setAttribute(`${MARK}-diff-graph`, ""); graph.setAttribute("aria-hidden", "true");
-          const dot = document.createElementNS("http://www.w3.org/2000/svg", "svg"); dot.setAttribute("viewBox", "0 0 24 24");
-          const circle = document.createElementNS(dot.namespaceURI, "circle");
-          circle.setAttribute("cx", "12"); circle.setAttribute("cy", "12"); circle.setAttribute("r", "7"); dot.append(circle); graph.append(dot);
-          const text = document.createElement("code"); text.textContent = `${commit.shortSha} · ${commit.subject}`; text.title = `${commit.sha} · ${commit.subject}`;
-          row.append(graph, text); commits.append(row);
-        }
-        container.append(commits);
-        foldRows(commits, "commits");
       }
+      const commits = document.createElement("div"); commits.setAttribute(`${MARK}-diff-commits`, "");
+      if (!detail.commits.length) { const empty = document.createElement("p"); empty.textContent = "-"; commits.append(empty); }
+      for (const commit of [...detail.commits].sort((a,b) => (b.authoredAt ?? 0) - (a.authoredAt ?? 0))) {
+        const row = document.createElement("div"); row.setAttribute(`${MARK}-diff-commit`, "");
+        const graph = document.createElement("span"); graph.setAttribute(`${MARK}-diff-graph`, ""); graph.setAttribute("aria-hidden", "true");
+        const dot = document.createElementNS("http://www.w3.org/2000/svg", "svg"); dot.setAttribute("viewBox", "0 0 24 24");
+        const circle = document.createElementNS(dot.namespaceURI, "circle");
+        circle.setAttribute("cx", "12"); circle.setAttribute("cy", "12"); circle.setAttribute("r", "7"); dot.append(circle); graph.append(dot);
+        const text = document.createElement("code"); text.textContent = `${commit.shortSha} · ${commit.subject}`; text.title = `${commit.sha} · ${commit.subject}`;
+        row.append(graph, text); commits.append(row);
+      }
+      container.append(commits);
+      foldRows(commits, "commits");
       if (detail.commitKind === "pr" && detail.unpushedCount != null) {
         const push = document.createElement("p");
         push.textContent = `미푸시 · ${detail.unpushedCount} commits · ${detail.unpushedRef ?? "기준 없음"} 대비`;
