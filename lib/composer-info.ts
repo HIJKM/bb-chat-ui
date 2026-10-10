@@ -213,6 +213,7 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [data-promptbox-shell]:has([data-testid="plugin-interaction-shell"]:not([data-expanded])) > .grid,
 [${MARK}-stack] [data-testid="plugin-interaction-shell"]:not([data-expanded]) { margin-bottom:0 !important; }
 [${MARK}-stack] [data-testid="plugin-interaction-shell"]:not([data-expanded]) > :first-child span { align-items:center; }
+[${MARK}-stack] [data-testid="plugin-interaction-shell"] form > .sticky { background:transparent !important; border-top:0 !important; box-shadow:none !important; }
 [data-promptbox-shell]:has(> [${MARK}-request]) [data-follow-up-composer-anchor] { display:none !important; }
 [data-scroll-footer]:has([${MARK}-request]) button[aria-label="Scroll to latest event"] { display:none !important; }
 [${MARK}-stack] [${MARK}-supplements] { display:contents; }

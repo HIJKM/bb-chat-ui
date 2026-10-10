@@ -1590,6 +1590,36 @@ test("a collapsed secret card sits on the composer edge and keeps its label cent
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("secret action row drops its solid fill and divider without a second blur", async () => {
+  const f = fixture();
+  const native = f.document.createElement("style");
+  native.textContent = ".bg-surface-recessed-solid { background-color: rgb(210, 210, 214); } .border-t { border-top: 1px solid rgba(0, 0, 0, 0.7); }";
+  f.document.head.append(native);
+  const stack = f.document.querySelector("[data-promptbox-shell] > .grid")!;
+  const banner = f.document.createElement("div");
+  banner.setAttribute("data-testid", "plugin-request-banner");
+  banner.innerHTML = '<section data-testid="plugin-interaction-shell" data-expanded=""><form class="@container/secrets"><label>API_TOKEN<input type="password" value="dummy"></label><div class="sticky border-t bg-surface-recessed-solid"><button type="button">Cancel</button><button type="submit">Add secrets</button></div></form></section>';
+  stack.prepend(banner);
+  const shell = banner.querySelector("section")!;
+  const row = shell.querySelector(".sticky")!;
+  const submit = shell.querySelector('button[type="submit"]')!;
+  let submits = 0;
+  shell.querySelector("form")!.addEventListener("submit", event => { event.preventDefault(); submits++; });
+  const stop = injectComposerInfo(f.document);
+  try {
+    await f.tick();
+    const css = f.dom.window.getComputedStyle(row);
+    const face = f.dom.window.getComputedStyle(shell);
+    assert.equal(css.backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.equal(css.borderTopWidth, "0px");
+    assert.equal(css.backdropFilter, "none", "the action row must not add a second blur");
+    assert.equal(face.backdropFilter, "blur(14px) saturate(1.25)", "the shell keeps the one glass layer");
+    assert.equal(shell.querySelector("input")!.value, "dummy");
+    submit.click();
+    assert.equal(submits, 1);
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("two plugin notices are separately reachable, and unloading keeps a queue edit open", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
