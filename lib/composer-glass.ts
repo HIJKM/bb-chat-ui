@@ -227,6 +227,9 @@ ${FOOTER} [data-promptbox]:has([class~="@container/mention-menu"])::before {
     0 12px 32px -14px ${DARK_SHADOW},
     inset 0 1px 3px ${DARK_EDGE};
 }
+[class~="@container/mention-menu"] > .overflow-y-auto {
+  overscroll-behavior: contain;
+}
 ${darkScope(`${FOOTER} [data-promptbox-shell] .agentation-staging-shell--expanded`)} {
   box-shadow:
     0 12px 32px -14px ${DARK_SHADOW},

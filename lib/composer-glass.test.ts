@@ -585,6 +585,7 @@ test("lifts only an open mention composer face onto its before layer", () => {
       `.dark ${liftSelector}::before`,
       '[class~="@container/mention-menu"] .sticky.bg-background',
       '.dark [class~="@container/mention-menu"]',
+      '[class~="@container/mention-menu"] > .overflow-y-auto',
     ],
   );
   const closed = blocks.find((block) => block.selector.startsWith("[data-scroll-footer]:has(.chat-prompt-box) [data-promptbox],"));
@@ -592,4 +593,18 @@ test("lifts only an open mention composer face onto its before layer", () => {
   assert.ok(closed.body.includes(`background: ${LIGHT_GLASS_FACE} !important;`));
   assert.match(closed.body, /backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/);
   assert.equal(blocks.some((block) => /typeahead-menu|plugin-interaction|ResponsiveDrawer/.test(block.selector)), false);
+});
+
+test("contains overscroll only on the mention candidate scroller", () => {
+  const blocks = [...composerGlassCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
+    selector: selector.trim().replace(/\s+/g, " "),
+    body,
+  }));
+  const contained = blocks.filter((block) => /overscroll-behavior\s*:/.test(block.body));
+  assert.deepEqual(
+    contained.map((block) => block.selector),
+    ['[class~="@container/mention-menu"] > .overflow-y-auto'],
+  );
+  assert.match(contained[0]?.body ?? "", /overscroll-behavior:\s*contain;/);
+  assert.equal(/addEventListener|onWheel|new MutationObserver|new IntersectionObserver/.test(composerGlassCss), false);
 });
