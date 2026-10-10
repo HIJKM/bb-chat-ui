@@ -234,6 +234,205 @@ test("native card layout padding does not add another indent inside managed popo
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("open info popovers keep one glass face and drop the native body slab, activity wash, and title-button blur", () => {
+  const f = fixture();
+  const utilities = f.document.createElement("style");
+  utilities.textContent = [
+    ".border-t { border-top-width:1px; border-top-style:solid; }",
+    ".border-border { border-top-color:rgb(228, 228, 231); }",
+    ".bg-popover { background-color:rgb(255, 255, 255); }",
+    ".bg-background { background-color:rgb(200, 200, 200); }",
+    ".bg-background\\/70 { background-color:rgba(250, 250, 250, 0.7); }",
+    ".bg-destructive\\/5 { background-color:rgba(200, 0, 0, 0.05); }",
+    ".bg-success\\/10 { background-color:rgba(0, 128, 0, 0.1); }",
+    ".bg-foreground { background-color:rgb(10, 10, 10); }",
+    ".text-destructive-text { color:rgb(180, 40, 40); }",
+    ".px-3 { padding-left:12px; padding-right:12px; }",
+    ".shadow-xs, .ring-1 { box-shadow:0 0 0 1px rgb(0, 0, 255); }",
+    ".shadow-none, .ring-0 { box-shadow:none; }",
+    "hr { border:0; border-top:1px solid rgb(1, 2, 3); }",
+  ].join(" ");
+  f.document.head.append(utilities);
+  const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
+  const goalBody = f.document.querySelector<HTMLElement>('#goal')!;
+  goalBody.className = "overflow-hidden bg-popover";
+  f.document.body.insertAdjacentHTML("beforeend", '<div id="timeline-decoy" class="bg-popover">timeline</div>');
+  const activeRow = "rounded-md bg-background/70 px-2 py-1 shadow-none ring-0 flex min-w-0 items-center gap-2 text-xs";
+  const failedRow = "rounded-md bg-destructive/5 px-2 py-1 ring-1 ring-destructive/20 flex min-w-0 items-center gap-2 text-xs";
+  const headerWash = "bg-background/70 shadow-xs ring-1 ring-border/60 flex min-h-8 w-full min-w-0 items-center gap-1.5 rounded-none px-3 py-1.5 text-xs text-foreground";
+  const region = (id: string, labelledBy: string, inner: string) =>
+    `<section id="${id}" role="region" aria-labelledby="${labelledBy}" hidden class="grid overflow-hidden border-t border-border"><div class="overflow-hidden bg-popover">${inner}</div></section>`;
+  const wire = (card: HTMLElement, button: string, bodyId: string) => {
+    const toggle = card.querySelector<HTMLButtonElement>(button)!;
+    const body = card.querySelector<HTMLElement>(`#${bodyId}`)!;
+    toggle.addEventListener("click", () => {
+      const expanded = toggle.getAttribute("aria-expanded") !== "true";
+      toggle.setAttribute("aria-expanded", String(expanded));
+      body.hidden = !expanded;
+    });
+    return { toggle, body };
+  };
+  const todos = stack.querySelector<HTMLElement>('section[aria-label="To-do list"]')!;
+  todos.innerHTML = `<div class="flex items-center"><button type="button" id="thread-todo-card-toggle" aria-expanded="false" aria-controls="thread-todo-card-body" aria-label="To-do list: 0 of 2 items complete" class="${headerWash} cursor-pointer transition-colors hover:bg-background/80 group/disclosure"><span>0/2 complete</span></button></div>${region("thread-todo-card-body", "thread-todo-card-toggle", `<ul class="px-2.5"><li class="${activeRow}"><span class="text-foreground">Ship the card</span></li><li class="${failedRow}"><span class="text-destructive-text">Retry the check</span></li></ul>`)}`;
+  const todoToggle = wire(todos, "#thread-todo-card-toggle", "thread-todo-card-body");
+  const cards: Array<{ key: string; html: string; toggle: string; body: string }> = [
+    {
+      key: "background",
+      toggle: "#thread-background-commands-card-toggle",
+      body: "thread-background-commands-card-body",
+      html: `<section aria-label="Background agents"><div class="flex items-center"><div class="${headerWash} cursor-default" aria-label="npm test"><span>npm test</span></div><button type="button" id="thread-background-commands-card-toggle" aria-expanded="false" aria-controls="thread-background-commands-card-body" aria-label="Background agents" class="${headerWash} cursor-pointer transition-colors hover:bg-background/80 group/disclosure"><span>Background agents</span></button></div>${region("thread-background-commands-card-body", "thread-background-commands-card-toggle", `<p>running command</p><pre class="bg-popover"><code class="bg-popover">echo hi</code></pre><input class="bg-background" value="edit"><textarea class="bg-background">draft</textarea><input data-protected="input" class="bg-background/70 ring-1" value="wash"><textarea data-protected="textarea" class="bg-destructive/5">bad</textarea><select data-protected="select" class="bg-background/70"><option>A</option></select><pre data-protected="pre" class="bg-destructive/5"><span data-protected="pre-child" class="bg-background/70">inside</span></pre><code data-protected="code" class="bg-background/70">snippet</code><div data-protected="editable" contenteditable="true" class="bg-destructive/5"><em data-protected="editable-child" class="bg-background/70">note</em></div><div class="cm-editor"><div data-protected="cm" class="cm-content bg-background/70">cm</div></div><div data-protected="monaco" class="monaco-editor bg-destructive/5"><span data-protected="monaco-child" class="bg-background/70 ring-1">mono</span></div><hr>`)}</section>`,
+    },
+    {
+      key: "plan",
+      toggle: "#thread-prompt-mode-card-toggle",
+      body: "thread-prompt-mode-card-body",
+      html: `<section aria-label="Prompt mode"><div role="group" aria-label="Plan mode controls" class="bg-background/70 shadow-xs ring-1 ring-border/60 flex w-full items-stretch rounded-none px-0 py-0"><button type="button" id="thread-prompt-mode-card-toggle" aria-expanded="false" aria-controls="thread-prompt-mode-card-body" aria-label="Plan" class="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-none bg-transparent px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-background/80 group/disclosure"><span>Plan</span></button><button type="button" aria-label="Exit plan mode" class="flex min-h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-none border-l border-border/35 bg-transparent"><svg data-plan-exit></svg></button></div>${region("thread-prompt-mode-card-body", "thread-prompt-mode-card-toggle", "<p>Plan steps</p>")}</section>`,
+    },
+    {
+      key: "workflow",
+      toggle: "#workflow-card-toggle",
+      body: "workflow-card-body",
+      html: `<section aria-label="Workflow"><button type="button" id="workflow-card-toggle" aria-expanded="false" aria-controls="workflow-card-body" aria-label="Workflow: Release" class="flex min-h-8 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-none px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-background/80 group/disclosure"><span>Release</span></button>${region("workflow-card-body", "workflow-card-toggle", `<div class="${activeRow}">Build</div><div class="${failedRow}"><span class="text-destructive-text">Publish failed</span></div><span class="bg-success/10">done</span><span class="bg-foreground" data-phase-dot></span>`)}</section>`,
+    },
+    {
+      key: "machine",
+      toggle: "#machine-status-toggle",
+      body: "machine-status-body",
+      html: `<section aria-label="Machine status"><div class="flex items-center gap-0.5 p-1"><button type="button" id="machine-status-toggle" aria-expanded="false" aria-controls="machine-status-body" aria-label="Machine is paused. Could not resume the machine." class="flex min-w-0 flex-1 cursor-pointer items-center justify-start gap-1.5 text-left text-xs transition-colors group/disclosure hover:bg-state-hover"><span>Machine is paused</span></button><div class="ml-auto flex shrink-0 items-center gap-1.5 pr-2 text-xs text-muted-foreground"><button type="button" class="inline-flex items-center whitespace-nowrap rounded border border-border px-1.5 py-0.5 text-xs bg-background shadow-xs">Retry</button></div></div>${region("machine-status-body", "machine-status-toggle", "<p>Could not resume the machine.</p>")}</section>`,
+    },
+    {
+      key: "status",
+      toggle: "#thread-prompt-banner-status-toggle",
+      body: "thread-prompt-banner-status-body",
+      html: `<section aria-label="Thread history"><button type="button" id="thread-prompt-banner-status-toggle" aria-expanded="false" aria-controls="thread-prompt-banner-status-body" aria-label="Thread history" class="flex min-h-8 w-full cursor-pointer items-center rounded-none px-3 py-1.5 text-xs hover:bg-background/80"><span>History</span></button>${region("thread-prompt-banner-status-body", "thread-prompt-banner-status-toggle", "<p>Earlier turn</p>")}</section>`,
+    },
+  ];
+  const bodies = new Map<string, { toggle: HTMLButtonElement; body: HTMLElement; card: HTMLElement }>();
+  bodies.set("todos", { ...todoToggle, card: todos });
+  for (const spec of cards) {
+    stack.insertAdjacentHTML("beforeend", spec.html);
+    const card = stack.querySelector<HTMLElement>(`section[aria-label="${spec.html.match(/aria-label="([^"]+)"/)![1]}"]`)!;
+    bodies.set(spec.key, { ...wire(card, spec.toggle, spec.body), card });
+  }
+  const stop = injectComposerInfo(f.document);
+  const paint = (node: Element) => f.dom.window.getComputedStyle(node);
+  const blurOf = (node: Element) => `${paint(node).backdropFilter} ${paint(node).getPropertyValue("-webkit-backdrop-filter")}`;
+  const transparent = (value: string) => value === "rgba(0, 0, 0, 0)" || value === "transparent";
+  const flatFace = (value: string) => transparent(value) || value === "color-mix(in oklab, var(--foreground) 6%, transparent)";
+  const nativeWash = (value: string) => value === "rgba(250, 250, 250, 0.7)" || value === "rgba(200, 0, 0, 0.05)";
+  let openCard: HTMLElement | null = null;
+  try {
+    for (const key of ["background", "plan", "todos", "workflow", "machine", "status"]) {
+      f.click(`[data-bb-chat-ui-info-trigger="${key}"]`);
+      const card = f.document.querySelector<HTMLElement>("[data-bb-chat-ui-info-open]")!;
+      openCard = card;
+      const slab = card.querySelector<HTMLElement>('section[role="region"] > div.bg-popover')!;
+      const regionNode = slab.parentElement!;
+      assert.equal(paint(card).backdropFilter.includes("blur(14px)") || paint(card).getPropertyValue("-webkit-backdrop-filter").includes("blur(14px)"), true, `${key}: the open popover keeps the outer glass`);
+      assert.equal(paint(regionNode).borderTopWidth, "0px", `${key}: disclosure body has no separator line`);
+      assert.equal(transparent(paint(slab).backgroundColor), true, `${key}: disclosure body has no second face`);
+      assert.equal(paint(slab).boxShadow, "none", `${key}: disclosure body has no second shadow`);
+      assert.equal(bodies.get(key)!.body.hidden, false, `${key}: opening still expands the native body`);
+      const titleButton = card.querySelector<HTMLButtonElement>("button[aria-expanded][aria-controls]")!;
+      assert.equal(blurOf(titleButton).includes("blur"), false, `${key}: header disclosure has no nested glass blur`);
+      const flat = paint(titleButton).backgroundColor === "rgba(0, 0, 0, 0)" || paint(titleButton).backgroundColor === "transparent" || paint(titleButton).backgroundColor === "color-mix(in oklab, var(--foreground) 6%, transparent)";
+      assert.equal(flat, true, `${key}: header disclosure drops the opaque native face`);
+      assert.equal(paint(titleButton).backgroundColor === "rgba(250, 250, 250, 0.7)", false, `${key}: header disclosure drops the activity wash`);
+      assert.equal(paint(titleButton).boxShadow, "none", `${key}: header disclosure has no native ring`);
+      assert.equal(titleButton.getAttribute("aria-expanded"), "true", `${key}: expand control stays`);
+    }
+    const background = bodies.get("background")!.card;
+    f.click('[data-bb-chat-ui-info-trigger="background"]');
+    const single = background.querySelector<HTMLElement>('[aria-label="npm test"]')!;
+    assert.equal(flatFace(paint(single).backgroundColor) && !nativeWash(paint(single).backgroundColor), true, "a single background header drops its active wash");
+    assert.equal(paint(single).boxShadow, "none");
+    assert.equal(single.textContent, "npm test");
+    for (const label of ["Background agents", "Background commands", "Background activity"]) {
+      background.setAttribute("aria-label", label);
+      assert.equal(paint(background.querySelector("#thread-background-commands-card-toggle")!).paddingLeft, "0px", `${label}: header uses the common gutter`);
+      assert.equal(paint(single).paddingLeft, "0px", `${label}: single-task header uses the common gutter`);
+    }
+    const code = background.querySelector("code")!;
+    const field = background.querySelector("input")!;
+    const editor = background.querySelector("textarea")!;
+    assert.equal(paint(code).backgroundColor, "rgb(255, 255, 255)", "code preview keeps its face");
+    assert.equal(paint(field).backgroundColor, "rgb(200, 200, 200)", "inputs keep their face");
+    assert.equal(paint(editor).backgroundColor, "rgb(200, 200, 200)", "editors keep their face");
+    const wash = "rgba(250, 250, 250, 0.7)";
+    const failedWash = "rgba(200, 0, 0, 0.05)";
+    const protectedFace = (name: string, color: string) => assert.equal(paint(background.querySelector(`[data-protected="${name}"]`)!).backgroundColor, color, `${name} keeps its own face`);
+    protectedFace("input", wash);
+    protectedFace("textarea", failedWash);
+    protectedFace("select", wash);
+    protectedFace("pre", failedWash);
+    protectedFace("pre-child", wash);
+    protectedFace("code", wash);
+    protectedFace("editable", failedWash);
+    protectedFace("editable-child", wash);
+    protectedFace("cm", wash);
+    protectedFace("monaco", failedWash);
+    protectedFace("monaco-child", wash);
+    assert.notEqual(paint(background.querySelector('[data-protected="input"]')!).boxShadow, "none", "a protected field keeps its own shadow");
+    assert.notEqual(paint(background.querySelector('[data-protected="monaco-child"]')!).boxShadow, "none", "a protected editor descendant keeps its own shadow");
+    assert.equal(paint(background.querySelector("hr")!).borderTopColor, "rgb(1, 2, 3)", "semantic dividers stay");
+    f.click('[data-bb-chat-ui-info-trigger="plan"]');
+    const controls = f.document.querySelector<HTMLElement>('[aria-label="Plan mode controls"]')!;
+    assert.equal(flatFace(paint(controls).backgroundColor) && !nativeWash(paint(controls).backgroundColor), true, "plan controls drop the active wash");
+    assert.equal(paint(controls).boxShadow, "none");
+    assert.equal(controls.querySelector('[aria-label="Exit plan mode"]')!.querySelector("svg")!.getAttribute("data-plan-exit"), "", "plan exit stays in the card");
+    f.click('[data-bb-chat-ui-info-trigger="todos"]');
+    const todoCard = bodies.get("todos")!.card;
+    const active = todoCard.querySelectorAll("li")[0]!;
+    const failed = todoCard.querySelectorAll("li")[1]!;
+    assert.equal(flatFace(paint(active).backgroundColor) && !nativeWash(paint(active).backgroundColor), true, "an active todo drops its wash");
+    assert.equal(paint(active).boxShadow, "none");
+    assert.equal(flatFace(paint(failed).backgroundColor) && !nativeWash(paint(failed).backgroundColor), true, "a failed todo drops its wash");
+    assert.equal(paint(failed).boxShadow, "none");
+    assert.equal(paint(failed.querySelector("span")!).color, "rgb(180, 40, 40)", "failed text keeps its status color");
+    f.click('[data-bb-chat-ui-info-trigger="workflow"]');
+    const workflow = bodies.get("workflow")!.card;
+    const agent = workflow.querySelector("div.bg-background\\/70")!;
+    assert.equal(flatFace(paint(agent).backgroundColor) && !nativeWash(paint(agent).backgroundColor), true, "an active workflow row drops its wash");
+    assert.equal(paint(workflow.querySelector(".text-destructive-text")!).color, "rgb(180, 40, 40)");
+    assert.equal(paint(workflow.querySelector(".bg-success\\/10")!).backgroundColor, "rgba(0, 128, 0, 0.1)", "status pills keep their color");
+    assert.equal(paint(workflow.querySelector("[data-phase-dot]")!).backgroundColor, "rgb(10, 10, 10)", "phase dots keep their color");
+    f.click('[data-bb-chat-ui-info-trigger="machine"]');
+    const machineCard = bodies.get("machine")!.card;
+    const retryButton = [...machineCard.querySelectorAll("button")].find(button => button.textContent === "Retry")!;
+    const dismiss = machineCard.querySelector("[data-bb-chat-ui-info-native-dismiss]")!;
+    let retried = 0;
+    retryButton.addEventListener("click", () => retried++);
+    assert.equal(blurOf(retryButton).includes("blur(14px)"), true, "a small action keeps the shared glass blur");
+    assert.equal(paint(retryButton).backgroundColor, paint(machineCard).backgroundColor, "a small action uses the shared glass face");
+    assert.notEqual(paint(retryButton).backgroundColor, "rgb(200, 200, 200)", "a small action drops the opaque native fill");
+    assert.equal(paint(retryButton).boxShadow, paint(dismiss).boxShadow, "a small action uses the shared glass shadow");
+    assert.notEqual(paint(retryButton).boxShadow, "rgb(0, 0, 255) 0px 0px 0px 1px");
+    assert.equal(retryButton.textContent, "Retry");
+    retryButton.click();
+    assert.equal(retried, 1, "the native action click remains");
+    retryButton.disabled = true;
+    assert.equal(retryButton.disabled, true, "the native disabled state remains");
+    retryButton.disabled = false;
+    assert.equal(paint(goalBody).backgroundColor, "rgb(255, 255, 255)", "a closed card keeps its native face");
+    assert.equal(paint(f.document.querySelector("#timeline-decoy")!).backgroundColor, "rgb(255, 255, 255)", "timeline cards outside the popover keep their face");
+    const sheet = f.document.getElementById("bb-chat-ui-composer-info")!.textContent!;
+    assert.match(sheet, /\[class~="bg-background\/70"\][\s\S]*:is\(:hover, :focus-visible\)/);
+    assert.match(sheet, /color-mix\(in oklab, ?var\(--foreground\) 6%, ?transparent\)/);
+    const backgroundToggle = bodies.get("background")!.toggle;
+    f.click('[data-bb-chat-ui-info-trigger="background"]');
+    backgroundToggle.click();
+    assert.equal(bodies.get("background")!.body.hidden, true, "the native disclosure still collapses");
+    assert.equal(background.querySelector("p")!.textContent, "running command");
+    backgroundToggle.click();
+    assert.equal(bodies.get("background")!.body.hidden, false, "the native disclosure still expands");
+    assert.equal(background.hasAttribute("data-bb-chat-ui-info-open"), true);
+  } finally { stop(); }
+  assert.equal(paint(openCard!.querySelector('section[role="region"] > div.bg-popover')!).backgroundColor, "rgb(255, 255, 255)", "unload restores the disclosure face");
+  assert.equal(paint(openCard!.querySelector('section[role="region"]')!).borderTopWidth, "1px", "unload restores the disclosure line");
+  assert.equal(paint(f.document.querySelector('[aria-label="Plan mode controls"]')!).backgroundColor, "rgba(250, 250, 250, 0.7)", "unload restores the activity wash");
+  f.dom.window.close();
+});
+
 test("desktop hover previews wait for intent, bridge the popover gap, and pin on click", async () => {
   const f=fixture();
   f.document.body.insertAdjacentHTML('beforeend','<span hidden data-bb-chat-ui-device="desktop" data-bb-chat-ui-viewport="narrow"></span>');

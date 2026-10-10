@@ -23,7 +23,9 @@ const WORKFLOW_COLLAPSE = 'button[aria-label^="Collapse "][aria-label$=" workflo
 const ARCHIVED = '[aria-label="Thread archived"], [aria-label="Thread is archived"], [aria-label="Archived thread"]';
 const UNAVAILABLE = ["Environment unavailable", "Machine removed", "Machine removal in progress", "Machine cleanup failed", "Workspace removed"].map(label => `[aria-label="${label}"]`).join(", ");
 const DETAIL = `${STACK}[${MARK}-stack] [${UNIT}][${OPEN}]:not([hidden])`;
-const NATIVE_DETAIL = `${DETAIL}:is(${["Thread context before sending", "Child threads", "Prompt mode", "Goal", "To-do list", "Workflow", "Background commands", "Machine status", "Thread history", "Model fallback"].map(label => `section[aria-label="${label}"]`).join(",")})`;
+const NATIVE_DETAIL = `${DETAIL}:is(${["Thread context before sending", "Child threads", "Prompt mode", "Goal", "To-do list", "Workflow", "Background commands", "Background agents", "Background activity", "Machine status", "Thread history", "Model fallback"].map(label => `section[aria-label="${label}"]`).join(",")})`;
+const PROTECTED_SURFACE = "input, textarea, select, pre, code, [contenteditable='true'], .cm-editor, .cm-content, .monaco-editor";
+const LEGACY_ROW = `:is([class~="bg-background/70"], [class~="bg-destructive/5"]):not(${PROTECTED_SURFACE}):not(${PROTECTED_SURFACE.split(", ").map(selector => `${selector} *`).join(", ")})`;
 
 // The all-information button is always reachable. Fit measured pills into one row, with essentials first.
 export function fitComposerInfo(items: readonly { key: string; width: number }[], width: number): string[] {
@@ -96,6 +98,13 @@ ${DETAIL}[aria-label="Goal"] > #thread-goal-card-body { order:1; border:0 !impor
 ${DETAIL}[aria-label="Goal"] > #thread-goal-card-body > div { background:transparent !important; box-shadow:none !important; }
 ${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] { order:2; flex:none; width:auto; min-height:28px; padding:5px 9px; border-radius:8px; font-size:11px; line-height:18px; }
 ${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] > :is(svg, [data-icon-root]) { display:none !important; }
+/* One glass face. Header disclosure sits flat on it; small actions keep the shared face. */
+${DETAIL} > section[role="region"] { border-top-width:0 !important; border-top-color:transparent !important; background:transparent !important; box-shadow:none !important; }
+${DETAIL} > section[role="region"] > div[class~="bg-popover"] { background-color:transparent !important; box-shadow:none !important; }
+${DETAIL} ${LEGACY_ROW} { background-color:transparent !important; box-shadow:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
+${DETAIL} ${LEGACY_ROW}:is(:hover, :focus-visible) { background-color:color-mix(in oklab, var(--foreground) 6%, transparent) !important; }
+${DETAIL} button[aria-expanded][aria-controls] { background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
+${DETAIL} button[aria-expanded][aria-controls]:is(:hover, :focus-visible) { background-color:color-mix(in oklab, var(--foreground) 6%, transparent) !important; }
 [${MARK}-panel-action], [${MARK}-action="diff"] { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; padding:0 !important; border-radius:50% !important; color:var(--subtle-foreground); }
 [${MARK}-panel-action] svg, [${MARK}-action="diff"] svg { width:14px; height:14px; }
 [${MARK}-trigger]:hover, [${MARK}-all]:hover { transform:translateY(-1px); }
