@@ -1560,6 +1560,48 @@ test("composer question cards frost once with the theme glass and keep nested an
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("plan and approval cards round and clip the outer surface in both shell states", async () => {
+  for (const id of ["plan-review-banner", "approval-banner"] as const) {
+    for (const expanded of [false, true]) {
+      const f = fixture();
+      const native = f.document.createElement("style");
+      native.textContent = NATIVE_CARD_CSS;
+      f.document.head.append(native);
+      const stack = f.document.querySelector<HTMLElement>("[data-promptbox-shell] > .grid")!;
+      const card = f.document.createElement("section");
+      card.setAttribute("data-testid", id);
+      card.className = "bg-surface-recessed border";
+      if (expanded) card.setAttribute("data-expanded", "");
+      card.innerHTML = '<p>Which option?</p><button type="button">Option A</button><button type="submit">Submit</button>';
+      if (id === "plan-review-banner") card.insertAdjacentHTML("beforeend", '<div data-testid="plan-review-request" class="bg-card"><div class="overflow-auto">Plan body</div></div>');
+      stack.prepend(card);
+      const stop = injectComposerInfo(f.document);
+      try {
+        await f.tick();
+        const css = f.dom.window.getComputedStyle(card);
+        const state = expanded ? "expanded" : "collapsed";
+        assert.equal(css.borderRadius, "18px", `${id} ${state} rounds every outer corner`);
+        assert.equal(css.overflow, "hidden", `${id} ${state} clips to the outer radius`);
+        assert.equal(css.animationName, "none", `${id} does not gain an entrance`);
+        const request = card.querySelector('[data-testid="plan-review-request"]');
+        if (request) {
+          const body = f.dom.window.getComputedStyle(request);
+          assert.equal(body.borderRadius, "0px", "the plan body stays square");
+          assert.equal(body.overflow, "visible");
+          assert.equal(body.backgroundColor, "rgba(0, 0, 0, 0)");
+        }
+        const fade = f.document.querySelector("[data-bb-chat-ui-info-body-fade]");
+        if (id === "plan-review-banner") {
+          assert.ok(fade, "the plan body still has a scroll fade");
+          assert.equal(fade!.parentElement, stack, "the scroll fade stays outside the clipped card");
+          assert.equal(card.contains(fade), false);
+          assert.equal(f.dom.window.getComputedStyle(stack).overflow, "visible");
+        }
+      } finally { stop(); f.dom.window.close(); }
+    }
+  }
+});
+
 test("a collapsed secret card sits on the composer edge and keeps its label centered", async () => {
   const f = fixture();
   const native = f.document.createElement("style");

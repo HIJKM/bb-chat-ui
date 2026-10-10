@@ -218,6 +218,7 @@ ${DETAIL} header[data-queued-messages-mode] { display:none !important; }
 ${DETAIL}[aria-label="Queued messages"] > div:has(> button[aria-label="Collapse queued messages"]) { display:none !important; }
 ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] { display:none !important; }
 [${MARK}-stack] :is(${QUESTION}) { border-radius:18px !important; overflow:hidden; transform-origin:center bottom; animation:bb-info-enter 260ms cubic-bezier(.22,1,.36,1); }
+[${MARK}-stack] :is([data-testid="plan-review-banner"], [data-testid="approval-banner"]) { border-radius:18px !important; overflow:hidden; }
 [${MARK}-stack] [data-testid="plugin-request-banner"] > [data-testid="plugin-interaction-shell"] { border-radius:18px !important; overflow:hidden; }
 /* Native envelopes are a 6% recessed wash with no blur. Frost the visible card once.
    The plugin-request wrapper only carries the entrance, so a second blur there would stack. */
