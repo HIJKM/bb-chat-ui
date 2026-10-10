@@ -64,6 +64,8 @@ export const composerInfoCss = `
 [${MARK}-stack] [${MARK}-collapse] { display:none !important; }
 ${DETAIL} > h3[${MARK}-close-heading] { display:flex; align-items:center; min-height:28px; margin:0 0 8px; font-size:12px; font-weight:600; }
 /* Native cards already have a gutter on layout wrappers; the popover supplies it once. */
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"] :is(#thread-prompt-banner-git-toggle, [aria-label^="Pull request "]),
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="pullRequest"] :is(#thread-prompt-banner-git-toggle, #thread-prompt-banner-parent-thread-toggle, #thread-prompt-banner-parent-thread-body) { display:none !important; }
 ${NATIVE_DETAIL} :is(div[class~="px-3"],p[class~="px-3"],ul[class~="px-3"],ul[class~="px-2.5"]) { padding-left:0 !important; padding-right:0 !important; }
 ${NATIVE_DETAIL} > button[aria-expanded][aria-controls][class~="px-3"] { padding-left:0 !important; padding-right:0 !important; }
 ${NATIVE_DETAIL} > div > button[aria-expanded][aria-controls]:is([class~="px-3"],[class~="px-2"]) { padding-left:0 !important; padding-right:0 !important; }
@@ -1234,7 +1236,8 @@ export function injectComposerInfo(document: Document): () => void {
       }
       active = key;
       activeNode = item.node;
-      item.node.setAttribute(OPEN, "");
+      // The value names the family, so a shared host card shows only that family.
+      item.node.setAttribute(OPEN, key);
       if (item.trigger?.getAttribute("aria-expanded") === "false") item.trigger.click();
       syncNativeControls();
       syncTitleIcon();

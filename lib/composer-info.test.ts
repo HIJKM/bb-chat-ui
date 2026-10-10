@@ -2737,3 +2737,31 @@ test("latest-event stays rendered while off so the host hidden rule cannot cance
     } finally { stop(); f.dom.window.close(); }
   }
 });
+
+test("Parent and PR popovers from the shared context card hide the other families' toggles", async () => {
+  const f = fixture();
+  const node = f.document.querySelector<HTMLElement>('section[aria-label="Thread context before sending"]')!;
+  node.innerHTML = '<div class="flex items-center gap-0.5 p-1"><button id="thread-prompt-banner-parent-thread-toggle" aria-label="Parent thread: VAU-2" aria-expanded="false" aria-controls="thread-prompt-banner-parent-thread-body"><svg /></button><button id="thread-prompt-banner-git-toggle">+162 −21 · 6 files</button><a aria-label="Pull request 12: Open" href="https://example.com/pr/12">#12</a></div><div id="thread-prompt-banner-parent-thread-body" hidden><div class="overflow-hidden"><div class="px-3">This thread is a child of <a href="/threads/vau-2">VAU-2</a>.</div></div></div>';
+  const toggle = node.querySelector<HTMLButtonElement>('#thread-prompt-banner-parent-thread-toggle')!;
+  toggle.addEventListener('click', () => {
+    const expanded = toggle.getAttribute('aria-expanded') !== 'true';
+    toggle.setAttribute('aria-expanded', String(expanded));
+    node.querySelector<HTMLElement>('#thread-prompt-banner-parent-thread-body')!.hidden = !expanded;
+  });
+  const shown = (selector:string) => f.dom.window.getComputedStyle(node.querySelector(selector)!).display !== 'none';
+  const stop = injectComposerInfo(f.document);
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
+    assert.equal(shown('#thread-prompt-banner-git-toggle'), false, 'Parent does not show the Diff summary beside its title');
+    assert.equal(shown('[aria-label^="Pull request "]'), false);
+    assert.equal(shown('#thread-prompt-banner-parent-thread-toggle'), true);
+    assert.equal(node.querySelector<HTMLElement>('#thread-prompt-banner-parent-thread-body')!.hidden, false);
+    f.click('[data-bb-chat-ui-info-native-dismiss]'); await f.tick();
+    assert.equal(shown('#thread-prompt-banner-git-toggle'), true, 'closing restores the native card');
+    f.click('[data-bb-chat-ui-info-trigger="pullRequest"]'); await f.tick();
+    assert.equal(shown('[aria-label^="Pull request "]'), true);
+    assert.equal(shown('#thread-prompt-banner-git-toggle'), false);
+    assert.equal(shown('#thread-prompt-banner-parent-thread-toggle'), false);
+    assert.equal(shown('#thread-prompt-banner-parent-thread-body'), false, 'PR does not reveal the parent body');
+  } finally { stop(); f.dom.window.close(); }
+});
