@@ -2176,7 +2176,8 @@ test("plan and approval cards ease height from the current box and keep independ
   const painted = (body: HTMLElement) => f.dom.window.getComputedStyle(body).display !== "none";
   const rect = (x: number, y: number, width: number, height: number) => new f.dom.window.DOMRect(x, y, width, height);
   stack.getBoundingClientRect = () => rect(0, 40, 400, 800);
-  planScroller.getBoundingClientRect = () => painted(planBody) ? rect(24, 180, 320, 288) : rect(24, 220, 320, 0);
+  // The banner box clips the fade. Keep the scroller inside that box.
+  planScroller.getBoundingClientRect = () => painted(planBody) ? rect(24, 8, 320, 120) : rect(24, 220, 320, 0);
   Object.defineProperty(planScroller, "scrollTop", { configurable: true, writable: true, value: 0 });
   Object.defineProperty(planScroller, "clientHeight", { configurable: true, get: () => painted(planBody) ? 288 : 0 });
   Object.defineProperty(planScroller, "scrollHeight", { configurable: true, get: () => painted(planBody) ? 600 : 0 });
@@ -2587,6 +2588,94 @@ test("a request card keeps measuring body fades after the popover observer reset
     for (const observer of RecordingResizeObserver.instances) if (observer.targets.has(scroller)) observer.callback();
     assert.equal(below.style.height, "20px");
     assert.equal(below.style.top, "200px", "a body viewport resize moves the fade");
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("a clipped plan body keeps the scroll blur on the visible edge", async () => {
+  const f = fixture();
+  class RecordingResizeObserver {
+    static instances: RecordingResizeObserver[] = [];
+    targets = new Set<Element>();
+    callback: () => void;
+    constructor(callback: () => void) {
+      this.callback = callback;
+      RecordingResizeObserver.instances.push(this);
+    }
+    observe(target: Element) { this.targets.add(target); }
+    unobserve(target: Element) { this.targets.delete(target); }
+    disconnect() { this.targets.clear(); }
+  }
+  f.dom.window.ResizeObserver = RecordingResizeObserver as unknown as typeof ResizeObserver;
+  f.document.body.insertAdjacentHTML("beforeend", '<span hidden data-bb-chat-ui-device="phone" data-bb-chat-ui-orientation="portrait" data-bb-chat-ui-viewport="narrow" data-bb-chat-ui-hit-target="large"></span>');
+  const stack = f.document.querySelector<HTMLElement>("[data-promptbox-shell] > .grid")!;
+  const card = f.document.createElement("section");
+  card.setAttribute("data-testid", "plan-review-banner");
+  card.setAttribute("data-expanded", "");
+  card.style.border = "1px solid transparent";
+  card.innerHTML = '<div data-body-clip style="overflow-y:auto;overflow-x:visible"><div data-testid="plan-review-request"><div class="overflow-auto">Plan body</div></div></div>';
+  stack.prepend(card);
+  const body = card.querySelector<HTMLElement>("[data-body-clip]")!;
+  const scroller = card.querySelector<HTMLElement>(".overflow-auto")!;
+  const rect = (x: number, y: number, width: number, height: number) => new f.dom.window.DOMRect(x, y, width, height);
+  let cardHeight = 160;
+  let bodyTop = 90;
+  let scrollerTop = 100;
+  let scrollerHeight = 304;
+  stack.getBoundingClientRect = () => rect(0, 0, 400, 800);
+  card.getBoundingClientRect = () => rect(10, 80, 300, cardHeight);
+  body.getBoundingClientRect = () => rect(16, bodyTop, 340, 400);
+  scroller.getBoundingClientRect = () => rect(24, scrollerTop, 320, scrollerHeight);
+  Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 304 });
+  Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 688 });
+  const stop = injectComposerInfo(f.document);
+  try {
+    const below = () => f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-body-fade="below"]')!;
+    const above = () => f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-body-fade="above"]')!;
+    const move = (top: number) => {
+      scroller.scrollTop = top;
+      scroller.dispatchEvent(new f.dom.window.Event("scroll", { bubbles: true }));
+    };
+    move(0);
+    assert.equal(below().hidden, false);
+    assert.equal(below().style.top, "215px", "the bottom blur sits on the card padding edge, not the scroller's unclipped bottom");
+    assert.equal(below().style.left, "24px");
+    assert.equal(below().style.width, "285px", "the blur stops at the card's clipped right edge");
+    assert.equal(below().style.height, "24px");
+    assert.equal(above().hidden, true);
+    assert.equal(below().parentElement, stack);
+    assert.equal(f.dom.window.getComputedStyle(below()).backdropFilter, "blur(5px)");
+    assert.match(f.dom.window.getComputedStyle(below()).maskImage, /linear-gradient/);
+    move(100);
+    assert.equal(above().hidden, false);
+    assert.equal(above().style.top, "100px");
+    assert.equal(above().style.height, "24px");
+    assert.equal(below().style.top, "215px");
+    move(384);
+    assert.equal(below().hidden, false, "a clipped bottom stays blurred after the inner scroller reaches its end");
+    assert.equal(below().style.top, "215px");
+    assert.equal(above().hidden, false);
+    assert.equal(above().style.top, "100px");
+    scrollerTop = 40;
+    move(0);
+    assert.equal(above().hidden, false, "content clipped above the visible edge gets a top blur before the inner scroller moves");
+    assert.equal(above().style.top, "90px");
+    assert.equal(above().style.width, "285px");
+    assert.equal(below().style.top, "215px");
+    bodyTop = 130;
+    move(0);
+    assert.equal(above().style.top, "130px", "a taller header moves the visible top, and the blur follows that edge");
+    assert.equal(above().style.height, "24px");
+    scrollerTop = 100;
+    bodyTop = 90;
+    cardHeight = 140;
+    move(0);
+    f.click("[data-bb-chat-ui-info-all]");
+    await f.tick();
+    const watching = RecordingResizeObserver.instances.some(observer => observer.targets.has(card) && observer.targets.has(body));
+    assert.equal(watching, true, "the clipping card and body stay observed after the popover observer resets");
+    for (const observer of RecordingResizeObserver.instances) if (observer.targets.has(card)) observer.callback();
+    assert.equal(below().style.top, "195px", "a card resize moves the blur to the new visible bottom");
+    assert.equal(below().style.height, "24px");
   } finally { stop(); f.dom.window.close(); }
 });
 

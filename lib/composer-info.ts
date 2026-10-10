@@ -5,6 +5,7 @@ import { commitIcon, fileStatusIcon } from "./composer-diff-icons.ts";
 import { childInitial, type ChildState, type ChildSummary } from "./composer-child.ts";
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
 import { isDesktopChrome } from "./device-chrome.ts";
+import { bodyFadeBox, readBodyFadeClips } from "./body-fade.ts";
 
 const STACK = "[data-promptbox-shell] > .grid";
 const MARK = "data-bb-chat-ui-info";
@@ -237,8 +238,9 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-stack] [data-testid="plan-review-request"] > p { border-top:0 !important; padding-left:0 !important; padding-right:0 !important; }
 [${MARK}-body-fade] { position:absolute; pointer-events:none; z-index:4; backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); }
 [${MARK}-body-fade][hidden] { display:none; }
-[${MARK}-body-fade="above"] { background:linear-gradient(to bottom,var(--bb-chat-ui-info-face),transparent); mask-image:linear-gradient(to bottom,black,transparent); -webkit-mask-image:linear-gradient(to bottom,black,transparent); }
-[${MARK}-body-fade="below"] { background:linear-gradient(to top,var(--bb-chat-ui-info-face),transparent); mask-image:linear-gradient(to top,black,transparent); -webkit-mask-image:linear-gradient(to top,black,transparent); }
+/* The card already paints this face. A second gradient on the blur lightens the edge. */
+[${MARK}-body-fade="above"] { mask-image:linear-gradient(to bottom,black,transparent); -webkit-mask-image:linear-gradient(to bottom,black,transparent); }
+[${MARK}-body-fade="below"] { mask-image:linear-gradient(to top,black,transparent); -webkit-mask-image:linear-gradient(to top,black,transparent); }
 [data-promptbox-shell]:has(> [${MARK}-request]) [data-follow-up-composer-anchor] { display:none !important; }
 [data-scroll-footer]:has([${MARK}-request]) button[aria-label="Scroll to latest event"] { display:none !important; }
 [${MARK}-stack] [${MARK}-supplements] { display:contents; }
@@ -684,9 +686,11 @@ export function injectComposerInfo(document: Document): () => void {
     const REQUEST_SHELL = '[data-testid="plan-review-banner"], [data-testid="approval-banner"]';
     const HEIGHT_SHELL = `[data-testid="plugin-interaction-shell"], ${REQUEST_SHELL}`;
     const bodyFades = new Map<HTMLElement, { above: HTMLElement; below: HTMLElement }>();
+    const clipNodes = new Set<HTMLElement>();
     const secretMotions = new Map<HTMLElement, Animation>();
     const updateBodyFades = () => {
       const live = new Set<HTMLElement>();
+      const liveClips = new Set<HTMLElement>();
       const anchor = stack.getBoundingClientRect();
       for (const scroller of Array.from(stack.querySelectorAll<HTMLElement>(BODY_SCROLLER))) {
         live.add(scroller);
@@ -705,21 +709,35 @@ export function injectComposerInfo(document: Document): () => void {
         }
         const loose = [pair.above, pair.below].filter(node => node.parentElement !== stack);
         if (loose.length) stack.append(...loose);
-        const edges = scrollOverflowEdges({ scrollTop: scroller.scrollTop, clientHeight: scroller.clientHeight, scrollHeight: scroller.scrollHeight });
-        const rect = scroller.getBoundingClientRect();
-        const height = Math.min(24, Math.max(0, rect.height) / 4);
-        const place = (node: HTMLElement, show: boolean, top: number) => {
-          node.hidden = !show;
-          node.style.left = `${rect.left - anchor.left}px`;
-          node.style.width = `${rect.width}px`;
-          node.style.height = `${height}px`;
-          node.style.top = `${top - anchor.top}px`;
-        };
+        const clips = readBodyFadeClips(scroller);
+        for (const clip of clips) liveClips.add(clip.node);
         // Fades sit on the stack, outside the card clip, so hide them until the height settles.
         const request = scroller.closest<HTMLElement>(REQUEST_SHELL);
-        const moving = !!request && secretMotions.has(request);
-        place(pair.above, edges.above && !moving, rect.top);
-        place(pair.below, edges.below && !moving, rect.bottom - height);
+        const frame = bodyFadeBox({
+          anchorTop: anchor.top,
+          anchorLeft: anchor.left,
+          scroller: scroller.getBoundingClientRect(),
+          clips,
+          overflow: scrollOverflowEdges({ scrollTop: scroller.scrollTop, clientHeight: scroller.clientHeight, scrollHeight: scroller.scrollHeight }),
+          moving: !!request && secretMotions.has(request),
+        });
+        const place = (node: HTMLElement, edge: { show: boolean; top: number; left: number; width: number; height: number }) => {
+          node.hidden = !edge.show;
+          node.style.left = `${edge.left}px`;
+          node.style.width = `${edge.width}px`;
+          node.style.height = `${edge.height}px`;
+          node.style.top = `${edge.top}px`;
+        };
+        place(pair.above, frame.above);
+        place(pair.below, frame.below);
+      }
+      for (const clip of [...clipNodes]) if (!liveClips.has(clip)) {
+        edgeResize?.unobserve(clip);
+        clipNodes.delete(clip);
+      }
+      for (const clip of liveClips) if (!clipNodes.has(clip)) {
+        clipNodes.add(clip);
+        edgeResize?.observe(clip);
       }
       for (const [scroller, pair] of bodyFades) if (!live.has(scroller)) {
         edgeResize?.unobserve(scroller);
@@ -747,6 +765,7 @@ export function injectComposerInfo(document: Document): () => void {
           if (scroller && scroller !== root) edgeResize?.observe(scroller);
         }
         for (const body of bodyFades.keys()) edgeResize?.observe(body);
+        for (const clip of clipNodes) edgeResize?.observe(clip);
       }
       scrollHints.forEach(hint => { hint.hidden = true; });
       // Hints are siblings of the card and do not share its entrance opacity or
