@@ -72,14 +72,13 @@ export const composerInfoCss = `
 [${MARK}-stack] [${MARK}-collapse] { display:none !important; }
 ${DETAIL} > h3[${MARK}-close-heading] { display:flex; align-items:center; min-height:28px; margin:0 0 8px; font-size:12px; font-weight:600; }
 /* Native cards already have a gutter on layout wrappers; the popover supplies it once. */
-${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"] :is(#thread-prompt-banner-git-toggle, #thread-prompt-banner-git-body, #thread-prompt-banner-parent-thread-toggle, [aria-label^="Pull request "]),
-${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"] > div:has(#thread-prompt-banner-parent-thread-toggle),
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:has([${MARK}-parent-row]) :is(#thread-prompt-banner-git-toggle, #thread-prompt-banner-git-body, #thread-prompt-banner-parent-thread-toggle, [aria-label^="Pull request "]),
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:has([${MARK}-parent-row]) > div:has(#thread-prompt-banner-parent-thread-toggle),
 ${DETAIL}[aria-label="Thread context before sending"][${OPEN}="pullRequest"] :is(#thread-prompt-banner-git-toggle, #thread-prompt-banner-parent-thread-toggle, #thread-prompt-banner-parent-thread-body) { display:none !important; }
-${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"] #thread-prompt-banner-parent-thread-body { border:0 !important; background:transparent !important; box-shadow:none !important; }
-${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"] #thread-prompt-banner-parent-thread-body > div { background:transparent !important; background-image:none !important; box-shadow:none !important; }
-${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:not(:has(#thread-prompt-banner-parent-thread-body)) :is(svg, [data-icon-root]):not([${MARK}-title-icon] *) { display:none !important; }
-${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:not(:has(#thread-prompt-banner-parent-thread-body)) span:has(> a) { font-size:0 !important; }
-${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:not(:has(#thread-prompt-banner-parent-thread-body)) span:has(> a) > a { font-size:12px !important; line-height:18px !important; }
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:has([${MARK}-parent-row]) > :not([${MARK}-parent-row]):not([${MARK}-dismiss]),
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:has([${MARK}-parent-row]) #thread-prompt-banner-parent-thread-body,
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:has([${MARK}-parent-row]) :is(svg, [data-icon-root]):not([${MARK}-parent-row] *),
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:has([${MARK}-parent-row]):not(:has(#thread-prompt-banner-parent-thread-body)) :is(span:has(> a), a[href*="/threads/"]) { display:none !important; }
 ${NATIVE_DETAIL} :is(div[class~="px-3"],p[class~="px-3"],ul[class~="px-3"],ul[class~="px-2.5"]) { padding-left:0 !important; padding-right:0 !important; }
 ${NATIVE_DETAIL} > button[aria-expanded][aria-controls][class~="px-3"] { padding-left:0 !important; padding-right:0 !important; }
 ${NATIVE_DETAIL} > div > button[aria-expanded][aria-controls]:is([class~="px-3"],[class~="px-2"]) { padding-left:0 !important; padding-right:0 !important; }
@@ -87,6 +86,7 @@ ${NATIVE_DETAIL} > div[class~="p-1"], ${NATIVE_DETAIL} > div[class~="p-1"] > div
 ${DETAIL}[aria-label="To-do list"] ul[class~="px-2.5"] > li[class~="px-2"] { margin-left:-8px; margin-right:-8px; width:calc(100% + 16px); box-sizing:border-box; }
 ${DETAIL} [${MARK}-close-heading] { box-sizing:border-box; padding-right:34px !important; }
 ${DETAIL} [${MARK}-native-dismiss] { position:absolute; top:18px; right:24px; color:var(--subtle-foreground); cursor:pointer; }
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:has([${MARK}-parent-row]) [${MARK}-native-dismiss] { top:8px; right:8px; }
 ${DETAIL}[aria-label="Goal"] { display:flex !important; flex-direction:column; outline:0 !important; }
 ${DETAIL}[aria-label="Goal"] > [aria-label="Goal controls"] { order:2; display:flex; justify-content:flex-end; margin-top:8px; padding:0 !important; border:0 !important; background:transparent !important; box-shadow:none !important; }
 ${DETAIL}[aria-label="Goal"] > button[aria-expanded][aria-controls],
@@ -171,6 +171,7 @@ ${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] > :is(svg, [data-i
 [${MARK}-avatar] [${MARK}-provider-icon], [${MARK}-avatar] [${MARK}-provider-icon] > :is(svg, span, img) { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; flex-shrink:0; }
 [${MARK}-avatar][data-new] { animation:bb-info-droplet 460ms cubic-bezier(.36,0,.18,1) backwards; }
 [${MARK}-menu], ${DETAIL} { position:absolute !important; display:block !important; left:0 !important; right:0 !important; top:auto !important; bottom:40px !important; transform:none !important; box-sizing:border-box; width:100% !important; max-width:none !important; min-height:0 !important; height:auto !important; max-height:min(50dvh,26rem) !important; overflow:auto !important; margin:0 !important; padding:16px 24px !important; order:0 !important; border:0 !important; border-radius:18px !important; background:var(--bb-chat-ui-info-face) !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); color:var(--foreground); box-shadow:0 12px 32px -14px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; z-index:52; transform-origin:center bottom; animation:bb-info-enter 260ms cubic-bezier(.22,1,.36,1); }
+${DETAIL}[aria-label="Thread context before sending"][${OPEN}="parent"]:has([${MARK}-parent-row]) { padding:8px !important; }
 [${MARK}-menu], ${DETAIL} { overscroll-behavior:contain !important; }
 [${MARK}-menu] header { display:flex; align-items:center; gap:6px; font-size:12px; padding-bottom:8px; }
 [${MARK}-menu] header button:last-child { margin-left:auto; }
@@ -251,6 +252,10 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-kind="children"] [${MARK}-dismiss] { margin-left:auto; border:0; background:transparent; color:var(--subtle-foreground); }
 ${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row] { display:flex; align-items:center; gap:8px; width:calc(100% + 16px); box-sizing:border-box; margin:0 -8px; padding:8px; min-width:0; border-radius:10px; text-align:left; cursor:pointer; background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; transition:background-color 150ms ease-out; }
 ${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row]:hover, ${DETAIL}[${MARK}-kind="children"] [${MARK}-child-row]:focus-visible { background:color-mix(in oklab,var(--foreground) 6%,transparent) !important; }
+${DETAIL} [${MARK}-parent-row] { display:flex; align-items:center; gap:8px; width:calc(100% + 16px); box-sizing:border-box; margin:-8px; padding:8px 40px 8px 8px; min-height:40px; min-width:0; border-radius:10px; text-align:left; cursor:pointer; background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; transition:background-color 150ms ease-out; }
+${DETAIL} [${MARK}-parent-row]:hover, ${DETAIL} [${MARK}-parent-row]:focus-visible { background:color-mix(in oklab,var(--foreground) 6%,transparent) !important; }
+[${MARK}-parent-row] [${MARK}-provider-icon], [${MARK}-parent-row] [${MARK}-provider-icon] > :is(svg, span, img) { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; flex-shrink:0; }
+[${MARK}-parent-title] { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
 [${MARK}-child-row] + [${MARK}-child-row] { border-top:1px solid var(--border-hairline,var(--border)); }
 [${MARK}-child-row] [${MARK}-avatar] { width:27px; height:27px; margin-left:0; }
 [${MARK}-child-main] { flex:1; min-width:0; }
@@ -486,6 +491,8 @@ export function injectComposerInfo(document: Document): () => void {
     const panelHeadings = new Set<HTMLElement>();
     const generatedHeadings = new Set<HTMLElement>();
     const nativeDismisses = new Map<HTMLElement, HTMLButtonElement>();
+    const parentRows = new Map<HTMLElement, HTMLButtonElement>();
+    const droppedParents = new WeakSet<HTMLElement>();
     const collapseRows = new Set<HTMLElement>();
     const closeHeadings = new Set<HTMLElement>();
     const generatedCloseHeadings = new Set<HTMLElement>();
@@ -515,6 +522,63 @@ export function injectComposerInfo(document: Document): () => void {
         if (generatedCloseHeadings.delete(heading)) heading.remove();
       }
       const item = items.find(item => item.node === activeNode && item.key === active);
+      const escapeAttr = (value: string) => view?.CSS?.escape(value) ?? value.replace(/["\\]/g, "\\$&");
+      const readParent = () => {
+        try {
+          const raw = stack.querySelector(`[${SOURCE}]`)?.getAttribute(`${MARK}-parent`);
+          if (!raw) return null;
+          const value = JSON.parse(raw) as { id?: unknown; title?: unknown; providerId?: unknown };
+          if (!value || typeof value.id !== "string" || typeof value.title !== "string" || typeof value.providerId !== "string") return null;
+          return { id:value.id, title:value.title, providerId:value.providerId };
+        } catch { return null; }
+      };
+      const parentHost = item?.key === "parent" && item.node.hasAttribute(OPEN) ? item.node : null;
+      for (const [host, row] of parentRows) if (host !== parentHost) { row.remove(); parentRows.delete(host); }
+      if (parentHost) {
+        const parent = readParent();
+        const currentRow = parentRows.get(parentHost);
+        const nativeParentLink = () => parentHost.querySelector<HTMLAnchorElement>('a[href*="/threads/"]');
+        const remembered = currentRow?.getAttribute(`${MARK}-parent-row`) ?? "";
+        const blocked = Boolean(remembered) || droppedParents.has(parentHost);
+        if (parent) droppedParents.delete(parentHost);
+        else if (blocked) droppedParents.add(parentHost);
+        const title = parent?.title ?? (blocked ? "" : nativeParentLink()?.textContent?.replace(/\s+/g, " ").trim() ?? "");
+        if (!title) { currentRow?.remove(); parentRows.delete(parentHost); }
+        else {
+          let row = currentRow;
+          if (!row) {
+            row = document.createElement("button");
+            row.type = "button";
+            const parentRow = row;
+            parentRow.addEventListener("click", () => {
+              const current = readParent();
+              if (current) {
+                const opener = stack.querySelector<HTMLButtonElement>(`[${MARK}-parent-open="${escapeAttr(current.id)}"]`);
+                if (opener) { opener.click(); return; }
+                nativeParentLink()?.click();
+                return;
+              }
+              if (parentRow.getAttribute(`${MARK}-parent-row`)) return;
+              nativeParentLink()?.click();
+            });
+            parentRows.set(parentHost, row);
+          }
+          const id = parent?.id ?? "";
+          if (row.getAttribute(`${MARK}-parent-row`) !== id) row.setAttribute(`${MARK}-parent-row`, id);
+          if (row.getAttribute("aria-label") !== title) row.setAttribute("aria-label", title);
+          const artwork = parent ? stack.querySelector(`[${MARK}-parent-icon="${escapeAttr(parent.id)}"]`)?.firstElementChild : null;
+          const icon = document.createElement("span");
+          icon.setAttribute(`${MARK}-provider-icon`, ""); icon.setAttribute("aria-hidden", "true");
+          if (artwork) { const copy = artwork.cloneNode(true) as Element; copy.removeAttribute("id"); icon.append(copy); }
+          const label = document.createElement("span");
+          label.setAttribute(`${MARK}-parent-title`, ""); label.textContent = title;
+          const wantIcon = icon.innerHTML;
+          if (row.querySelector(`[${MARK}-parent-title]`)?.textContent !== title || (row.querySelector(`[${MARK}-provider-icon]`)?.innerHTML ?? "") !== wantIcon) {
+            row.replaceChildren(...(wantIcon ? [icon, label] : [label]));
+          }
+          if (row.parentElement !== parentHost) parentHost.prepend(row);
+        }
+      }
       for (const [button, label] of goalClearLabels) if (item?.key !== "goal" || !item.node.hasAttribute(OPEN) || !item.node.contains(button)) {
         label.remove(); goalClearLabels.delete(button);
       }
@@ -529,18 +593,20 @@ export function injectComposerInfo(document: Document): () => void {
           if (label.parentElement !== button) button.append(label);
         }
       }
-      let heading = item.node.querySelector<HTMLElement>(`[${MARK}-panel-heading], [${MARK}-close-heading]`);
-      if (!heading || heading.closest("button, a")) {
-        const parent = item.trigger?.parentElement;
-        heading = parent && parent !== item.node && !parent.closest("button, a") && !parent.hasAttribute("data-queued-messages-mode") ? parent : item.trigger;
-        if (!item.trigger) heading = item.node.querySelector<HTMLElement>("h3, h4, header");
-        if (heading?.hasAttribute("data-queued-messages-mode") || item.key === "queue" || item.key === "parent" || item.key === "goal") heading = null;
+      if (item.key !== "parent") {
+        let heading = item.node.querySelector<HTMLElement>(`[${MARK}-panel-heading], [${MARK}-close-heading]`);
+        if (!heading || heading.closest("button, a")) {
+          const parent = item.trigger?.parentElement;
+          heading = parent && parent !== item.node && !parent.closest("button, a") && !parent.hasAttribute("data-queued-messages-mode") ? parent : item.trigger;
+          if (!item.trigger) heading = item.node.querySelector<HTMLElement>("h3, h4, header");
+          if (heading?.hasAttribute("data-queued-messages-mode") || item.key === "queue" || item.key === "goal") heading = null;
+        }
+        if (!heading) {
+          heading = document.createElement("h3"); heading.textContent = item.label;
+          item.node.prepend(heading); generatedCloseHeadings.add(heading);
+        }
+        heading.setAttribute(`${MARK}-close-heading`, ""); closeHeadings.add(heading);
       }
-      if (!heading) {
-        heading = document.createElement("h3"); heading.textContent = item.label;
-        item.node.prepend(heading); generatedCloseHeadings.add(heading);
-      }
-      heading.setAttribute(`${MARK}-close-heading`, ""); closeHeadings.add(heading);
       let dismiss = nativeDismisses.get(item.node);
       if (!dismiss) {
         dismiss = document.createElement("button"); dismiss.type = "button"; dismiss.textContent = "×";
@@ -1864,6 +1930,7 @@ export function injectComposerInfo(document: Document): () => void {
       for (const heading of panelHeadings) heading.removeAttribute(`${MARK}-panel-heading`);
       for (const heading of generatedHeadings) heading.remove();
       for (const button of nativeDismisses.values()) button.remove();
+      for (const row of parentRows.values()) row.remove();
       for (const row of collapseRows) row.removeAttribute(`${MARK}-collapse`);
       for (const heading of closeHeadings) heading.removeAttribute(`${MARK}-close-heading`);
       for (const heading of generatedCloseHeadings) heading.remove();
@@ -1884,7 +1951,7 @@ export function injectComposerInfo(document: Document): () => void {
   }
   const schedule = () => { if (!frame && !disposed) frame = view.requestAnimationFrame(sync); };
   const observer = new view.MutationObserver(schedule);
-  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-children`, `${MARK}-child-providers`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
+  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-parent`, `${MARK}-children`, `${MARK}-child-providers`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     for (const [stack, state] of states) if (stack.contains(event.target as Node) || event.target === document) state.close(true);

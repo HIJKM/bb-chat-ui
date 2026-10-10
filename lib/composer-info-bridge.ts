@@ -2,6 +2,7 @@ import { createElement, Fragment, useEffect, useMemo, useState } from "react";
 import { experimental_Icon, experimental_ProviderIcon, experimental_useProviders, UrlLink, useBbNavigate, useComposer, useSdk, useSettings } from "@get-bb/plugin-sdk/app";
 import { infoKinds } from "./composer-info-settings.ts";
 import { childState } from "./composer-child.ts";
+import { loadParent, parentEventMatters, type ParentSummary } from "./composer-parent.ts";
 import { createThreadRestorer, type RestoreState } from "./composer-restore.ts";
 
 type Sdk = ReturnType<typeof useSdk>;
@@ -9,7 +10,7 @@ type Timeline = Awaited<ReturnType<Sdk["threads"]["timeline"]>>;
 type Children = Awaited<ReturnType<Sdk["threads"]["list"]>>;
 type Queue = Awaited<ReturnType<Sdk["threads"]["queuedMessages"]["list"]>>;
 type PullRequest = Awaited<ReturnType<Sdk["environments"]["pullRequest"]>>;
-interface Snapshot { threadId: string; timeline: Timeline; children: Children; queue: Queue; pullRequest: PullRequest | null; readOnly:{label:string|null; canRestore:boolean}; }
+interface Snapshot { threadId: string; timeline: Timeline; children: Children; queue: Queue; pullRequest: PullRequest | null; readOnly:{label:string|null; canRestore:boolean}; parent: ParentSummary | null; }
 const mark = "data-bb-chat-ui-info";
 
 export function ComposerInfoBridge() {
@@ -31,6 +32,7 @@ export function ComposerInfoBridge() {
     let fetching = false;
     let again = false;
     let childIds = new Set<string>();
+    let parentId: string | null = null;
     const refresh = async () => {
       if (signal.aborted) return;
       if (fetching) { again = true; return; }
@@ -45,12 +47,13 @@ export function ComposerInfoBridge() {
             : lifecycle === "removing" ? "Machine removal in progress" : lifecycle === "cleanup-failed" ? "Machine cleanup failed"
             : environment?.status === "destroyed" ? "Environment unavailable" : null;
           const readOnly = { label, canRestore:thread.canRestoreEnvironment };
-          if (!label) return { queue:[] as Queue, pullRequest:null, readOnly };
+          const parentThreadId = thread.parentThreadId;
+          if (!label) return { queue:[] as Queue, pullRequest:null, readOnly, parentThreadId };
           const results = await Promise.allSettled([
             sdk.threads.queuedMessages.list({ threadId, signal }),
             thread.environmentId ? sdk.environments.pullRequest({ environmentId:thread.environmentId, signal }) : Promise.resolve(null),
           ]);
-          return { queue:results[0].status === "fulfilled" ? results[0].value : [], pullRequest:results[1].status === "fulfilled" ? results[1].value : null, readOnly };
+          return { queue:results[0].status === "fulfilled" ? results[0].value : [], pullRequest:results[1].status === "fulfilled" ? results[1].value : null, readOnly, parentThreadId };
         })();
         const childrenPromise = (async () => {
           const children: Children = [];
@@ -61,8 +64,19 @@ export function ComposerInfoBridge() {
           }
           return children;
         })();
-        const [timeline, children, readOnly] = await Promise.all([timelinePromise, childrenPromise, readOnlyPromise]);
-        if (!signal.aborted) { childIds = new Set(children.map(child => child.id)); setSnapshot({ threadId, timeline, children, ...readOnly }); setError(false); }
+        const [timeline, children, context] = await Promise.all([timelinePromise, childrenPromise, readOnlyPromise]);
+        const parent = await loadParent(
+          (parentThreadId, parentSignal) => sdk.threads.get({ threadId:parentThreadId, signal:parentSignal }),
+          threadId,
+          { id:threadId, parentThreadId:context.parentThreadId },
+          signal,
+        );
+        if (!signal.aborted) {
+          parentId = parent?.id ?? null;
+          childIds = new Set(children.map(child => child.id));
+          setSnapshot({ threadId, timeline, children, parent, queue:context.queue, pullRequest:context.pullRequest, readOnly:context.readOnly });
+          setError(false);
+        }
       } catch {
         if (!signal.aborted) setError(true);
       } finally {
@@ -77,6 +91,7 @@ export function ComposerInfoBridge() {
     // Include child changes, and coalesce rapid stream updates into one request.
     const stop = sdk.subscribe({ event:"thread:changed", callback:event => {
       if (event.changes.some(change => change === "thread-created" || change === "parent-changed")) { schedule(); return; }
+      if (parentId && event.id === parentId) { if (parentEventMatters(event.changes)) schedule(); return; }
       if (event.id !== threadId && (!event.id || !childIds.has(event.id))) return;
       if (event.changes.some(change => change !== "events-appended" && change !== "read-state-changed" && change !== "tabs-changed" && change !== "terminals-changed")) { schedule(); return; }
       const types = event.metadata?.eventTypes;
@@ -94,6 +109,7 @@ export function ComposerInfoBridge() {
   const restoring = restoreStates[threadId];
   const timeline = data?.timeline;
   const children = data?.children ?? [];
+  const parent = data?.parent ?? null;
   const providerIcon = (providerId:string) => createElement(experimental_ProviderIcon, {
     providerKind:"agent", provider:providers.find(provider => provider.id === providerId) ?? { id:providerId },
     fallback:"UserRound", className:"size-4", "aria-hidden":true,
@@ -109,11 +125,14 @@ export function ComposerInfoBridge() {
       [`${mark}-thread`]:threadId,
       [`${mark}-settings`]:JSON.stringify(values ?? {}),
       [`${mark}-read-only-label`]:data?.readOnly.label ?? undefined,
+      [`${mark}-parent`]:parent ? JSON.stringify(parent) : undefined,
       [`${mark}-children`]:JSON.stringify(children.map(child => ({ id:child.id, title:child.title ?? child.titleFallback ?? "Child Thread", providerId:child.providerId, state:childState(child.runtime.displayStatus, child.hasPendingInteraction) }))),
       [`${mark}-child-providers`]:JSON.stringify(providers.map(provider => [provider.id, provider.logoUrl, provider.icon, provider.strings?.iconTint])),
     }, ...infoKinds.map(kind => createElement("span", { key:kind.key, [`${mark}-icon`]:kind.key },
       createElement(experimental_Icon, { name:kind.icon, "aria-hidden":true }))),
       ...children.map(child => createElement("span", { key:child.id, [`${mark}-child-icon`]:child.id }, providerIcon(child.providerId))),
+      parent ? createElement("span", { key:"parent-icon", [`${mark}-parent-icon`]:parent.id }, providerIcon(parent.providerId)) : null,
+      parent ? createElement("button", { key:"parent-open", type:"button", [`${mark}-parent-open`]:parent.id, onClick:() => navigate.toThread(parent.id) }) : null,
       createElement("button", { type:"button", [`${mark}-restore-source`]:"unarchive", disabled:restoring?.pending === true,
         [`${mark}-restore-error`]:restoring?.error ?? undefined, onClick:() => void restore(threadId, "unarchive") }, restoring?.pending ? "Unarchiving..." : "Unarchive"),
       createElement("button", { type:"button", [`${mark}-restore-source`]:"environment", disabled:restoring?.pending === true || !data?.readOnly.canRestore,

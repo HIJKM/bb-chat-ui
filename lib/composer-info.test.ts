@@ -400,7 +400,257 @@ test("native close survives header replacement and keeps genuine actions on thei
   } finally { stop(); f.dom.window.close(); }
 });
 
-test("Parent popovers have a named header separate from native inline and icon-only rows", async () => {
+test("Parent popover is one row of the parent provider and title", async () => {
+  const f = fixture();
+  const source = f.document.querySelector<HTMLElement>("[data-bb-chat-ui-info-settings]")!;
+  source.insertAdjacentHTML("beforeend", '<span data-bb-chat-ui-info-icon="parent"><svg data-family="parent"></svg></span><span data-bb-chat-ui-info-child-icon="child-1"><svg data-provider="child-provider"></svg></span>');
+  const card = f.document.querySelector<HTMLElement>('section[aria-label="Thread context before sending"]')!;
+  const sectionParent = card.parentElement;
+  const shared = `<div class="flex items-center gap-0.5 p-1"><button type="button" id="thread-prompt-banner-parent-thread-toggle" aria-expanded="false" aria-controls="thread-prompt-banner-parent-thread-body" aria-label="Parent thread"><svg data-icon="UserRound"></svg></button><a href="https://example.com/pr/12" aria-label="Pull request 12: Open">#12</a><button type="button" id="thread-prompt-banner-git-toggle" aria-expanded="false" aria-controls="thread-prompt-banner-git-body">+12 −4 · 3 files</button></div><section id="thread-prompt-banner-parent-thread-body" hidden><div class="bg-popover">This thread is a child of <a href="/threads/parent-1"><span>네이티브 제목</span></a>.</div><div><button type="button" aria-expanded="true" aria-controls="thread-prompt-banner-parent-thread-body" aria-label="Collapse parent thread">Collapse</button></div></section><section id="thread-prompt-banner-git-body" hidden><div>lib/composer-info.ts</div></section>`;
+  const alone = `<div class="native-inlay"><svg data-icon="UserRound"></svg><span>Parent <a href="/threads/parent-only">Parent only title</a></span></div>`;
+  const wire = () => {
+    for (const toggle of card.querySelectorAll<HTMLButtonElement>('button[id$="-toggle"]')) {
+      toggle.addEventListener("click", () => {
+        const expanded = toggle.getAttribute("aria-expanded") !== "true";
+        toggle.setAttribute("aria-expanded", String(expanded));
+        const body = card.querySelector<HTMLElement>(`#${toggle.getAttribute("aria-controls")}`);
+        if (body) body.hidden = !expanded;
+      });
+    }
+  };
+  const publish = (id: string, title: string, provider: string, navigate: boolean) => {
+    source.querySelector("[data-bb-chat-ui-info-parent-icon]")?.remove();
+    source.querySelector("[data-bb-chat-ui-info-parent-open]")?.remove();
+    source.setAttribute("data-bb-chat-ui-info-parent", JSON.stringify({ id, title, providerId: provider }));
+    source.insertAdjacentHTML("beforeend", `<span data-bb-chat-ui-info-parent-icon="${id}"><svg data-provider="${provider}"></svg></span>${navigate ? `<button type="button" data-bb-chat-ui-info-parent-open="${id}"></button>` : ""}`);
+  };
+  card.innerHTML = shared;
+  wire();
+  const nativeLink = () => card.querySelector<HTMLAnchorElement>('a[href*="/threads/"]')!;
+  const linkParent = nativeLink().parentElement;
+  let sdkMoves = 0;
+  let linkMoves = 0;
+  const countLink = () => { nativeLink().addEventListener("click", event => { event.preventDefault(); linkMoves += 1; }); };
+  countLink();
+  publish("parent-1", "아주 긴 부모 스레드 제목은 닫기 앞에서 끊긴다", "codex", true);
+  source.querySelector<HTMLButtonElement>("[data-bb-chat-ui-info-parent-open]")!.addEventListener("click", () => { sdkMoves += 1; });
+  const stop = injectComposerInfo(f.document);
+  const nativeCard = () => card.innerHTML.replaceAll('hidden=""', "hidden");
+  const resting = nativeCard();
+  const style = (node: Element) => f.dom.window.getComputedStyle(node);
+  const shown = (selector: string) => style(card.querySelector(selector)!).display !== "none";
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
+    assert.equal(card.querySelector("[data-bb-chat-ui-info-close-heading]"), null, "Parent has no separate title");
+    assert.equal(card.querySelector('[data-bb-chat-ui-info-title-icon="parent"]'), null);
+    const row = card.querySelector<HTMLButtonElement>("[data-bb-chat-ui-info-parent-row]")!;
+    assert.ok(row, "the parent is one card row");
+    assert.equal(card.querySelectorAll("[data-bb-chat-ui-info-parent-row]").length, 1);
+    assert.equal(row.parentElement, card);
+    assert.equal(row.tagName, "BUTTON");
+    assert.equal(row.getAttribute("href"), null);
+    assert.equal(row.querySelector("[data-provider]")?.getAttribute("data-provider"), "codex");
+    assert.equal(row.querySelector('[data-provider="child-provider"]'), null);
+    assert.equal(row.querySelector("[data-family]"), null);
+    assert.equal(row.querySelector("[data-icon='UserRound']"), null);
+    assert.equal(row.textContent, "아주 긴 부모 스레드 제목은 닫기 앞에서 끊긴다");
+    assert.equal(row.querySelector("[data-bb-chat-ui-info-child-meta], [data-bb-chat-ui-info-child-status], [data-bb-chat-ui-info-avatar-dot]"), null);
+    const title = row.querySelector<HTMLElement>("[data-bb-chat-ui-info-parent-title]")!;
+    assert.equal(style(title).textOverflow, "ellipsis");
+    assert.equal(style(title).whiteSpace, "nowrap");
+    assert.equal(style(row).cursor, "pointer");
+    assert.equal(style(row).borderRadius, "10px");
+    assert.equal(style(row).paddingTop, "8px");
+    assert.ok(parseFloat(style(row).paddingRight) >= 32, "the title keeps room for the close button");
+    assert.ok(parseFloat(style(row).minHeight) >= 40);
+    assert.equal(style(card).paddingTop, "8px");
+    assert.equal(style(card).paddingLeft, "8px");
+    assert.match(style(card).backdropFilter, /blur\(14px\)/);
+    assert.match(style(card).animation, /bb-info-enter/);
+    const dismiss = card.querySelector<HTMLButtonElement>("[data-bb-chat-ui-info-native-dismiss]")!;
+    assert.equal(card.querySelectorAll("[data-bb-chat-ui-info-native-dismiss]").length, 1);
+    assert.equal(dismiss.closest("[data-bb-chat-ui-info-parent-row]"), null);
+    assert.equal(style(dismiss).width, "24px");
+    assert.equal(style(dismiss).height, "24px");
+    assert.equal(shown("#thread-prompt-banner-parent-thread-body"), false, "the relationship sentence stays out of the popover");
+    assert.equal(shown("#thread-prompt-banner-git-toggle"), false);
+    assert.equal(shown("#thread-prompt-banner-git-body"), false);
+    assert.equal(shown('[aria-label^="Pull request "]'), false);
+    assert.equal(shown("#thread-prompt-banner-parent-thread-toggle"), false);
+    assert.equal(style(card.querySelector("svg[data-icon='UserRound']")!).display, "none");
+    assert.equal(nativeLink().parentElement, linkParent);
+    assert.equal(card.parentElement, sectionParent);
+    row.click();
+    assert.equal(sdkMoves, 1, "the row uses the parent navigate control");
+    assert.equal(linkMoves, 0, "the row does not move or activate the native link when navigate is available");
+    assert.equal(nativeLink().parentElement, linkParent);
+    assert.equal(card.hasAttribute("data-bb-chat-ui-info-open"), true);
+    dismiss.click();
+    assert.equal(sdkMoves, 1);
+    assert.equal(linkMoves, 0);
+    assert.equal(card.hasAttribute("data-bb-chat-ui-info-open"), false);
+    assert.equal(card.querySelector("[data-bb-chat-ui-info-parent-row]"), null);
+    assert.equal(nativeCard(), resting);
+
+    f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
+    f.document.dispatchEvent(new f.dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.equal(card.hasAttribute("data-bb-chat-ui-info-open"), false);
+    assert.equal(nativeCard(), resting);
+    f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
+    f.document.body.dispatchEvent(new f.dom.window.PointerEvent("pointerdown", { bubbles: true }));
+    assert.equal(card.hasAttribute("data-bb-chat-ui-info-open"), false);
+    assert.equal(nativeCard(), resting);
+
+    f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
+    publish("parent-2", "다른 부모", "claude", true);
+    source.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-parent-open="parent-2"]')!.addEventListener("click", () => { sdkMoves += 1; });
+    await f.tick();
+    const replaced = card.querySelector<HTMLButtonElement>("[data-bb-chat-ui-info-parent-row]")!;
+    assert.equal(replaced.textContent, "다른 부모");
+    assert.equal(replaced.querySelector("[data-provider]")?.getAttribute("data-provider"), "claude");
+    assert.equal(replaced.textContent?.includes("아주 긴 부모"), false);
+    source.removeAttribute("data-bb-chat-ui-info-parent");
+    source.querySelector("[data-bb-chat-ui-info-parent-icon]")?.remove();
+    source.querySelector("[data-bb-chat-ui-info-parent-open]")?.remove();
+    await f.tick();
+    assert.equal(card.querySelector("[data-bb-chat-ui-info-parent-row]"), null, "a removed parent does not leave the previous row");
+    assert.equal(shown("#thread-prompt-banner-parent-thread-body"), true, "a removed parent shows the native card instead of an empty popover");
+    replaced.click();
+    assert.equal(sdkMoves, 1, "a removed parent row does not navigate to the previous parent");
+
+    card.innerHTML = shared;
+    wire();
+    countLink();
+    await f.tick();
+    assert.equal(card.querySelector<HTMLButtonElement>("#thread-prompt-banner-parent-thread-toggle")!.getAttribute("aria-expanded"), "true");
+    assert.equal(card.querySelector("[data-bb-chat-ui-info-parent-row]"), null, "a rerender does not keep a parent that is already gone");
+    publish("parent-1", "늦은 부모", "codex", true);
+    await f.tick();
+    const late = card.querySelector<HTMLButtonElement>("[data-bb-chat-ui-info-parent-row]")!;
+    assert.equal(late.textContent, "늦은 부모");
+    assert.equal(late.querySelector("[data-provider]")?.getAttribute("data-provider"), "codex");
+    assert.equal(nativeLink().parentElement?.closest("[data-bb-chat-ui-info-parent-row]"), null);
+    card.querySelector("#thread-prompt-banner-git-toggle")!.textContent = "+200 −1 · 2 files";
+    await f.tick();
+    assert.equal(shown("#thread-prompt-banner-git-toggle"), false);
+    assert.equal(shown("#thread-prompt-banner-git-body"), false);
+    assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent?.includes("+200"));
+    f.click('[data-bb-chat-ui-info-trigger="pullRequest"]'); await f.tick();
+    assert.equal(card.getAttribute("data-bb-chat-ui-info-open"), "pullRequest");
+    assert.equal(card.querySelector("[data-bb-chat-ui-info-parent-row]"), null, "PR does not keep the parent row");
+    assert.equal(shown('[aria-label^="Pull request "]'), true);
+    assert.equal(shown("#thread-prompt-banner-parent-thread-body"), false);
+
+    card.innerHTML = alone;
+    const inlineLink = card.querySelector<HTMLAnchorElement>('a[href="/threads/parent-only"]')!;
+    const inlineParent = inlineLink.parentElement;
+    inlineLink.addEventListener("click", event => { event.preventDefault(); linkMoves += 1; });
+    publish("parent-only", "Parent only title", "codex", false);
+    await f.tick();
+    f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
+    const only = card.querySelector<HTMLButtonElement>("[data-bb-chat-ui-info-parent-row]")!;
+    assert.equal(only.textContent, "Parent only title");
+    assert.equal(only.querySelector("[data-provider]")?.getAttribute("data-provider"), "codex");
+    assert.equal(style(card.querySelector("svg[data-icon='UserRound']")!).display, "none");
+    assert.equal(style(inlineLink).display, "none");
+    assert.equal(card.querySelector("[data-bb-chat-ui-info-close-heading]"), null);
+    assert.equal(inlineLink.parentElement, inlineParent);
+    const before = linkMoves;
+    only.click();
+    assert.equal(linkMoves, before + 1, "without the navigate control the row uses the native parent link");
+    assert.equal(inlineLink.parentElement, inlineParent);
+    f.click("[data-bb-chat-ui-info-native-dismiss]");
+    assert.equal(card.innerHTML, alone);
+    source.setAttribute("data-bb-chat-ui-info-thread", "another-thread");
+    await f.tick();
+    assert.equal(card.hasAttribute("data-bb-chat-ui-info-open"), false);
+    assert.equal(card.querySelector("[data-bb-chat-ui-info-parent-row]"), null);
+    stop();
+    assert.equal(card.innerHTML, alone);
+    assert.equal(card.parentElement, sectionParent);
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("Parent popover keeps one row before parent metadata and does not follow a removed parent", async () => {
+  const f = fixture();
+  const source = f.document.querySelector<HTMLElement>("[data-bb-chat-ui-info-settings]")!;
+  source.insertAdjacentHTML("beforeend", '<span data-bb-chat-ui-info-icon="parent"><svg data-family="parent"></svg></span><span data-bb-chat-ui-info-child-icon="child-1"><svg data-provider="child-provider"></svg></span><button type="button" data-bb-chat-ui-info-parent-open="other-thread"></button>');
+  const card = f.document.querySelector<HTMLElement>('section[aria-label="Thread context before sending"]')!;
+  card.innerHTML = '<div class="flex items-center gap-0.5 p-1"><button type="button" id="thread-prompt-banner-parent-thread-toggle" aria-expanded="false" aria-controls="thread-prompt-banner-parent-thread-body" aria-label="Parent thread"><svg data-icon="UserRound"></svg></button><a href="https://example.com/pr/12" aria-label="Pull request 12: Open">#12</a><button type="button" id="thread-prompt-banner-git-toggle" aria-expanded="false" aria-controls="thread-prompt-banner-git-body">+12 −4 · 3 files</button></div><section id="thread-prompt-banner-parent-thread-body" hidden>This thread is a child of <a href="/threads/parent-1"><span>네이티브 제목</span></a>.</section><section id="thread-prompt-banner-git-body" hidden>lib/composer-info.ts</section>';
+  for (const toggle of card.querySelectorAll<HTMLButtonElement>('button[id$="-toggle"]')) {
+    toggle.addEventListener("click", () => {
+      const expanded = toggle.getAttribute("aria-expanded") !== "true";
+      toggle.setAttribute("aria-expanded", String(expanded));
+      const body = card.querySelector<HTMLElement>(`#${toggle.getAttribute("aria-controls")}`);
+      if (body) body.hidden = !expanded;
+    });
+  }
+  const nativeLink = () => card.querySelector<HTMLAnchorElement>('a[href="/threads/parent-1"]')!;
+  let nativeMoves = 0;
+  let staleMoves = 0;
+  let oldMoves = 0;
+  let nextMoves = 0;
+  nativeLink().addEventListener("click", event => { event.preventDefault(); nativeMoves += 1; });
+  source.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-parent-open="other-thread"]')!.addEventListener("click", () => { staleMoves += 1; });
+  const stop = injectComposerInfo(f.document);
+  const shown = (selector: string) => f.dom.window.getComputedStyle(card.querySelector(selector)!).display !== "none";
+  const row = () => card.querySelector<HTMLButtonElement>("[data-bb-chat-ui-info-parent-row]");
+  try {
+    f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
+    const waiting = row()!;
+    assert.ok(waiting, "parent metadata that is not ready still leaves one row");
+    assert.equal(waiting.textContent, "네이티브 제목");
+    assert.equal(waiting.querySelector("[data-provider], [data-family], [data-icon='UserRound']"), null, "the temporary row does not borrow another thread icon");
+    assert.equal(shown("#thread-prompt-banner-parent-thread-body"), false);
+    assert.equal(shown("#thread-prompt-banner-git-toggle"), false);
+    assert.equal(shown('[aria-label^="Pull request "]'), false);
+    assert.equal(f.dom.window.getComputedStyle(waiting).display !== "none", true);
+    waiting.click();
+    assert.equal(nativeMoves, 1, "the temporary row uses this card's native parent link");
+    assert.equal(staleMoves, 0);
+
+    source.setAttribute("data-bb-chat-ui-info-parent", "null");
+    await f.tick();
+    const failed = row()!;
+    assert.ok(failed, "a failed parent lookup does not leave only the close button");
+    assert.equal(failed.textContent, "네이티브 제목");
+    assert.equal(failed.querySelector("[data-provider], [data-family]"), null);
+    failed.click();
+    assert.equal(nativeMoves, 2);
+    assert.equal(staleMoves, 0);
+
+    source.setAttribute("data-bb-chat-ui-info-parent", JSON.stringify({ id: "parent-1", title: "이전 부모", providerId: "codex" }));
+    source.insertAdjacentHTML("beforeend", '<span data-bb-chat-ui-info-parent-icon="parent-1"><svg data-provider="codex"></svg></span><button type="button" data-bb-chat-ui-info-parent-open="parent-1"></button>');
+    source.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-parent-open="parent-1"]')!.addEventListener("click", () => { oldMoves += 1; });
+    await f.tick();
+    assert.equal(row()!.textContent, "이전 부모");
+    assert.equal(row()!.querySelector("[data-provider]")?.getAttribute("data-provider"), "codex");
+    source.setAttribute("data-bb-chat-ui-info-parent", JSON.stringify({ id: "parent-2", title: "다음 부모", providerId: "claude" }));
+    source.insertAdjacentHTML("beforeend", '<span data-bb-chat-ui-info-parent-icon="parent-2"><svg data-provider="claude"></svg></span><button type="button" data-bb-chat-ui-info-parent-open="parent-2"></button>');
+    source.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-parent-open="parent-2"]')!.addEventListener("click", () => { nextMoves += 1; });
+    await f.tick();
+    const replaced = row()!;
+    assert.equal(replaced.textContent, "다음 부모");
+    assert.equal(replaced.querySelector("[data-provider]")?.getAttribute("data-provider"), "claude");
+    replaced.click();
+    assert.equal(nextMoves, 1, "replacement follows the new parent");
+    assert.equal(oldMoves, 0, "replacement does not follow the previous parent");
+    assert.equal(nativeMoves, 2);
+    assert.equal(staleMoves, 0);
+
+    source.removeAttribute("data-bb-chat-ui-info-parent");
+    await f.tick();
+    assert.equal(row(), null, "a removed parent does not keep the previous row");
+    assert.equal(shown("#thread-prompt-banner-parent-thread-body"), true, "a removed parent does not leave only the close button");
+    replaced.click();
+    assert.equal(oldMoves, 0);
+    assert.equal(nextMoves, 1);
+    assert.equal(nativeMoves, 2, "a removed parent row does not navigate to the previous parent");
+    assert.equal(staleMoves, 0);
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("Parent popovers keep the native link without a separate title", async () => {
   for (const inline of [true, false]) {
     const f = fixture();
     const node = f.document.querySelector<HTMLElement>('section[aria-label="Thread context before sending"]')!;
@@ -419,17 +669,17 @@ test("Parent popovers have a named header separate from native inline and icon-o
     const stop = injectComposerInfo(f.document);
     try {
       f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
-      const heading = node.querySelector<HTMLElement>('[data-bb-chat-ui-info-close-heading]')!;
-      assert.equal(heading.tagName, 'H3', 'the icon-only native row is not the popover title');
-      assert.equal(heading.textContent, 'Parent');
-      const style = f.dom.window.getComputedStyle(heading);
-      assert.equal(style.display, 'flex');
-      assert.equal(style.alignItems, 'center');
+      const waiting = node.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-parent-row]');
+      assert.equal(node.querySelector('[data-bb-chat-ui-info-close-heading]'), null, 'Parent has no separate title');
+      assert.equal(waiting?.textContent, 'Parent title', 'this card native title fills the row before parent metadata');
+      assert.equal(waiting?.querySelector('[data-provider], [data-family]'), null);
+      assert.equal(f.dom.window.getComputedStyle(link).display, 'none', 'the native sentence and link stay out of the popover');
       assert.equal(link.parentElement, linkParent, 'native parent navigation keeps its original structure');
       assert.equal(link.getAttribute('href'), '/threads/parent');
       if (toggle) assert.equal(toggle.getAttribute('aria-expanded'), 'true');
       f.click('[data-bb-chat-ui-info-native-dismiss]');
       assert.equal(node.querySelector('[data-bb-chat-ui-info-close-heading]'), null);
+      assert.equal(node.querySelector('[data-bb-chat-ui-info-parent-row]'), null);
       if (toggle) assert.equal(toggle.getAttribute('aria-expanded'), 'false');
       assert.equal(node.innerHTML, original, 'closing restores the native card');
     } finally { stop(); f.dom.window.close(); }
@@ -3546,7 +3796,7 @@ test("Parent and PR popovers from the shared context card hide the other familie
   } finally { stop(); f.dom.window.close(); }
 });
 
-test("Parent popover shows the common title and parent link without the native icon row, divider, or opaque body", async () => {
+test("Parent popover hides the native sentence, person icon, and Diff without moving the card", async () => {
   const f = fixture();
   const utilities = f.document.createElement("style");
   utilities.textContent = ".border-t { border-top-width:1px; border-top-style:solid; } .border-border { border-top-color:rgb(228, 228, 231); } .border-transparent { border-top-color:transparent; } .bg-popover { background-color:rgb(255, 255, 255); } .dark .bg-popover { background-color:rgb(24, 24, 27); }";
@@ -3583,22 +3833,21 @@ test("Parent popover shows the common title and parent link without the native i
     f.click('[data-bb-chat-ui-info-trigger="parent"]'); await f.tick();
     const toggle = card.querySelector<HTMLButtonElement>("#thread-prompt-banner-parent-thread-toggle")!;
     const body = card.querySelector<HTMLElement>("#thread-prompt-banner-parent-thread-body")!;
-    const fill = body.querySelector<HTMLElement>(".bg-popover")!;
     assert.equal(style(toggle).display, "none", "the native person-icon toggle is not a second Parent title");
     assert.equal(style(toggle.parentElement!).display, "none", "the shared segment row does not stay under the title");
     assert.equal(style(card.querySelector("#thread-prompt-banner-git-toggle")!).display, "none");
     assert.equal(style(card.querySelector("#thread-prompt-banner-git-body")!).display, "none");
     assert.equal(style(card.querySelector('a[aria-label^="Pull request "]')!).display, "none");
-    assert.equal(style(body).display, "block");
-    assert.equal(style(body).borderTopWidth, "0px", "the disclosure divider stays off while Parent is open");
-    assert.equal(style(fill).backgroundColor, "rgba(0, 0, 0, 0)", "the native popover fill does not cover the glass");
+    assert.equal(style(body).display, "none", "the relationship sentence stays out of the popover");
+    const waiting = card.querySelector<HTMLButtonElement>("[data-bb-chat-ui-info-parent-row]");
+    assert.equal(card.querySelector("[data-bb-chat-ui-info-close-heading]"), null, "Parent has no separate title");
+    assert.equal(waiting?.textContent, "VAU-2 · 그래프 ㄱ자 코너 리사이즈 핸들");
+    assert.equal(waiting?.querySelector("[data-provider], [data-family], [data-icon='UserRound']"), null);
+    assert.equal(card.querySelector('[data-bb-chat-ui-info-title-icon="parent"]'), null);
     assert.match(body.textContent ?? "", /This thread is a child of/);
     assert.match(body.textContent ?? "", /VAU-2/);
     assert.equal((body.textContent ?? "").includes("+162"), false);
     assert.equal((body.textContent ?? "").includes("lib/composer-info.ts"), false);
-    const heading = card.querySelector("[data-bb-chat-ui-info-close-heading]")!;
-    assert.equal(heading.textContent, "Parent");
-    assert.ok(heading.querySelector('[data-bb-chat-ui-info-title-icon="parent"] [data-family="parent"]'));
     assert.equal(card.querySelectorAll("[data-bb-chat-ui-info-native-dismiss]").length, 1);
     assert.equal(style(card.querySelector('[aria-label="Collapse parent thread"]')!.parentElement!).display, "none");
     assert.equal(link().parentElement, linkParent);
@@ -3610,10 +3859,10 @@ test("Parent popover shows the common title and parent link without the native i
     card.querySelector("#thread-prompt-banner-git-toggle span")!.textContent = "Uncommitted · +200 −1 · 2 files";
     await f.tick();
     assert.equal(style(card.querySelector("#thread-prompt-banner-git-toggle")!).display, "none");
-    assert.equal(style(fill).backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.equal(style(body).display, "none");
     assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.textContent?.includes("+200"));
     f.document.documentElement.classList.add("dark");
-    assert.equal(style(fill).backgroundColor, "rgba(0, 0, 0, 0)", "dark mode keeps the body fill transparent");
+    assert.equal(style(body).display, "none", "dark mode keeps the relationship sentence out");
     f.document.documentElement.classList.remove("dark");
 
     card.innerHTML = shared("Uncommitted · +200 −1 · 2 files");
@@ -3623,8 +3872,7 @@ test("Parent popover shows the common title and parent link without the native i
     const nextBody = card.querySelector<HTMLElement>("#thread-prompt-banner-parent-thread-body")!;
     assert.equal(nextToggle.getAttribute("aria-expanded"), "true", "a native rerender keeps the parent disclosure open");
     assert.equal(style(nextToggle).display, "none");
-    assert.equal(style(nextBody).borderTopWidth, "0px");
-    assert.equal(style(nextBody.querySelector(".bg-popover")!).backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.equal(style(nextBody).display, "none");
     assert.match(nextBody.textContent ?? "", /This thread is a child of/);
     assert.equal(card.parentElement, sectionParent);
 
@@ -3640,11 +3888,13 @@ test("Parent popover shows the common title and parent link without the native i
     const inlineLink = card.querySelector<HTMLAnchorElement>('a[href="/threads/parent-only"]')!;
     const inlineParent = inlineLink.parentElement!;
     assert.equal(style(card.querySelector("svg[data-icon='UserRound']")!).display, "none", "parent-only does not repeat the native person icon");
-    assert.equal(style(inlineParent).fontSize, "0px", "parent-only does not repeat the native Parent verb");
-    assert.equal(style(inlineLink).fontSize, "12px");
-    assert.notEqual(style(inlineLink).display, "none");
+    assert.equal(style(inlineParent).display, "none", "parent-only does not repeat the native Parent verb");
+    assert.equal(style(inlineLink).display, "none");
     assert.equal(inlineLink.parentElement, inlineParent);
-    assert.match(card.querySelector("[data-bb-chat-ui-info-close-heading]")?.textContent ?? "", /^Parent$/);
+    const nativeRow = card.querySelector<HTMLButtonElement>("[data-bb-chat-ui-info-parent-row]");
+    assert.equal(card.querySelector("[data-bb-chat-ui-info-close-heading]"), null);
+    assert.equal(nativeRow?.textContent, "Chat UI 전체 이슈 정리");
+    assert.equal(nativeRow?.querySelector("[data-provider], [data-family], [data-icon='UserRound']"), null);
     assert.equal(card.querySelectorAll("[data-bb-chat-ui-info-native-dismiss]").length, 1);
     f.click('[data-bb-chat-ui-info-native-dismiss]');
     assert.equal(card.querySelector("[data-bb-chat-ui-info-close-heading]"), null);
