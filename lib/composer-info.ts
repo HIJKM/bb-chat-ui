@@ -233,10 +233,10 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-stack] [data-testid="plan-review-request"] { position:relative; background:transparent !important; border:0 !important; border-radius:0 !important; overflow:visible !important; box-shadow:none !important; }
 [${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto { padding-left:0 !important; padding-right:0 !important; }
 [${MARK}-stack] [data-testid="plan-review-request"] > p { border-top:0 !important; padding-left:0 !important; padding-right:0 !important; }
-[${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto::before { content:""; display:block; position:sticky; top:0; z-index:1; height:24px; margin-bottom:-24px; pointer-events:none; opacity:0; background:linear-gradient(to bottom,var(--bb-chat-ui-info-face),transparent); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); mask-image:linear-gradient(to bottom,black,transparent); -webkit-mask-image:linear-gradient(to bottom,black,transparent); }
-[${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto::after { content:""; display:block; position:sticky; bottom:0; z-index:1; height:24px; margin-top:-24px; pointer-events:none; opacity:0; background:linear-gradient(to top,var(--bb-chat-ui-info-face),transparent); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); mask-image:linear-gradient(to top,black,transparent); -webkit-mask-image:linear-gradient(to top,black,transparent); }
-[${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto[${MARK}-fade~="above"]::before,
-[${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto[${MARK}-fade~="below"]::after { opacity:1; }
+[${MARK}-body-fade] { position:absolute; pointer-events:none; z-index:4; backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); }
+[${MARK}-body-fade][hidden] { display:none; }
+[${MARK}-body-fade="above"] { background:linear-gradient(to bottom,var(--bb-chat-ui-info-face),transparent); mask-image:linear-gradient(to bottom,black,transparent); -webkit-mask-image:linear-gradient(to bottom,black,transparent); }
+[${MARK}-body-fade="below"] { background:linear-gradient(to top,var(--bb-chat-ui-info-face),transparent); mask-image:linear-gradient(to top,black,transparent); -webkit-mask-image:linear-gradient(to top,black,transparent); }
 [data-promptbox-shell]:has(> [${MARK}-request]) [data-follow-up-composer-anchor] { display:none !important; }
 [data-scroll-footer]:has([${MARK}-request]) button[aria-label="Scroll to latest event"] { display:none !important; }
 [${MARK}-stack] [${MARK}-supplements] { display:contents; }
@@ -613,16 +613,49 @@ export function injectComposerInfo(document: Document): () => void {
     });
     let edgeRoot: HTMLElement | null = null;
     let edgeScroller: HTMLElement | null = null;
-    const updatePlanFades = () => {
-      for (const scroller of Array.from(stack.querySelectorAll<HTMLElement>('[data-testid="plan-review-request"] > .overflow-auto'))) {
+    const BODY_SCROLLER = '[data-testid="plan-review-request"] > .overflow-auto, [data-testid="command-preview"] > .overflow-auto';
+    const bodyFades = new Map<HTMLElement, { above: HTMLElement; below: HTMLElement }>();
+    const updateBodyFades = () => {
+      const live = new Set<HTMLElement>();
+      const anchor = stack.getBoundingClientRect();
+      for (const scroller of Array.from(stack.querySelectorAll<HTMLElement>(BODY_SCROLLER))) {
+        live.add(scroller);
+        let pair = bodyFades.get(scroller);
+        if (!pair) {
+          const hint = (edge: "above" | "below") => {
+            const node = document.createElement("span");
+            node.setAttribute(`${MARK}-body-fade`, edge);
+            node.setAttribute("aria-hidden", "true");
+            node.hidden = true;
+            return node;
+          };
+          pair = { above: hint("above"), below: hint("below") };
+          bodyFades.set(scroller, pair);
+          edgeResize?.observe(scroller);
+        }
+        stack.append(pair.above, pair.below);
         const edges = scrollOverflowEdges({ scrollTop: scroller.scrollTop, clientHeight: scroller.clientHeight, scrollHeight: scroller.scrollHeight });
-        const value = [edges.above ? "above" : "", edges.below ? "below" : ""].filter(Boolean).join(" ");
-        if (value) scroller.setAttribute(`${MARK}-fade`, value);
-        else scroller.removeAttribute(`${MARK}-fade`);
+        const rect = scroller.getBoundingClientRect();
+        const height = Math.min(24, Math.max(0, rect.height) / 4);
+        const place = (node: HTMLElement, show: boolean, top: number) => {
+          node.hidden = !show;
+          node.style.left = `${rect.left - anchor.left}px`;
+          node.style.width = `${rect.width}px`;
+          node.style.height = `${height}px`;
+          node.style.top = `${top - anchor.top}px`;
+        };
+        place(pair.above, edges.above, rect.top);
+        place(pair.below, edges.below, rect.bottom - height);
+      }
+      for (const [scroller, pair] of bodyFades) if (!live.has(scroller)) {
+        edgeResize?.unobserve(scroller);
+        pair.above.remove();
+        pair.below.remove();
+        bodyFades.delete(scroller);
       }
     };
     const updateScrollHints = () => {
-      updatePlanFades();
+      updateBodyFades();
       const root = menu ?? activeNode;
       const scrollable = (node: HTMLElement) => {
         if (node.matches('textarea, input, [contenteditable="true"]')) return false;
@@ -1798,7 +1831,8 @@ export function injectComposerInfo(document: Document): () => void {
       stack.removeEventListener("pointerout", onHoverOut);
       stack.removeEventListener("pointerdown", pinPreview, true);
       stack.removeEventListener("focusin", pinPreview);
-      for (const scroller of Array.from(stack.querySelectorAll('[data-testid="plan-review-request"] > .overflow-auto'))) scroller.removeAttribute(`${MARK}-fade`);
+      for (const pair of bodyFades.values()) { pair.above.remove(); pair.below.remove(); }
+      bodyFades.clear();
       bar.remove();
       stack.removeAttribute(`${MARK}-stack`);
       stack.removeAttribute(`${MARK}-request`);
