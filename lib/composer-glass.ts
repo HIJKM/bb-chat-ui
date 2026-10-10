@@ -245,6 +245,9 @@ ${FOOTER} [data-promptbox]:has([class~="@container/mention-menu"])::before {
 [class~="@container/mention-menu"] > .overflow-y-auto {
   overscroll-behavior: contain;
 }
+[class~="@container/mention-menu"] button:not(:disabled):not([aria-disabled="true"]) {
+  cursor: pointer;
+}
 ${darkScope(`${FOOTER} [data-promptbox-shell] .agentation-staging-shell--expanded`)} {
   box-shadow:
     0 12px 32px -14px ${DARK_SHADOW},

@@ -588,6 +588,7 @@ test("lifts only an open mention composer face onto its before layer", () => {
       '[class~="@container/mention-menu"] .sticky.bg-background',
       '.dark [class~="@container/mention-menu"]',
       '[class~="@container/mention-menu"] > .overflow-y-auto',
+      '[class~="@container/mention-menu"] button:not(:disabled):not([aria-disabled="true"])',
     ],
   );
   const closed = blocks.find((block) => block.selector.startsWith("[data-scroll-footer]:has(.chat-prompt-box) [data-promptbox],"));
@@ -641,6 +642,19 @@ test("lifts the mention menu face onto its own before layer", () => {
   assert.equal(darkRoot.body.includes("backdrop-filter"), false);
   assert.ok(darkRoot.body.includes("0 12px 32px -14px color-mix(in oklab, black 60%, transparent)"));
   assert.ok(darkRoot.body.includes("inset 0 1px 3px color-mix(in oklab, var(--foreground) 8%, transparent)"));
+});
+
+test("points at enabled mention menu buttons", () => {
+  const blocks = [...composerGlassCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
+    selector: selector.trim().replace(/\s+/g, " "),
+    body,
+  }));
+  const pointed = blocks.filter((block) => /cursor\s*:/.test(block.body));
+  assert.deepEqual(
+    pointed.map((block) => block.selector),
+    ['[class~="@container/mention-menu"] button:not(:disabled):not([aria-disabled="true"])'],
+  );
+  assert.match(pointed[0]?.body ?? "", /cursor:\s*pointer;/);
 });
 
 test("contains overscroll only on the mention candidate scroller", () => {
