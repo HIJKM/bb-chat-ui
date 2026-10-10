@@ -512,16 +512,16 @@ test("frosts only the shared slash and at candidate box", () => {
   );
   const light = menus[0]?.body ?? "";
   const dark = menus[1]?.body ?? "";
-  assert.ok(light.includes(`background: ${LIGHT_GLASS_FACE} !important`));
+  assert.ok(light.includes("background: transparent !important"));
   assert.ok(light.includes("border-color: transparent !important"));
   assert.ok(light.includes("border-radius: 18px !important"));
-  assert.ok(light.includes("backdrop-filter: blur(14px) saturate(1.25);"));
-  assert.ok(light.includes("-webkit-backdrop-filter: blur(14px) saturate(1.25);"));
+  assert.equal(light.includes(LIGHT_GLASS_FACE), false);
+  assert.equal(light.includes("blur(14px)"), false);
   assert.ok(light.includes("0 12px 32px -14px color-mix(in oklab, var(--ink, var(--foreground)) 22%, transparent)"));
   assert.ok(light.includes("inset 0 1px 3px color-mix(in oklab, var(--popover) 35%, transparent)"));
   assert.equal(light.includes("white"), false);
-  assert.equal(/\b(?:position|width|max-height|z-index)\s*:/.test(light), false);
-  assert.ok(dark.includes(`background: ${DARK_GLASS_FACE} !important`));
+  assert.equal(/\b(?:width|max-height|z-index)\s*:/.test(light), false);
+  assert.equal(dark.includes(DARK_GLASS_FACE), false);
   assert.ok(dark.includes("border-color: transparent !important"));
   assert.ok(dark.includes("0 12px 32px -14px color-mix(in oklab, black 60%, transparent)"));
   assert.ok(dark.includes("inset 0 1px 3px color-mix(in oklab, var(--foreground) 8%, transparent)"));
@@ -580,6 +580,8 @@ test("lifts only an open mention composer face onto its before layer", () => {
     blocks.filter((block) => block.selector.includes("@container/mention-menu")).map((block) => block.selector),
     [
       '[class~="@container/mention-menu"]',
+      '[class~="@container/mention-menu"]::before',
+      '.dark [class~="@container/mention-menu"]::before',
       liftSelector,
       `${liftSelector}::before`,
       `.dark ${liftSelector}::before`,
@@ -593,6 +595,52 @@ test("lifts only an open mention composer face onto its before layer", () => {
   assert.ok(closed.body.includes(`background: ${LIGHT_GLASS_FACE} !important;`));
   assert.match(closed.body, /backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/);
   assert.equal(blocks.some((block) => /typeahead-menu|plugin-interaction|ResponsiveDrawer/.test(block.selector)), false);
+});
+
+test("lifts the mention menu face onto its own before layer", () => {
+  const blocks = [...composerGlassCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
+    selector: selector.trim().replace(/\s+/g, " "),
+    body,
+  }));
+  const root = blocks.find((block) => block.selector === '[class~="@container/mention-menu"]');
+  assert.ok(root, "mention root");
+  assert.match(root.body, /position:\s*relative;/);
+  assert.match(root.body, /isolation:\s*isolate;/);
+  assert.match(root.body, /background:\s*transparent !important;/);
+  assert.match(root.body, /backdrop-filter:\s*none !important;/);
+  assert.match(root.body, /-webkit-backdrop-filter:\s*none !important;/);
+  assert.match(root.body, /border-radius:\s*18px !important;/);
+  assert.ok(root.body.includes("0 12px 32px -14px color-mix(in oklab, var(--ink, var(--foreground)) 22%, transparent)"));
+  assert.ok(root.body.includes("inset 0 1px 3px color-mix(in oklab, var(--popover) 35%, transparent)"));
+  assert.equal(root.body.includes(LIGHT_GLASS_FACE), false);
+  assert.equal(root.body.includes("blur(14px)"), false);
+
+  const before = blocks.find((block) => block.selector === '[class~="@container/mention-menu"]::before');
+  assert.ok(before, "mention ::before");
+  assert.match(before.body, /content:\s*"";/);
+  assert.match(before.body, /position:\s*absolute;/);
+  assert.match(before.body, /inset:\s*0;/);
+  assert.match(before.body, /border-radius:\s*inherit;/);
+  assert.match(before.body, /pointer-events:\s*none;/);
+  assert.match(before.body, /z-index:\s*-1;/);
+  assert.ok(before.body.includes(`background: ${LIGHT_GLASS_FACE};`));
+  assert.match(before.body, /backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/);
+  assert.match(before.body, /-webkit-backdrop-filter:\s*blur\(14px\) saturate\(1\.25\);/);
+  assert.equal(before.body.includes("box-shadow"), false);
+  assert.equal(before.body.includes("18px"), false);
+
+  const darkBefore = blocks.find((block) => block.selector === '.dark [class~="@container/mention-menu"]::before');
+  assert.ok(darkBefore, "dark mention ::before");
+  assert.ok(darkBefore.body.includes(`background: ${DARK_GLASS_FACE};`));
+  assert.equal(darkBefore.body.includes("0.68"), false);
+  assert.equal(darkBefore.body.includes("box-shadow"), false);
+
+  const darkRoot = blocks.find((block) => block.selector === '.dark [class~="@container/mention-menu"]');
+  assert.ok(darkRoot, "dark mention root");
+  assert.equal(darkRoot.body.includes(DARK_GLASS_FACE), false);
+  assert.equal(darkRoot.body.includes("backdrop-filter"), false);
+  assert.ok(darkRoot.body.includes("0 12px 32px -14px color-mix(in oklab, black 60%, transparent)"));
+  assert.ok(darkRoot.body.includes("inset 0 1px 3px color-mix(in oklab, var(--foreground) 8%, transparent)"));
 });
 
 test("contains overscroll only on the mention candidate scroller", () => {

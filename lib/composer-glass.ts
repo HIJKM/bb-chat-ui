@@ -91,14 +91,30 @@ ${FACE} {
     inset 0 1px 3px ${LIGHT_EDGE};
 }
 [class~="@container/mention-menu"] {
-  background: ${LIGHT_GLASS_FACE} !important;
+  position: relative;
+  isolation: isolate;
+  background: transparent !important;
   border-color: transparent !important;
   border-radius: 18px !important;
-  backdrop-filter: blur(14px) saturate(1.25);
-  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   box-shadow:
     0 12px 32px -14px ${LIGHT_SHADOW},
     inset 0 1px 3px ${LIGHT_EDGE};
+}
+[class~="@container/mention-menu"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: ${LIGHT_GLASS_FACE};
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+}
+.dark [class~="@container/mention-menu"]::before {
+  background: ${DARK_GLASS_FACE};
 }
 ${FOOTER} [data-promptbox-shell] .agentation-staging-shell--expanded {
   box-shadow:
@@ -221,7 +237,6 @@ ${FOOTER} [data-promptbox]:has([class~="@container/mention-menu"])::before {
   -webkit-backdrop-filter: blur(14px) saturate(1.25);
 }
 .dark [class~="@container/mention-menu"] {
-  background: ${DARK_GLASS_FACE} !important;
   border-color: transparent !important;
   box-shadow:
     0 12px 32px -14px ${DARK_SHADOW},
