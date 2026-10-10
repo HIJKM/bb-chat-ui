@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
 import {
   applyComposerRadius,
   applyFadeHeight,
@@ -495,4 +496,37 @@ test("strengthens only the composer specular highlight while keeping its soft ed
     .filter(([, selector, body]) => (selector.includes(",") || selector.includes("agentation-staging-shell--expanded")) && body.includes("inset"));
   assert.equal(otherSurfaces.length, 4);
   for (const [, , body] of otherSurfaces) assert.ok(!body.includes("in oklab, white"));
+});
+
+test("frosts only the shared slash and at candidate box", () => {
+  const blocks = [...composerGlassCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
+    selector: selector.trim(),
+    body,
+  }));
+  const menus = blocks.filter((block) => block.selector.includes("@container/mention-menu"));
+  assert.deepEqual(
+    menus.map((block) => block.selector),
+    ['[class~="@container/mention-menu"]', '.dark [class~="@container/mention-menu"]'],
+  );
+  const light = menus[0]?.body ?? "";
+  const dark = menus[1]?.body ?? "";
+  assert.ok(light.includes(`background: ${LIGHT_GLASS_FACE} !important`));
+  assert.ok(light.includes("border-color: transparent !important"));
+  assert.ok(light.includes("border-radius: 18px !important"));
+  assert.ok(light.includes("backdrop-filter: blur(14px) saturate(1.25);"));
+  assert.ok(light.includes("-webkit-backdrop-filter: blur(14px) saturate(1.25);"));
+  assert.ok(light.includes("0 12px 32px -14px color-mix(in oklab, var(--ink, var(--foreground)) 22%, transparent)"));
+  assert.ok(light.includes("inset 0 1px 3px color-mix(in oklab, var(--popover) 35%, transparent)"));
+  assert.equal(light.includes("white"), false);
+  assert.equal(/\b(?:position|width|max-height|z-index)\s*:/.test(light), false);
+  assert.ok(dark.includes(`background: ${DARK_GLASS_FACE} !important`));
+  assert.ok(dark.includes("border-color: transparent !important"));
+  assert.ok(dark.includes("0 12px 32px -14px color-mix(in oklab, black 60%, transparent)"));
+  assert.ok(dark.includes("inset 0 1px 3px color-mix(in oklab, var(--foreground) 8%, transparent)"));
+  assert.equal(dark.includes("white"), false);
+  assert.equal(blocks.some((block) => block.selector.includes("data-promptbox-typeahead-menu")), false);
+  assert.equal(
+    blocks.some((block) => /listbox|monaco-menu|plugin-interaction|ResponsiveDrawer/.test(block.selector)),
+    false,
+  );
 });
