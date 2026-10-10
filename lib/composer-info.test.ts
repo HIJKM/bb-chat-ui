@@ -3690,8 +3690,8 @@ test("the default centred choice pins the all-information button right and float
     for (const pill of f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(all) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
     assert.deepEqual([...all.querySelectorAll('svg[data-bb-chat-ui-info-glyph] path')].map(path => path.getAttribute('d')), ['m12 3 9 5-9 5-9-5z', 'm3 13 9 5 9-5']);
     const glyph = all.querySelector('svg[data-bb-chat-ui-info-glyph]');
-    assert.match(proxy.textContent ?? '', /최신으로/);
-    assert.ok(proxy.querySelector('svg'), 'the chip keeps an arrow');
+    assert.equal(proxy.querySelector('[data-bb-chat-ui-info-jump-label]')!.textContent, 'Latest');
+    assert.deepEqual([...proxy.querySelectorAll('svg path')].map(path => path.getAttribute('d')), ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'], 'the chip points down to a bottom line');
     assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true);
     assert.equal(f.shown(), 2, 'a folded count widens the button by 8px before fitting');
     assert.ok(all.hasAttribute('data-bb-chat-ui-info-folded'));

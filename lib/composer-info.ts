@@ -388,8 +388,8 @@ export function injectComposerInfo(document: Document): () => void {
     jump.setAttribute(`${MARK}-jump`, "");
     jump.setAttribute("aria-label", "맨 아래로 이동"); jump.title = "맨 아래로 이동";
     const jumpLabel = document.createElement("span");
-    jumpLabel.setAttribute(`${MARK}-jump-label`, ""); jumpLabel.textContent = "최신으로";
-    jump.append(svg(["M12 5v14", "m19 12-7 7-7-7"]), jumpLabel);
+    jumpLabel.setAttribute(`${MARK}-jump-label`, ""); jumpLabel.textContent = "Latest";
+    jump.append(svg(["M12 3v12", "m7 10 5 5 5-5", "M5 21h14"]), jumpLabel);
     bar.append(pills);
     stack.append(bar);
     let layout: "dock" | "center" | null = null;
