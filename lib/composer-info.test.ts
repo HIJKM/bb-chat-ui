@@ -2428,7 +2428,7 @@ test("the right capsule choice joins the all-information button and an expanding
     for (const pill of f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(dock) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'the capsule ends the row');
     assert.equal(f.document.querySelector('[data-bb-chat-ui-info-orb]'), null, 'the particle orb is replaced by the approved glyph');
     assert.ok(all.querySelector('svg[data-bb-chat-ui-info-glyph="dock"]'));
-    assert.equal(proxy.hidden, true, 'an invisible host button keeps the capsule closed');
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true, 'an invisible host button keeps the capsule closed');
     assert.equal(dock.hasAttribute('data-bb-chat-ui-info-jumping'), false);
     assert.equal(f.shown(), 3, 'without latest-event only the 32px capsule is reserved');
     const badge = all.querySelector<HTMLElement>('[data-bb-chat-ui-info-badge]')!;
@@ -2437,14 +2437,14 @@ test("the right capsule choice joins the all-information button and an expanding
     assert.equal(f.jump.hasAttribute('data-bb-chat-ui-info-jump-source'), true, 'the host button stays mounted for its own scroll logic');
     assert.equal(f.dom.window.getComputedStyle(f.jump).visibility, 'hidden');
     f.jump.classList.remove('invisible'); await f.tick();
-    assert.equal(proxy.hidden, false);
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), false);
     assert.ok(dock.hasAttribute('data-bb-chat-ui-info-jumping'));
     assert.equal(f.shown(), 2, 'the expanded capsule reserves another 32px');
     assert.equal(badge.textContent, `+${f.folded()}`);
     proxy.click();
     assert.equal(f.jumps(), 1, 'the capsule forwards to the host scroll action');
     f.jump.classList.add('invisible'); await f.tick();
-    assert.equal(proxy.hidden, true); assert.equal(f.shown(), 3);
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true); assert.equal(f.shown(), 3);
     f.setWidth(2000); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
     assert.equal(f.folded(), 0); assert.equal(badge.hidden, true, 'nothing folded leaves only the glyph');
   } finally { stop(); }
@@ -2468,17 +2468,17 @@ test("the default centred choice pins the all-information button right and float
     assert.ok(all.querySelector('svg[data-bb-chat-ui-info-glyph="center"]'));
     assert.match(proxy.textContent ?? '', /최신으로/);
     assert.ok(proxy.querySelector('svg'), 'the chip keeps an arrow');
-    assert.equal(proxy.hidden, true);
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true);
     assert.equal(f.shown(), 2, 'a folded count widens the button by 8px before fitting');
     assert.ok(all.hasAttribute('data-bb-chat-ui-info-folded'));
     assert.equal(all.querySelector('[data-bb-chat-ui-info-count]')!.textContent, `+${f.folded()}`);
     f.jump.classList.remove('invisible'); await f.tick();
-    assert.equal(proxy.hidden, false);
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), false);
     assert.equal(f.shown(), 2, 'the chip above the row never takes pill width');
     f.click('[data-bb-chat-ui-info-all]');
-    assert.equal(proxy.hidden, true, 'an open popover covers the chip area, so the chip steps aside');
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true, 'an open popover covers the chip area, so the chip steps aside');
     f.click('[data-bb-chat-ui-info-all]');
-    assert.equal(proxy.hidden, false);
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), false);
     proxy.click(); assert.equal(f.jumps(), 1);
     f.setWidth(2000); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
     assert.equal(all.hasAttribute('data-bb-chat-ui-info-folded'), false);
@@ -2598,16 +2598,36 @@ test("latest-event appears and leaves with a longer eased transition in both lay
   const dock = '[data-bb-chat-ui-info-dock] > [data-bb-chat-ui-info-jump]';
   const center = '[data-bb-chat-ui-info-bar][data-bb-chat-ui-info-layout="center"] > [data-bb-chat-ui-info-jump]';
   assert.ok(timing(rule(dock), 'width').duration >= 400, 'the capsule opens slowly enough to read');
-  assert.ok(timing(rule(`${dock}[hidden]`), 'width').duration >= 320, 'and closes without snapping');
-  assert.ok(timing(rule(`${dock}[hidden]`), 'width').delay > 0, 'the arrow fades before the capsule narrows');
+  assert.ok(timing(rule(`${dock}[data-bb-chat-ui-info-jump-off]`), 'width').duration >= 320, 'and closes without snapping');
+  assert.ok(timing(rule(`${dock}[data-bb-chat-ui-info-jump-off]`), 'width').delay > 0, 'the arrow fades before the capsule narrows');
   assert.ok(timing(rule('[data-bb-chat-ui-info-dock-sep]'), 'width').duration >= 400, 'the divider follows the capsule');
-  assert.match(rule(`${dock}[hidden] svg`), /scale:\.6/, 'the arrow shrinks inside the closing capsule');
+  assert.match(rule(`${dock}[data-bb-chat-ui-info-jump-off] svg`), /scale:\.6/, 'the arrow shrinks inside the closing capsule');
   for (const property of ['translate','scale']) assert.ok(timing(rule(center), property).duration >= 400, `the chip ${property} eases in`);
-  assert.match(rule(`${center}[hidden]`), /scale:\.92/, 'the chip grows from slightly smaller');
+  assert.match(rule(`${center}[data-bb-chat-ui-info-jump-off]`), /scale:\.92/, 'the chip grows from slightly smaller');
   for (const selector of [dock, center]) {
-    const hidden = rule(`${selector}[hidden]`);
+    const hidden = rule(`${selector}[data-bb-chat-ui-info-jump-off]`);
     const visibility = Number(hidden.match(/visibility 0s (\d+)ms/)?.[1] ?? 0);
     assert.ok(visibility >= end(hidden), `${selector}: it stays visible until the exit finishes`);
     assert.doesNotMatch(rule(selector) + hidden, /cubic-bezier\(\.2,\.9,\.22,1\.25\)/, 'no springy overshoot on appear or leave');
+  }
+});
+
+test("latest-event stays rendered while off so the host hidden rule cannot cancel its transition", async () => {
+  for (const layout of ['가운데 최신으로', '오른쪽 캡슐']) {
+    const f = jumpFixture({ infoButtonLayout:layout });
+    const host = f.document.createElement('style');
+    host.textContent = '[hidden]{display:none!important}';
+    f.document.head.append(host);
+    const stop = injectComposerInfo(f.document);
+    try {
+      const proxy = f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-jump]')!;
+      for (const visible of [false, true, false]) {
+        f.jump.classList.toggle('invisible', !visible); await f.tick();
+        assert.equal(proxy.hidden, false, `${layout}: the hidden attribute would force display:none in BB`);
+        assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), !visible);
+        assert.notEqual(f.dom.window.getComputedStyle(proxy).display, 'none', `${layout}: the element stays rendered to animate`);
+        assert.equal(f.dom.window.getComputedStyle(proxy).pointerEvents, visible ? 'auto' : 'none');
+      }
+    } finally { stop(); f.dom.window.close(); }
   }
 });

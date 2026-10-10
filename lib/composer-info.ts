@@ -125,13 +125,13 @@ ${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] > :is(svg, [data-i
 [${MARK}-dock][${MARK}-jumping] > [${MARK}-dock-sep] { width:1px; margin:0 .5px; }
 [${MARK}-jump] { display:inline-flex; flex:none; align-items:center; justify-content:center; gap:5px; padding:0; border:0; border-radius:999px; font-size:12px !important; line-height:18px; white-space:nowrap; color:var(--foreground); cursor:pointer; }
 [${MARK}-jump] svg { width:16px; height:16px; flex-shrink:0; transition:scale 420ms cubic-bezier(.22,1,.36,1); }
-[${MARK}-jump][hidden] { display:inline-flex !important; visibility:hidden; opacity:0; pointer-events:none; }
+[${MARK}-jump][${MARK}-jump-off] { visibility:hidden; opacity:0; pointer-events:none; }
 [${MARK}-dock] > [${MARK}-jump] { overflow:hidden; transition:width 420ms cubic-bezier(.22,1,.36,1), opacity 260ms ease-out 100ms, visibility 0s; }
-[${MARK}-dock] > [${MARK}-jump][hidden] { width:0; transition:width 360ms cubic-bezier(.4,0,.2,1) 80ms, opacity 180ms ease-in, visibility 0s 440ms; }
-[${MARK}-dock] > [${MARK}-jump][hidden] svg { scale:.6; }
+[${MARK}-dock] > [${MARK}-jump][${MARK}-jump-off] { width:0; transition:width 360ms cubic-bezier(.4,0,.2,1) 80ms, opacity 180ms ease-in, visibility 0s 440ms; }
+[${MARK}-dock] > [${MARK}-jump][${MARK}-jump-off] svg { scale:.6; }
 [${MARK}-dock] [${MARK}-jump-label] { display:none; }
 [${MARK}-bar][${MARK}-layout="center"] > [${MARK}-jump] { position:absolute; left:50%; bottom:40px; z-index:2; height:32px; padding:0 12px 0 9px; translate:-50% 0; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); transition:opacity 280ms ease-out, translate 460ms cubic-bezier(.22,1,.36,1), scale 460ms cubic-bezier(.22,1,.36,1), visibility 0s; }
-[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-jump][hidden] { translate:-50% 10px; scale:.92; transition:opacity 220ms ease-in, translate 340ms cubic-bezier(.4,0,.2,1), scale 340ms cubic-bezier(.4,0,.2,1), visibility 0s 340ms; }
+[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-jump][${MARK}-jump-off] { translate:-50% 10px; scale:.92; transition:opacity 220ms ease-in, translate 340ms cubic-bezier(.4,0,.2,1), scale 340ms cubic-bezier(.4,0,.2,1), visibility 0s 340ms; }
 [${MARK}-jump]:focus-visible { outline:2px solid var(--ring); outline-offset:3px; }
 [data-bb-chat-ui-info-jump-source] { visibility:hidden !important; pointer-events:none !important; }
 [${MARK}-badge] { position:absolute; right:-3px; top:-4px; font-size:9px; min-width:14px; line-height:14px; padding:0 3px; border-radius:999px; background:var(--bb-chat-ui-info-face); color:var(--subtle-foreground); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)); }
@@ -342,7 +342,8 @@ export function injectComposerInfo(document: Document): () => void {
     dockSep.setAttribute("aria-hidden", "true");
     const jump = document.createElement("button");
     jump.type = "button";
-    jump.hidden = true;
+    // Not [hidden]: BB's layered `[hidden]{display:none!important}` would skip the transition.
+    jump.setAttribute(`${MARK}-jump-off`, "");
     jump.setAttribute(`${MARK}-jump`, "");
     jump.setAttribute("aria-label", "맨 아래로 이동"); jump.title = "맨 아래로 이동";
     const jumpLabel = document.createElement("span");
@@ -374,7 +375,7 @@ export function injectComposerInfo(document: Document): () => void {
         if (host) { host.setAttribute(`${MARK}-jump-source`, ""); jumpWatch.observe(host, { attributes:true, attributeFilter:["class", "disabled"] }); }
       }
       jumpVisible = !!host && !host.disabled && !host.classList.contains("invisible");
-      jump.hidden = !jumpVisible || layout === "center" && active !== null;
+      jump.toggleAttribute(`${MARK}-jump-off`, !jumpVisible || layout === "center" && active !== null);
       dock.toggleAttribute(`${MARK}-jumping`, jumpVisible);
     };
     jump.addEventListener("click", () => jumpSource?.click());
