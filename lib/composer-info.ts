@@ -1,4 +1,4 @@
-import { exposedInfo, infoKinds, infoLayout, listedInfo, type InfoKind } from "./composer-info-settings.ts";
+import { exposedInfo, infoKinds, listedInfo, type InfoKind } from "./composer-info-settings.ts";
 import { HEAD_DIFF_MARK, openChangesPanel, type HeadDiffDetail } from "./workspace-diff-pill.ts";
 import type { WorkspaceDiffSnapshot } from "./workspace-diff-data.ts";
 import { commitIcon, fileStatusIcon } from "./composer-diff-icons.ts";
@@ -1788,7 +1788,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (active && active !== "all" && !listed.includes(active)) close();
       if (!listed.length) close();
       bar.hidden = request || !listed.length && !editing();
-      applyLayout(infoLayout(settings));
+      applyLayout(isDesktopChrome(document) ? "dock" : "center");
       syncJump();
       const diff = readDiff();
       const unavailableDiff = stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(`${HEAD_DIFF_MARK}-state`) === "unavailable";
@@ -1971,7 +1971,7 @@ export function injectComposerInfo(document: Document): () => void {
   }
   const schedule = () => { if (!frame && !disposed) frame = view.requestAnimationFrame(sync); };
   const observer = new view.MutationObserver(schedule);
-  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-parent`, `${MARK}-children`, `${MARK}-child-providers`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
+  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-parent`, `${MARK}-children`, `${MARK}-child-providers`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "data-bb-chat-ui-device", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     for (const [stack, state] of states) if (stack.contains(event.target as Node) || event.target === document) state.close(true);

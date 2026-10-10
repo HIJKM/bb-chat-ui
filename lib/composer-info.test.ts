@@ -3665,6 +3665,16 @@ test("queue rerendering does not turn existing messages into extra droplets", as
   stop();f.dom.window.close();
 });
 
+function markDevice(document: Document, device: "desktop" | "phone", extra: { viewport?: string; orientation?: string } = {}) {
+  const marker = document.createElement("span");
+  marker.hidden = true;
+  marker.setAttribute("data-bb-chat-ui-device", device);
+  if (extra.viewport) marker.setAttribute("data-bb-chat-ui-viewport", extra.viewport);
+  if (extra.orientation) marker.setAttribute("data-bb-chat-ui-orientation", extra.orientation);
+  document.body.append(marker);
+  return marker;
+}
+
 function jumpFixture(settings: Record<string, unknown> = {}) {
   const f = fixture();
   f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify(settings));
@@ -3681,8 +3691,70 @@ function jumpFixture(settings: Record<string, unknown> = {}) {
   return { ...f, jump, stack, jumps:() => jumps, setWidth:(next:number) => { width = next; }, shown, folded };
 }
 
-test("the right capsule choice joins the all-information button and an expanding latest-event button", async () => {
-  const f = jumpFixture({ infoButtonLayout:'오른쪽 캡슐' });
+test("latest-event layout follows the desktop device marker, not width, rotation, or a stored choice", async () => {
+  const phone = jumpFixture({ infoButtonLayout:"오른쪽 캡슐" });
+  const phoneMarker = phone.document.createElement("span");
+  phoneMarker.hidden = true;
+  phoneMarker.setAttribute("data-bb-chat-ui-device", "phone");
+  phoneMarker.setAttribute("data-bb-chat-ui-orientation", "landscape");
+  phoneMarker.setAttribute("data-bb-chat-ui-viewport", "wide");
+  phone.document.body.append(phoneMarker);
+  const stopPhone = injectComposerInfo(phone.document);
+  try {
+    const layout = () => phone.document.querySelector("[data-bb-chat-ui-info-bar]")!.getAttribute("data-bb-chat-ui-info-layout");
+    assert.equal(layout(), "center", "a stored capsule choice does not dock a phone");
+    for (const width of [240, 2000]) {
+      phone.setWidth(width);
+      phone.dom.window.dispatchEvent(new phone.dom.window.Event("resize"));
+      await phone.tick();
+      assert.equal(layout(), "center", `phone width ${width} stays centred`);
+    }
+    assert.equal(phone.jump.hasAttribute("data-bb-chat-ui-info-jump-source"), true);
+  } finally { stopPhone(); }
+  assert.equal(phone.jump.hasAttribute("data-bb-chat-ui-info-jump-source"), false, "phone cleanup releases the host button");
+  phone.dom.window.close();
+
+  const desktop = jumpFixture({ infoButtonLayout:"가운데 최신으로" });
+  const stop = injectComposerInfo(desktop.document);
+  try {
+    const layout = () => desktop.document.querySelector("[data-bb-chat-ui-info-bar]")!.getAttribute("data-bb-chat-ui-info-layout");
+    assert.equal(layout(), "center", "the row stays centred until a desktop marker exists");
+    const marker = desktop.document.createElement("span");
+    marker.hidden = true;
+    marker.setAttribute("data-bb-chat-ui-device", "desktop");
+    marker.setAttribute("data-bb-chat-ui-viewport", "narrow");
+    marker.setAttribute("data-bb-chat-ui-orientation", "portrait");
+    desktop.document.body.append(marker);
+    await desktop.tick();
+    assert.equal(layout(), "dock", "a late narrow desktop marker docks");
+    desktop.setWidth(320);
+    desktop.dom.window.dispatchEvent(new desktop.dom.window.Event("resize"));
+    await desktop.tick();
+    assert.equal(layout(), "dock", "a narrow desktop stays docked");
+    marker.setAttribute("data-bb-chat-ui-device", "phone");
+    marker.setAttribute("data-bb-chat-ui-orientation", "landscape");
+    marker.setAttribute("data-bb-chat-ui-viewport", "wide");
+    await desktop.tick();
+    assert.equal(layout(), "center", "changing the marker to a wide landscape phone recentres");
+    marker.setAttribute("data-bb-chat-ui-device", "tablet");
+    await desktop.tick();
+    assert.equal(layout(), "center", "tablet stays centred");
+    marker.setAttribute("data-bb-chat-ui-device", "desktop");
+    await desktop.tick();
+    assert.equal(layout(), "dock");
+    assert.equal(desktop.jump.hasAttribute("data-bb-chat-ui-info-jump-source"), true);
+    desktop.jump.classList.remove("invisible");
+    await desktop.tick();
+    desktop.document.querySelector<HTMLButtonElement>("[data-bb-chat-ui-info-jump]")!.click();
+    assert.equal(desktop.jumps(), 1, "the docked control still forwards to the host button");
+  } finally { stop(); }
+  assert.equal(desktop.jump.hasAttribute("data-bb-chat-ui-info-jump-source"), false, "desktop cleanup releases the host button");
+  desktop.dom.window.close();
+});
+
+test("a desktop row joins the all-information button and an expanding latest-event button", async () => {
+  const f = jumpFixture();
+  markDevice(f.document, "desktop", { viewport:"narrow" });
   const stop = injectComposerInfo(f.document);
   try {
     const bar = f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
@@ -3721,9 +3793,9 @@ test("the right capsule choice joins the all-information button and an expanding
   f.dom.window.close();
 });
 
-test("the default centred choice pins the all-information button right and floats a latest-event chip above the row", async () => {
-  const f = jumpFixture();
-  const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+test("a phone row pins the all-information button right and floats a latest-event chip above the row", async () => {
+  const f = jumpFixture({ infoButtonLayout:"오른쪽 캡슐" });
+  const marker = markDevice(f.document, "phone", { viewport:"wide", orientation:"landscape" });
   const stop = injectComposerInfo(f.document);
   try {
     const bar = f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
@@ -3751,20 +3823,24 @@ test("the default centred choice pins the all-information button right and float
     proxy.click(); assert.equal(f.jumps(), 1);
     f.setWidth(2000); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
     assert.equal(all.hasAttribute('data-bb-chat-ui-info-folded'), false);
-    source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ infoButtonLayout:'오른쪽 캡슐' })); await f.tick();
+    marker.setAttribute("data-bb-chat-ui-device", "desktop");
+    marker.setAttribute("data-bb-chat-ui-viewport", "narrow");
+    await f.tick();
     const dock = f.document.querySelector('[data-bb-chat-ui-info-dock]')!;
-    assert.ok(dock, 'a settings change applies to the open composer');
+    assert.ok(dock, 'a device change applies to the open composer');
     assert.equal(all.querySelector('svg[data-bb-chat-ui-info-glyph]'), glyph, 'switching layouts keeps one icon');
     assert.equal(all.parentElement, dock); assert.equal(proxy.parentElement, dock);
     assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'), 'dock');
-    source.setAttribute('data-bb-chat-ui-info-settings', JSON.stringify({ infoButtonLayout:'가운데 최신으로' })); await f.tick();
+    marker.setAttribute("data-bb-chat-ui-device", "phone");
+    await f.tick();
     assert.equal(all.parentElement, bar);
     assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'), null);
   } finally { stop(); f.dom.window.close(); }
 });
 
 test("read-only rows and input requests leave the host latest-event button unmanaged", async () => {
-  const f = jumpFixture({ infoButtonLayout:'오른쪽 캡슐' });
+  const f = jumpFixture();
+  markDevice(f.document, "desktop", { viewport:"narrow" });
   const stop = injectComposerInfo(f.document);
   try {
     assert.ok(f.jump.hasAttribute('data-bb-chat-ui-info-jump-source'));
@@ -3776,7 +3852,8 @@ test("read-only rows and input requests leave the host latest-event button unman
 });
 
 test("the Child Thread stack shows three, two or one latest avatars by the room left, with an exact overflow count", async () => {
-  const f = jumpFixture({ infoButtonLayout:'오른쪽 캡슐' });
+  const f = jumpFixture();
+  markDevice(f.document, "desktop");
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
   const children = Array.from({ length:7 }, (_, index) => ({ id:`child-${index}`, title:`Review ${index}`, state:'run' }));
   let count = 6;
@@ -3821,8 +3898,9 @@ test("the Child Thread stack shows three, two or one latest avatars by the room 
 });
 
 test("pressing a pill gives it one tiny additive upward bounce without moving its neighbours", async () => {
-  for (const layout of ['오른쪽 캡슐', '가운데 최신으로']) for (const reduced of [false, true]) {
-    const f = jumpFixture({ infoButtonLayout:layout });
+  for (const device of ["desktop", "phone"] as const) for (const reduced of [false, true]) {
+    const f = jumpFixture();
+    markDevice(f.document, device, device === "desktop" ? { viewport:"narrow" } : { viewport:"wide", orientation:"landscape" });
     f.setWidth(2000);
     Object.defineProperty(f.dom.window, 'matchMedia', { value:() => ({ matches:reduced }) });
     const records: { node:Element; frames:Keyframe[]; options:KeyframeAnimationOptions; cancelled:boolean }[] = [];
@@ -3838,8 +3916,8 @@ test("pressing a pill gives it one tiny additive upward bounce without moving it
       records.length = 0;
       goal.click();
       assert.ok(f.document.querySelector('[data-bb-chat-ui-info-open]'), 'the popover still opens');
-      if (reduced) { assert.equal(presses().length, 0, `${layout}: reduced motion skips the bounce`); continue; }
-      assert.equal(presses().length, 1, `${layout}: one bounce per press`);
+      if (reduced) { assert.equal(presses().length, 0, `${device}: reduced motion skips the bounce`); continue; }
+      assert.equal(presses().length, 1, `${device}: one bounce per press`);
       const bounce = presses()[0];
       assert.equal(bounce.node, goal);
       assert.deepEqual(bounce.frames.map(frame => frame.transform), ['translateY(0px)', 'translateY(-2px)', 'translateY(0px)']);
@@ -3850,7 +3928,7 @@ test("pressing a pill gives it one tiny additive upward bounce without moving it
       assert.equal(presses().length, 3);
       assert.ok(presses().slice(0, 2).every(record => record.cancelled), 'rapid presses restart instead of stacking');
       f.click('[data-bb-chat-ui-info-all]');
-      const slot = layout === '오른쪽 캡슐' ? f.document.querySelector('[data-bb-chat-ui-info-dock]') : f.document.querySelector('[data-bb-chat-ui-info-all]');
+      const slot = device === "desktop" ? f.document.querySelector('[data-bb-chat-ui-info-dock]') : f.document.querySelector('[data-bb-chat-ui-info-all]');
       assert.equal(presses().at(-1)!.node, slot, 'the all-information control bounces as one visible object');
       stop();
       assert.ok(presses().every(record => record.cancelled), 'unload cancels bounces');
@@ -3883,8 +3961,9 @@ test("latest-event appears and leaves with a longer eased transition in both lay
 });
 
 test("latest-event stays rendered while off so the host hidden rule cannot cancel its transition", async () => {
-  for (const layout of ['가운데 최신으로', '오른쪽 캡슐']) {
-    const f = jumpFixture({ infoButtonLayout:layout });
+  for (const device of ["phone", "desktop"] as const) {
+    const f = jumpFixture();
+    markDevice(f.document, device);
     const host = f.document.createElement('style');
     host.textContent = '[hidden]{display:none!important}';
     f.document.head.append(host);
@@ -3893,9 +3972,9 @@ test("latest-event stays rendered while off so the host hidden rule cannot cance
       const proxy = f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-jump]')!;
       for (const visible of [false, true, false]) {
         f.jump.classList.toggle('invisible', !visible); await f.tick();
-        assert.equal(proxy.hidden, false, `${layout}: the hidden attribute would force display:none in BB`);
+        assert.equal(proxy.hidden, false, `${device}: the hidden attribute would force display:none in BB`);
         assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), !visible);
-        assert.notEqual(f.dom.window.getComputedStyle(proxy).display, 'none', `${layout}: the element stays rendered to animate`);
+        assert.notEqual(f.dom.window.getComputedStyle(proxy).display, 'none', `${device}: the element stays rendered to animate`);
         assert.equal(f.dom.window.getComputedStyle(proxy).pointerEvents, visible ? 'auto' : 'none');
       }
     } finally { stop(); f.dom.window.close(); }
