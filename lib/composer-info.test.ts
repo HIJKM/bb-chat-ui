@@ -1560,6 +1560,36 @@ test("composer question cards frost once with the theme glass and keep nested an
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("a collapsed secret card sits on the composer edge and keeps its label centered", async () => {
+  const f = fixture();
+  const native = f.document.createElement("style");
+  native.textContent = ".mb-2 { margin-bottom: 8px; } .space-y-2 > :not(:last-child) { margin-bottom: 8px; } .items-start { align-items: flex-start; } .items-center { align-items: center; }";
+  f.document.head.append(native);
+  const shell = f.document.querySelector("[data-promptbox-shell]")!;
+  shell.classList.add("space-y-2");
+  const stack = shell.querySelector(":scope > .grid")!;
+  const banner = f.document.createElement("div");
+  banner.setAttribute("data-testid", "plugin-request-banner");
+  banner.innerHTML = '<section data-testid="plugin-interaction-shell" class="mb-2" aria-label="Add secrets"><div class="flex items-center"><button type="button" aria-expanded="false" aria-label="Add secrets"><span class="flex items-start"><span>Add secrets</span></span></button><button type="button" aria-label="Show details">Show</button></div></section>';
+  stack.prepend(banner);
+  const card = banner.querySelector("section")!;
+  const label = card.querySelector("span")!;
+  const stop = injectComposerInfo(f.document);
+  try {
+    await f.tick();
+    const css = f.dom.window.getComputedStyle(card);
+    const row = f.dom.window.getComputedStyle(stack);
+    assert.equal(css.marginBottom, "0px", "collapsed card drops the native bottom margin");
+    assert.equal(row.marginBottom, "0px", "the hidden composer no longer leaves a space-y gap");
+    assert.equal(f.dom.window.getComputedStyle(label).alignItems, "center");
+    assert.equal(css.borderRadius, "18px");
+    assert.ok(f.dom.window.getComputedStyle(banner).animation.includes("bb-info-enter 260ms"));
+    card.setAttribute("data-expanded", "");
+    assert.equal(f.dom.window.getComputedStyle(card).marginBottom, "8px", "an open card keeps its bottom margin");
+    assert.equal(f.dom.window.getComputedStyle(stack).marginBottom, "8px");
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("two plugin notices are separately reachable, and unloading keeps a queue edit open", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;

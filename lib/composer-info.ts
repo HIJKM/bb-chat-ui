@@ -209,6 +209,10 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
    The plugin-request wrapper only carries the entrance, so a second blur there would stack. */
 [${MARK}-stack] :is([data-testid="tool-use-ask"], [data-testid="user-question-banner"], [data-testid="approval-banner"], [data-testid="plan-review-banner"]),
 [${MARK}-stack] [data-testid="plugin-request-banner"] > [data-testid="plugin-interaction-shell"] { background:var(--bb-chat-ui-info-face) !important; border-color:transparent !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 12px 32px -14px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; }
+/* A collapsed secret shell keeps mb-2, and the grid keeps space-y margin under the hidden composer. */
+[data-promptbox-shell]:has([data-testid="plugin-interaction-shell"]:not([data-expanded])) > .grid,
+[${MARK}-stack] [data-testid="plugin-interaction-shell"]:not([data-expanded]) { margin-bottom:0 !important; }
+[${MARK}-stack] [data-testid="plugin-interaction-shell"]:not([data-expanded]) > :first-child span { align-items:center; }
 [data-promptbox-shell]:has(> [${MARK}-request]) [data-follow-up-composer-anchor] { display:none !important; }
 [data-scroll-footer]:has([${MARK}-request]) button[aria-label="Scroll to latest event"] { display:none !important; }
 [${MARK}-stack] [${MARK}-supplements] { display:contents; }
