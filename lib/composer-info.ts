@@ -163,11 +163,11 @@ ${DETAIL}[aria-label="Goal"] [aria-label="Clear active Goal"] > :is(svg, [data-i
 [${MARK}-avatar]:nth-child(3n) { background:color-mix(in oklch,var(--bb-chat-ui-info-face) 78%,oklch(.78 .09 60) 22%); }
 [${MARK}-trigger="children"]:hover [${MARK}-avatar], [${MARK}-trigger="children"]:hover [${MARK}-avatar-more] { transform:translateY(-2px); margin-right:1px; }
 [${MARK}-avatar-more] { color:var(--subtle-foreground); backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); }
-[${MARK}-avatar-dot] { position:absolute; right:0; bottom:0; width:6px; height:6px; border-radius:50%; background:var(--success-text,#80b995); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)); }
+[${MARK}-avatar-dot] { position:absolute; left:0; right:auto; bottom:0; width:6px; height:6px; border-radius:50%; background:var(--success-text,#80b995); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)); }
 [${MARK}-avatar][data-state="run"] [${MARK}-avatar-dot] { animation:bb-info-breathe 2.6s ease-in-out infinite; }
 [${MARK}-avatar][data-state="wait"] [${MARK}-avatar-dot] { background:var(--warning-text,#cfb577); }
 [${MARK}-avatar][data-state="error"] [${MARK}-avatar-dot] { background:var(--destructive-text,#d99090); }
-[${MARK}-avatar][data-state="done"] [${MARK}-avatar-dot] { display:flex; align-items:center; justify-content:center; width:11px; height:11px; right:-2px; bottom:-2px; }
+[${MARK}-avatar][data-state="done"] [${MARK}-avatar-dot] { display:flex; align-items:center; justify-content:center; width:11px; height:11px; left:-2px; right:auto; bottom:-2px; }
 [${MARK}-avatar-dot] svg { width:8px; height:8px; color:var(--bb-chat-ui-glass-base,var(--background)); }
 [${MARK}-avatar] [${MARK}-provider-icon], [${MARK}-avatar] [${MARK}-provider-icon] > :is(svg, span, img) { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; flex-shrink:0; }
 [${MARK}-avatar][data-new] { animation:bb-info-droplet 460ms cubic-bezier(.36,0,.18,1) backwards; }

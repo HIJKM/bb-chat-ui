@@ -1180,6 +1180,51 @@ test("child avatars use host provider artwork, including late and updated logos,
   } finally {stop();f.dom.window.close();}
 });
 
+test("child status dots sit on the left of each avatar, including the done check", () => {
+  const dom = new JSDOM("<!doctype html><html><head></head><body></body></html>");
+  const style = dom.window.document.createElement("style");
+  style.textContent = composerInfoCss;
+  dom.window.document.head.append(style);
+  const stack = dom.window.document.createElement("span");
+  stack.setAttribute("data-bb-chat-ui-info-avatars", "");
+  for (const state of ["run", "wait", "error", "done"]) {
+    const avatar = dom.window.document.createElement("span");
+    avatar.setAttribute("data-bb-chat-ui-info-avatar", "");
+    avatar.setAttribute("data-state", state);
+    const dot = dom.window.document.createElement("span");
+    dot.setAttribute("data-bb-chat-ui-info-avatar-dot", "");
+    if (state === "done") {
+      const check = dom.window.document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      dot.append(check);
+    }
+    avatar.append(dot);
+    stack.append(avatar);
+  }
+  dom.window.document.body.append(stack);
+  const dotOf = (state: string) => dom.window.getComputedStyle(stack.querySelector(`[data-state="${state}"] [data-bb-chat-ui-info-avatar-dot]`)!);
+  try {
+    for (const state of ["run", "wait", "error"]) {
+      const css = dotOf(state);
+      assert.equal(css.left, "0px", state);
+      assert.equal(css.right, "auto", state);
+      assert.equal(css.bottom, "0px", state);
+      assert.equal(css.width, "6px", state);
+      assert.equal(css.height, "6px", state);
+    }
+    const done = dotOf("done");
+    assert.equal(done.left, "-2px");
+    assert.equal(done.right, "auto");
+    assert.equal(done.bottom, "-2px");
+    assert.equal(done.width, "11px");
+    assert.equal(done.height, "11px");
+    const check = dom.window.getComputedStyle(stack.querySelector('[data-state="done"] svg')!);
+    assert.equal(check.width, "8px");
+    assert.equal(check.height, "8px");
+  } finally {
+    dom.window.close();
+  }
+});
+
 test("Agentation uses the browser picker icon and count while retaining native controls", async () => {
   const f = fixture();
   const nativeStyle = f.document.createElement('style');
