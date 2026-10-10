@@ -386,6 +386,65 @@ test("composer question controls buzz once per activation without affecting nati
   assert.equal(listeners.size, 0);
 });
 
+test("plan and approval controls buzz once per activation without affecting past cards", t => {
+  const cards = [
+    ["plan-review-banner", "Plan review"],
+    ["approval-banner", "Approval needed"],
+  ] as const;
+  const dom = new JSDOM(`<div data-bb-chat-ui-info-stack>${cards.map(([id, label]) => `<section data-testid="${id}">
+    <button aria-label="${label}"><span>${label}</span></button>
+    <button aria-label="Hide details"><svg></svg></button>
+    <button aria-label="Show details">Show</button>
+    <div hidden><button>Approve</button><button>Deny</button></div>
+    <button disabled>Disabled</button><button aria-disabled="true">Unavailable</button>
+  </section>`).join("")}</div><section data-testid="plan-review-banner"><button>Past plan</button></section><button>Unrelated</button>`);
+  const originalElement = globalThis.Element;
+  const originalButton = globalThis.HTMLButtonElement;
+  globalThis.Element = dom.window.Element;
+  globalThis.HTMLButtonElement = dom.window.HTMLButtonElement;
+  t.after(() => { globalThis.Element = originalElement; globalThis.HTMLButtonElement = originalButton; dom.window.close(); });
+  const messages: unknown[] = [];
+  Object.assign(dom.window, { bb:{ native:{ capabilities:["haptic"], post:(message:unknown) => messages.push(message) } } });
+  const listeners = new Map<string, (event:Event) => void>();
+  const document = {
+    body:null, defaultView:dom.window,
+    addEventListener:(type:string, listener:(event:Event) => void) => listeners.set(type, listener),
+    removeEventListener:(type:string) => listeners.delete(type),
+  } as unknown as Document;
+  const stop = injectSendHaptic(document);
+  t.after(stop);
+  const active = [...dom.window.document.querySelectorAll("[data-bb-chat-ui-info-stack] button:not([disabled]):not([aria-disabled])")];
+  assert.equal(active.length, 10);
+  let answers = 0;
+  for (const button of active) {
+    const target = button.firstElementChild ?? button;
+    const parent = button.parentElement;
+    button.addEventListener("click", () => answers++);
+    listeners.get("pointerup")!({ target, isPrimary:true, pointerType:"touch" } as unknown as Event);
+    listeners.get("click")!({ target, isTrusted:true } as unknown as Event);
+    assert.equal(messages.length, active.indexOf(button) + 1);
+    button.click();
+    listeners.get("click")!({ target, isTrusted:false } as unknown as Event);
+    assert.equal(button.parentElement, parent);
+    assert.equal(messages.length, active.indexOf(button) + 1);
+  }
+  assert.equal(answers, active.length);
+  assert.deepEqual(messages, active.map(() => ({ type:"haptic", kind:"selection" })));
+  for (const target of dom.window.document.querySelectorAll("button[disabled], button[aria-disabled], body > section button, body > button")) {
+    listeners.get("click")!({ target, isTrusted:true } as unknown as Event);
+  }
+  assert.equal(messages.length, active.length, "disabled, past and unrelated controls stay quiet");
+  listeners.get("click")!({ target:active[0], isTrusted:true, detail:0 } as unknown as Event);
+  assert.equal(messages.length, active.length + 1, "keyboard activation also pulses");
+  listeners.get("click")!({ target:active[1].querySelector("svg"), isTrusted:true } as unknown as Event);
+  assert.equal(messages.length, active.length + 2, "a mouse click on the nested chevron icon pulses once");
+  Object.assign(dom.window, { bb:{ native:{ capabilities:[], post:(message:unknown) => messages.push(message) } } });
+  listeners.get("click")!({ target:active[0], isTrusted:true } as unknown as Event);
+  assert.equal(messages.length, active.length + 2, "unsupported shells stay quiet");
+  stop();
+  assert.equal(listeners.size, 0);
+});
+
 test("removes the send listeners when the script stops", () => {
   let observed = false;
   let disconnected = false;

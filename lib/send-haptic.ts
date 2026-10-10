@@ -1,6 +1,6 @@
 const SEND_BUTTON = "[data-promptbox-submit-action][type='submit']";
 const JUMP_BUTTON = 'button[aria-label="Scroll to latest event"]';
-const QUESTION_CARD = ['tool-use-ask', 'plugin-request-banner', 'user-question-banner'].map(id => `[data-testid="${id}"]`).join(', ');
+const QUESTION_CARD = ['tool-use-ask', 'plugin-request-banner', 'user-question-banner', 'plan-review-banner', 'approval-banner'].map(id => `[data-testid="${id}"]`).join(', ');
 const WAIT_MS = 80;
 const JUMP_GAP_MS = 400;
 
