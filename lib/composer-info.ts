@@ -675,6 +675,19 @@ export function injectComposerInfo(document: Document): () => void {
       reaction = animation; entryAnimations.add(animation);
       animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); if (reaction === animation) reaction = null; };
     };
+    // A press lifts the pill 2px and back. Additive transform keeps droplet, slide and
+    // absorb motion intact and leaves the layout box, so neighbours never move.
+    const presses = new WeakMap<HTMLElement, Animation>();
+    const press = (node: HTMLElement) => {
+      if (reduced() || node.hasAttribute("disabled") || node.getAttribute("aria-disabled") === "true") return;
+      presses.get(node)?.cancel();
+      const animation = node.animate?.([
+        { transform:"translateY(0px)" }, { transform:"translateY(-2px)", offset:.4 }, { transform:"translateY(0px)" },
+      ], { duration:220, easing:"cubic-bezier(.22,1,.36,1)", composite:"add" });
+      if (!animation) return;
+      presses.set(node, animation); entryAnimations.add(animation);
+      animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); };
+    };
     const mark = (node: HTMLElement, attr: string, collection: Set<HTMLElement>) => {
       collection.add(node);
       if (!node.hasAttribute(attr)) node.setAttribute(attr, "");
@@ -1257,7 +1270,7 @@ export function injectComposerInfo(document: Document): () => void {
     stack.addEventListener("pointerout", onHoverOut);
     stack.addEventListener("pointerdown", pinPreview, true);
     stack.addEventListener("focusin", pinPreview);
-    orb.addEventListener("click", () => open("all", orb));
+    orb.addEventListener("click", () => { press(slot()); open("all", orb); });
     const fit = (motion = true) => {
       const previouslyVisible = new Set([...buttons.values()].filter(button => !button.hidden && positions.has(button)));
       const widths = [...buttons].map(([key, button]) => {
@@ -1469,7 +1482,7 @@ export function injectComposerInfo(document: Document): () => void {
             button = document.createElement("button");
             button.type = "button";
             button.setAttribute(`${MARK}-trigger`, key);
-            button.addEventListener("click", () => open(key, button!));
+            button.addEventListener("click", () => { press(button!); open(key, button!); });
             buttons.set(key, button);
           }
           const previousText = button.textContent;

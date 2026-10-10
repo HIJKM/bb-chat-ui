@@ -2549,3 +2549,41 @@ test("the Child Thread stack shows three, two or one latest avatars by the room 
     assert.equal(pill().hidden, true, 'without room even for one avatar the stack folds into the menu');
   } finally { stop(); f.dom.window.close(); }
 });
+
+test("pressing a pill gives it one tiny additive upward bounce without moving its neighbours", async () => {
+  for (const layout of ['오른쪽 캡슐', '가운데 최신으로']) for (const reduced of [false, true]) {
+    const f = jumpFixture({ infoButtonLayout:layout });
+    f.setWidth(2000);
+    Object.defineProperty(f.dom.window, 'matchMedia', { value:() => ({ matches:reduced }) });
+    const records: { node:Element; frames:Keyframe[]; options:KeyframeAnimationOptions; cancelled:boolean }[] = [];
+    f.dom.window.HTMLElement.prototype.animate = function(frames, options) {
+      const record = { node:this, frames:frames as Keyframe[], options:(options ?? {}) as KeyframeAnimationOptions, cancelled:false };
+      records.push(record);
+      return { cancel() { record.cancelled = true; } } as Animation;
+    };
+    const stop = injectComposerInfo(f.document);
+    try {
+      const presses = () => records.filter(record => (record.options as { composite?:string }).composite === 'add');
+      const goal = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-trigger="goal"]')!;
+      records.length = 0;
+      goal.click();
+      assert.ok(f.document.querySelector('[data-bb-chat-ui-info-open]'), 'the popover still opens');
+      if (reduced) { assert.equal(presses().length, 0, `${layout}: reduced motion skips the bounce`); continue; }
+      assert.equal(presses().length, 1, `${layout}: one bounce per press`);
+      const bounce = presses()[0];
+      assert.equal(bounce.node, goal);
+      assert.deepEqual(bounce.frames.map(frame => frame.transform), ['translateY(0px)', 'translateY(-2px)', 'translateY(0px)']);
+      assert.ok(bounce.frames.every(frame => Object.keys(frame).every(key => ['transform', 'offset', 'easing'].includes(key))), 'only the visual transform moves; width, margin and translate stay untouched');
+      assert.ok((bounce.options.duration as number) <= 240);
+      assert.ok(records.every(record => record.node === goal || !record.node.matches('[data-bb-chat-ui-info-trigger]')), 'neighbouring pills do not animate');
+      goal.click(); goal.click();
+      assert.equal(presses().length, 3);
+      assert.ok(presses().slice(0, 2).every(record => record.cancelled), 'rapid presses restart instead of stacking');
+      f.click('[data-bb-chat-ui-info-all]');
+      const slot = layout === '오른쪽 캡슐' ? f.document.querySelector('[data-bb-chat-ui-info-dock]') : f.document.querySelector('[data-bb-chat-ui-info-all]');
+      assert.equal(presses().at(-1)!.node, slot, 'the all-information control bounces as one visible object');
+      stop();
+      assert.ok(presses().every(record => record.cancelled), 'unload cancels bounces');
+    } finally { stop(); f.dom.window.close(); }
+  }
+});

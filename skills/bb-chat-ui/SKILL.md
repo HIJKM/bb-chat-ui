@@ -52,6 +52,8 @@ Agentation은 BB 브라우저 `Annotate elements` 버튼과 같은 SDK `MessageS
 
 정보 줄의 모든 필·아바타 스택·전체 정보 원 버튼과 펼친 목록의 버튼은 사용자 클릭당 `impact-light` 햅틱을 한 번 낸다. 터치·마우스·키보드 활성화를 같은 click 경로에서 처리한다. 호스트 disclosure에 전달하는 합성 클릭과 pointerup은 추가 진동을 만들지 않는다. 빠르게 다른 정보를 선택해도 각 클릭을 처리하며, disabled 버튼과 `haptic` capability가 없는 셸에서는 울리지 않는다.
 
+정보 pill과 전체 정보 버튼을 누르면 모바일·데스크톱 모두 220ms 동안 2px 위로 살짝 떴다가 돌아온다. 오른쪽 캡슐에서는 캡슐 전체가 움직인다. 너비·높이·여백·간격과 독립 `translate`는 바꾸지 않고 `transform`을 additive Web Animation으로 더해, 주변 pill을 밀지 않고 등장 droplet·좌우 이동·큐 흡수 모션과 겹쳐도 서로 지우지 않는다. 클릭당 한 번 재생하며 빠르게 다시 누르면 이전 반동을 취소하고 새로 시작한다. disabled 버튼과 `prefers-reduced-motion`에서는 생략하고, 해제 시 진행 중인 반동을 취소한다. 햅틱과 팝오버 열기·닫기는 그대로다.
+
 기존 boolean 설정을 쓴 설치를 업그레이드할 때는 빌드·reload 전에 `bb plugin config bb-chat-ui --json`의 값을 보관하고, reload 후 같은 키에 `true → 상단 표시`, `false → 목록에만 표시`로 저장해 선택을 유지한다.
 
 Code Diff pill의 커밋 수는 `commits` 문구 대신 가운데 원과 가로선이 있는 커밋 아이콘과 숫자로 압축한다. 접근성 라벨과 툴팁에는 커밋 개수 의미를 유지한다. 팝오버에 HEAD 이후 변경 파일이 있으면 항상 커밋 제목과 목록보다 위에 둔다. 열린 팝오버를 갱신해도 같은 순서를 유지한다. 커밋 행 왼쪽의 원을 세로선으로 연결하고 첫·마지막 원 밖으로는 선을 늘리지 않는다. 파일 행 왼쪽에는 BB 스레드 정보의 실제 glyph와 같은 아이콘을 둔다. 수정은 `DiffModified`, 추가와 미추적(`??`)은 `DiffAdded`, 삭제는 `DiffRemoved`, 이름 변경은 `DiffRenamed`, 복사는 `Copy`, 충돌은 `DiffConflict`, 상태 불명(`?`)은 `CircleQuestion`이다. 추가·미추적은 `text-diff-added`, 삭제는 `text-diff-removed`, 충돌은 `text-destructive`, 나머지는 `text-subtle-foreground`를 사용한다. 파일 경로와 라인 통계, 기존 아이콘 크기와 행 배치는 유지한다. 팝오버의 일반 안내 문구는 표시하지 않으며, PR 후보의 미푸시 보조 줄은 개수를 확인할 수 있을 때만 표시한다.
