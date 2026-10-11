@@ -1050,18 +1050,13 @@ export function injectComposerInfo(document: Document): () => void {
         queueTimers.delete(timer);
         const pill = buttons.get("queue");
         const target = pill && !pill.hidden ? pill : slot();
-        if (bar.hidden || reduced() || !target.isConnected) return;
+        if (bar.hidden || reduced() || !target.isConnected || !target.animate) return;
         const shell = stack.closest("[data-promptbox-shell]");
         const origin = shell?.querySelector<HTMLElement>('[data-promptbox-submit-action][type="submit"]')
           ?? shell?.querySelector<HTMLElement>("[data-follow-up-composer], textarea");
         if (!origin) return;
         const beforeOrigin = new Set(origin.getAnimations?.() ?? []);
         const beforeDrops = new Set(Array.from(document.querySelectorAll(".bbk-drop")));
-        // motion.ts addresses the page document. Node tests have no global document.
-        const previousDocument = globalThis.document;
-        const borrowDocument = previousDocument !== document;
-        if (borrowDocument) Object.defineProperty(globalThis, "document", { configurable:true, writable:true, value:document });
-        try {
         const watchQueue = (animation: Animation) => {
           queueAnimations.add(animation);
           const finish = animation.onfinish;
@@ -1090,12 +1085,6 @@ export function injectComposerInfo(document: Document): () => void {
               cancel?.call(animation, event);
               dropTracked();
             };
-          }
-        }
-        } finally {
-          if (borrowDocument) {
-            if (previousDocument === undefined) delete (globalThis as { document?: Document }).document;
-            else Object.defineProperty(globalThis, "document", { configurable:true, writable:true, value:previousDocument });
           }
         }
       }, delay);

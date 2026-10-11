@@ -1,9 +1,16 @@
-import test from "node:test";
+import test, { beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import { injectComposerInfo, fitComposerInfo, composerInfoCss, scrollOverflowEdges } from "./composer-info.ts";
 import { infoKinds } from "./composer-info-settings.ts";
 import { queuedMessagesCss } from "./queued-messages.ts";
+
+let pageDocument: PropertyDescriptor | undefined;
+beforeEach(() => { pageDocument = Object.getOwnPropertyDescriptor(globalThis, "document"); });
+afterEach(() => {
+  if (pageDocument) Object.defineProperty(globalThis, "document", pageDocument);
+  else Reflect.deleteProperty(globalThis, "document");
+});
 
 function fixture() {
   const dom = new JSDOM(`<html><head></head><body><div data-scroll-footer><div class="chat-prompt-box"><div data-promptbox-shell><div class="grid">
@@ -16,6 +23,7 @@ function fixture() {
     <section aria-label="Queued messages"><header data-queued-messages-mode="collapsed"><button aria-expanded="false" aria-controls="queue">2</button></header><div id="queue" hidden><div data-queued-messages-scroll-frame><button>Edit message</button></div></div></section>
   </div><div data-follow-up-composer-anchor><div data-follow-up-composer><textarea>keep draft</textarea></div></div></div></div></div></body></html>`, { pretendToBeVisual: true });
   const { document } = dom.window;
+  Object.defineProperty(globalThis, "document", { configurable:true, writable:true, value:document });
   for (const toggle of document.querySelectorAll('button[aria-expanded]')) {
     toggle.addEventListener("click", () => {
       const expanded = toggle.getAttribute("aria-expanded") !== "true";
@@ -3988,6 +3996,27 @@ test("every queued addition sends a droplet, including equal-count replacement a
   assert.equal(flights().at(-1)?.cancelled,true);
   assert.equal(finishedSource.cancelled,false);
   assert.equal(finishedLand.cancelled,false);
+  f.dom.window.close();
+});
+
+test("a queue addition without WAAPI does not throw or leave a drop", async () => {
+  const f = fixture();
+  f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings','{"showQueue":"상단 표시"}');
+  const queue = f.document.querySelector('section[aria-label="Queued messages"]')!;
+  queue.querySelector('header button')!.innerHTML = '<span data-queued-messages-count>1</span>';
+  const rows = queue.querySelector('#queue')!;
+  const add = (id: string) => { const row = f.document.createElement('div'); row.setAttribute('data-queued-message-id', id); rows.append(row); };
+  add('a');
+  delete (f.dom.window.HTMLElement.prototype as { animate?: unknown }).animate;
+  const errors: unknown[] = [];
+  f.dom.window.addEventListener('error', event => { errors.push(event.error ?? event.message); });
+  const stop = injectComposerInfo(f.document);
+  add('b');
+  queue.querySelector('[data-queued-messages-count]')!.textContent = '2';
+  await f.tick();
+  assert.deepEqual(errors, []);
+  assert.equal(f.document.querySelector('.bbk-drop'), null);
+  stop();
   f.dom.window.close();
 });
 
