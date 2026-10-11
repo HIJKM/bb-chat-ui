@@ -15,6 +15,7 @@ import { injectWorkspaceDiffPill } from "./lib/workspace-diff-pill";
 import { WorkspaceDiffBridge } from "./lib/workspace-diff-bridge";
 import { ComposerInfoBridge } from "./lib/composer-info-bridge";
 import { injectComposerInfo } from "./lib/composer-info";
+import "./lib/motion.css";
 import { infoSettingsNotice } from "./lib/composer-info-settings";
 
 function ComposerBridges() {

@@ -4,6 +4,7 @@ import type { WorkspaceDiffSnapshot } from "./workspace-diff-data.ts";
 import { commitIcon, fileStatusIcon } from "./composer-diff-icons.ts";
 import { childInitial, type ChildState, type ChildSummary } from "./composer-child.ts";
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
+import { eventHop, pressPop, stickyDrop } from "./motion.ts";
 import { isDesktopChrome } from "./device-chrome.ts";
 import { bodyFadeBox, readBodyFadeClips } from "./body-fade.ts";
 
@@ -147,7 +148,8 @@ ${DETAIL}[${OPEN}="workflow"] button[aria-expanded]:is(:hover, :focus-visible) {
 [${MARK}-diff-current] { display:block; animation:bb-info-count-in 180ms cubic-bezier(.2,.8,.2,1); }
 [${MARK}-diff-previous] { position:absolute; inset:0; pointer-events:none; animation:bb-info-count-out 180ms cubic-bezier(.2,.8,.2,1) forwards; }
 [${MARK}-diff-previous]::before { content:attr(${MARK}-diff-value); }
-[${MARK}-queue-drop] { position:fixed; width:12px; height:12px; border-radius:50%; pointer-events:none; z-index:54; background:color-mix(in oklab,var(--bb-chat-ui-info-face) 60%,var(--foreground) 40%); backdrop-filter:blur(14px) saturate(1.25); box-shadow:inset 0 1px 3px var(--bb-chat-ui-info-edge),0 2px 8px -2px var(--bb-chat-ui-info-shadow); }
+body > .bbk-drop { z-index:54; --bbk-drop-face:${LIGHT_GLASS_FACE}; --bbk-drop-edge:color-mix(in oklab,var(--popover) 35%,transparent); }
+.dark body > .bbk-drop, body.dark > .bbk-drop { --bbk-drop-face:${DARK_GLASS_FACE}; --bbk-drop-edge:color-mix(in oklab,var(--foreground) 8%,transparent); }
 [${MARK}-all] { position:relative; width:32px; padding:0; }
 [${MARK}-glyph] { display:block; width:16px; height:16px; pointer-events:none; color:var(--subtle-foreground); transition:opacity 200ms, scale 280ms cubic-bezier(.2,.9,.22,1.25); }
 [${MARK}-all]:hover [${MARK}-glyph], [${MARK}-all][aria-expanded=true] [${MARK}-glyph] { color:var(--foreground); }
@@ -506,7 +508,10 @@ export function injectComposerInfo(document: Document): () => void {
     let queueSnapshot:{ count:number; seenIds:Set<string>; pendingRows:number; pendingCount:number } | null = null;
     const queueAnimations = new Set<Animation>();
     const queueDrops = new Set<HTMLElement>();
+    const queueTimers = new Set<number>();
     const cancelQueueMotion = () => {
+      for (const timer of queueTimers) view!.clearTimeout(timer);
+      queueTimers.clear();
       for (const animation of queueAnimations) animation.cancel();
       queueAnimations.clear();
       for (const drop of queueDrops) drop.remove();
@@ -862,32 +867,105 @@ export function injectComposerInfo(document: Document): () => void {
     stack.addEventListener("touchcancel", endTouch);
     const editing = () => stack.querySelector('[data-queued-message-inline-editor]') !== null;
     const reduced = () => view!.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    let reaction: Animation | null = null;
     const slot = () => layout === "dock" ? dock : orb;
-    const pulse = () => {
-      reaction?.cancel();
-      reaction = null;
-      if (reduced() || entering.has(slot()) || orb.hidden || bar.hidden) return;
-      const animation = glyph.animate?.([
-        { transform:"none" }, { transform:"scale(.78) rotate(-10deg)" }, { transform:"scale(1.08)" }, { transform:"none" },
-      ], { duration:380, easing:"cubic-bezier(.22,1,.36,1)" });
-      if (!animation) return;
-      reaction = animation; entryAnimations.add(animation);
-      animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); if (reaction === animation) reaction = null; };
+    const ownedMotion = new Map<Element, Set<Animation>>();
+    const pressHeld = new Set<HTMLElement>();
+    const pressControls = new WeakMap<HTMLElement, { down(): void; up(): void }>();
+    const remember = (node: Element) => {
+      const before = new Set(node.getAnimations?.() ?? []);
+      return () => {
+        const created = (node.getAnimations?.() ?? []).filter(animation => !before.has(animation));
+        if (!created.length) return;
+        let tracked = ownedMotion.get(node);
+        if (!tracked) ownedMotion.set(node, tracked = new Set());
+        for (const animation of created) {
+          tracked.add(animation);
+          const fill = animation.effect?.getTiming?.().fill;
+          // A held press uses fill forwards. Keep that effect until up, cancel, or removal.
+          if (fill === "forwards" || fill === "both") continue;
+          const finish = animation.onfinish;
+          const cancel = animation.oncancel;
+          const drop = () => {
+            tracked!.delete(animation);
+            if (!tracked!.size) ownedMotion.delete(node);
+          };
+          animation.onfinish = event => { finish?.call(animation, event); drop(); };
+          animation.oncancel = event => { cancel?.call(animation, event); drop(); };
+        }
+      };
     };
-    // A press lifts the pill 2px and back. Additive transform keeps droplet, slide and
-    // absorb motion intact and leaves the layout box, so neighbours never move.
-    const presses = new WeakMap<HTMLElement, Animation>();
-    const press = (node: HTMLElement) => {
-      if (reduced() || node.hasAttribute("disabled") || node.getAttribute("aria-disabled") === "true") return;
-      presses.get(node)?.cancel();
-      const animation = node.animate?.([
-        { transform:"translateY(0px)" }, { transform:"translateY(-2px)", offset:.4 }, { transform:"translateY(0px)" },
-      ], { duration:220, easing:"cubic-bezier(.22,1,.36,1)", composite:"add" });
-      if (!animation) return;
-      presses.set(node, animation); entryAnimations.add(animation);
-      animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); };
+    const forgetMotion = (node: Element) => {
+      const tracked = ownedMotion.get(node);
+      if (!tracked) return;
+      for (const animation of tracked) animation.cancel();
+      ownedMotion.delete(node);
     };
+    const cancelOwnedMotion = () => {
+      for (const node of [...ownedMotion.keys()]) forgetMotion(node);
+      pressHeld.clear();
+    };
+    const pruneDisconnected = () => {
+      for (const node of [...ownedMotion.keys()]) if (!node.isConnected) forgetMotion(node);
+      for (const animation of [...queueAnimations]) {
+        const target = (animation.effect as KeyframeEffect | null)?.target ?? null;
+        if (target instanceof view!.Element && !target.isConnected) {
+          animation.cancel();
+          queueAnimations.delete(animation);
+        }
+      }
+    };
+    const pressOf = (node: HTMLElement) => {
+      let control = pressControls.get(node);
+      if (!control) { control = pressPop(node); pressControls.set(node, control); }
+      return control;
+    };
+    const pressTarget = (target: EventTarget | null) => {
+      const button = target instanceof view!.Element ? target.closest<HTMLElement>(`[${MARK}-trigger], [${MARK}-all]`) : null;
+      if (!button || !bar.contains(button)) return null;
+      return button.hasAttribute(`${MARK}-all`) ? slot() : button;
+    };
+    const canPress = (node: HTMLElement) => !reduced() && !bar.hidden && !node.hidden
+      && !node.hasAttribute("disabled") && node.getAttribute("aria-disabled") !== "true"
+      && !(node instanceof view!.HTMLButtonElement && node.disabled);
+    const pressDown = (node: HTMLElement) => {
+      if (!canPress(node) || pressHeld.has(node)) return;
+      forgetMotion(node);
+      const done = remember(node);
+      pressOf(node).down();
+      done();
+      pressHeld.add(node);
+    };
+    const pressUp = (node: HTMLElement) => {
+      if (!pressHeld.has(node)) return;
+      pressHeld.delete(node);
+      if (!canPress(node)) { forgetMotion(node); return; }
+      forgetMotion(node);
+      const done = remember(node);
+      pressOf(node).up();
+      done();
+    };
+    const pressCancel = (node: HTMLElement) => {
+      if (!pressHeld.has(node)) return;
+      pressHeld.delete(node);
+      forgetMotion(node);
+    };
+    const releasePress = () => { for (const node of [...pressHeld]) pressUp(node); };
+    const cancelPress = () => { for (const node of [...pressHeld]) pressCancel(node); };
+    bar.addEventListener("pointerdown", event => { const node = pressTarget(event.target); if (node) pressDown(node); });
+    document.addEventListener("pointerup", releasePress);
+    document.addEventListener("pointercancel", cancelPress);
+    view!.addEventListener("blur", cancelPress);
+    bar.addEventListener("keydown", event => {
+      if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
+      const node = pressTarget(event.target);
+      if (node) pressDown(node);
+    });
+    bar.addEventListener("keyup", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const node = pressTarget(event.target);
+      if (node) pressUp(node);
+    });
+    bar.addEventListener("focusout", event => { const node = pressTarget(event.target); if (node) pressCancel(node); });
     const mark = (node: HTMLElement, attr: string, collection: Set<HTMLElement>) => {
       collection.add(node);
       if (!node.hasAttribute(attr)) node.setAttribute(attr, "");
@@ -968,42 +1046,60 @@ export function injectComposerInfo(document: Document): () => void {
       return "";
     };
     const queueAddition = (delay:number) => {
-      const pill = buttons.get("queue");
-      const target = pill && !pill.hidden ? pill : slot();
-      if (bar.hidden || reduced() || !target.animate) return;
-      const shell = stack.closest("[data-promptbox-shell]");
-      const origin = shell?.querySelector('[data-promptbox-submit-action][type="submit"]')
-        ?? shell?.querySelector('[data-follow-up-composer], textarea');
-      if (!origin) return;
-      const start = origin.getBoundingClientRect(), end = target.getBoundingClientRect();
-      const x = start.right - 12, y = start.top + start.height / 2;
-      const dx = end.left + end.width / 2 - x, dy = end.top + end.height / 2 - y;
-      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-      const drop = document.createElement("span");
-      drop.setAttribute(`${MARK}-queue-drop`, ""); drop.setAttribute("aria-hidden", "true");
-      drop.style.position = "fixed"; drop.style.left = `${x - 6}px`; drop.style.top = `${y - 6}px`;
-      const face = view!.getComputedStyle(stack);
-      for (const variable of ["--bb-chat-ui-info-face", "--bb-chat-ui-info-edge", "--bb-chat-ui-info-shadow", "--foreground"]) drop.style.setProperty(variable, face.getPropertyValue(variable));
-      document.body.append(drop); queueDrops.add(drop);
-      const flight = drop.animate([
-        { transform:"scale(.35)", opacity:0, offset:0 },
-        { transform:"translateY(-4px) scale(.9,1.1)", opacity:1, offset:.18 },
-        { transform:`translate(${dx * .5}px,${dy * .5 - 14}px) rotate(${angle}deg) scale(1.45,.7)`, opacity:1, offset:.55 },
-        { transform:`translate(${dx * .9}px,${dy * .9}px) scale(.85)`, opacity:1, offset:.86 },
-        { transform:`translate(${dx}px,${dy}px) scale(.2)`, opacity:0, offset:1 },
-      ], { duration:300, delay, easing:"cubic-bezier(.2,.8,.2,1)", fill:"both" });
-      queueAnimations.add(flight);
-      const remove = () => { drop.remove(); queueDrops.delete(drop); queueAnimations.delete(flight); };
-      flight.oncancel = remove;
-      flight.onfinish = () => {
-        remove();
-        if (!target.isConnected || target.hidden || bar.hidden || reduced()) return;
-        const absorb = target.animate([
-          { transform:"scale(1.02,.96)" }, { transform:"scale(1.08)", offset:.45 }, { transform:"none" },
-        ], { duration:150, easing:"cubic-bezier(.36,0,.18,1)" });
-        queueAnimations.add(absorb);
-        absorb.onfinish = absorb.oncancel = () => { queueAnimations.delete(absorb); };
-      };
+      const timer = view!.setTimeout(() => {
+        queueTimers.delete(timer);
+        const pill = buttons.get("queue");
+        const target = pill && !pill.hidden ? pill : slot();
+        if (bar.hidden || reduced() || !target.isConnected) return;
+        const shell = stack.closest("[data-promptbox-shell]");
+        const origin = shell?.querySelector<HTMLElement>('[data-promptbox-submit-action][type="submit"]')
+          ?? shell?.querySelector<HTMLElement>("[data-follow-up-composer], textarea");
+        if (!origin) return;
+        const beforeOrigin = new Set(origin.getAnimations?.() ?? []);
+        const beforeDrops = new Set(Array.from(document.querySelectorAll(".bbk-drop")));
+        // motion.ts addresses the page document. Node tests have no global document.
+        const previousDocument = globalThis.document;
+        const borrowDocument = previousDocument !== document;
+        if (borrowDocument) Object.defineProperty(globalThis, "document", { configurable:true, writable:true, value:document });
+        try {
+        const watchQueue = (animation: Animation) => {
+          queueAnimations.add(animation);
+          const finish = animation.onfinish;
+          const cancel = animation.oncancel;
+          const dropTracked = () => queueAnimations.delete(animation);
+          animation.onfinish = event => { finish?.call(animation, event); dropTracked(); };
+          animation.oncancel = event => { cancel?.call(animation, event); dropTracked(); };
+        };
+        stickyDrop(origin, target);
+        for (const animation of origin.getAnimations?.() ?? []) if (!beforeOrigin.has(animation)) watchQueue(animation);
+        for (const drop of Array.from(document.querySelectorAll<HTMLElement>(".bbk-drop"))) {
+          if (beforeDrops.has(drop)) continue;
+          queueDrops.add(drop);
+          for (const animation of drop.getAnimations?.() ?? []) {
+            queueAnimations.add(animation);
+            const finish = animation.onfinish;
+            const cancel = animation.oncancel;
+            const dropTracked = () => { queueAnimations.delete(animation); queueDrops.delete(drop); };
+            animation.onfinish = (event: AnimationPlaybackEvent) => {
+              const beforeTarget = new Set(target.getAnimations?.() ?? []);
+              finish?.call(animation, event);
+              for (const land of target.getAnimations?.() ?? []) if (!beforeTarget.has(land)) watchQueue(land);
+              dropTracked();
+            };
+            animation.oncancel = (event: AnimationPlaybackEvent) => {
+              cancel?.call(animation, event);
+              dropTracked();
+            };
+          }
+        }
+        } finally {
+          if (borrowDocument) {
+            if (previousDocument === undefined) delete (globalThis as { document?: Document }).document;
+            else Object.defineProperty(globalThis, "document", { configurable:true, writable:true, value:previousDocument });
+          }
+        }
+      }, delay);
+      queueTimers.add(timer);
     };
     const catalog = () => infoKinds.filter(kind => listed.includes(kind.key)).flatMap<InfoItem | { key:InfoKind; label:string }>(kind => {
       const available = items.filter(item => item.key === kind.key);
@@ -1268,10 +1364,9 @@ export function injectComposerInfo(document: Document): () => void {
         number.replaceChildren(current, previous);
       }
     };
-    const close = (restoreFocus = false, force = false, react = true) => {
+    const close = (restoreFocus = false, force = false) => {
       cancelHover();
       if (!force && editing()) return false;
-      if (active !== null && !force && react) pulse();
       clearTitleIcon();
       hoverPreview = false;
       const item = items.find(item => item.node === activeNode && item.key === active);
@@ -1331,8 +1426,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (active === key && hoverPreview && !preview && (!selected || selected.node === activeNode)) { hoverPreview = false; return; }
       if (preview && active !== null && (!hoverPreview || active === key)) return;
       if (active === key && (!selected || selected.node === activeNode)) { close(true); return; }
-      close(false, false, false);
-      pulse();
+      close(false, false);
       hoverPreview = preview;
       lastTrigger = trigger;
       if (key === "all") {
@@ -1473,7 +1567,7 @@ export function injectComposerInfo(document: Document): () => void {
     stack.addEventListener("pointerout", onHoverOut);
     stack.addEventListener("pointerdown", pinPreview, true);
     stack.addEventListener("focusin", pinPreview);
-    orb.addEventListener("click", () => { press(slot()); open("all", orb); });
+    orb.addEventListener("click", () => { open("all", orb); });
     const fit = (motion = true) => {
       const previouslyVisible = new Set([...buttons.values()].filter(button => !button.hidden && positions.has(button)));
       const widths = [...buttons].map(([key, button]) => {
@@ -1724,11 +1818,12 @@ export function injectComposerInfo(document: Document): () => void {
     });
     secretObserver.observe(stack, { childList:true, subtree:true, attributes:true, attributeFilter:["data-expanded", "hidden"] });
     const sync = () => {
+      pruneDisconnected();
       const source = stack.querySelector(`[${SOURCE}]`);
       if (!source) return;
       const nextThreadId = source.getAttribute(`${MARK}-thread`);
       if (nextThreadId !== threadId) {
-        cancelQueueMotion(); queueSnapshot = null;
+        cancelQueueMotion(); cancelOwnedMotion(); queueSnapshot = null;
         cancelExit(); positions.clear(); moves.clear();
         close(false, true);
         for (const animation of entryAnimations) animation.cancel();
@@ -1822,14 +1917,17 @@ export function injectComposerInfo(document: Document): () => void {
       const diff = readDiff();
       const unavailableDiff = stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(`${HEAD_DIFF_MARK}-state`) === "unavailable";
       const exposed: InfoKind[] = readOnlyLabel ? ["status"] : exposedInfo(settings).filter(key => key !== "diff" || !unavailableDiff && diff?.presentation?.visible !== false);
-      if (request || reduced() || bar.hidden) cancelExit();
+      if (request || reduced() || bar.hidden) { cancelExit(); cancelOwnedMotion(); }
       const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
       const childIcons = Array.from(source.querySelectorAll(`[${MARK}-child-icon]`)).map(node => node.outerHTML);
       const next = JSON.stringify([settings, readOnlyLabel, infoKinds.map(kind => emptyIcon(kind.key)?.outerHTML), childIcons, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
       let widthChange: { button:HTMLButtonElement; from:number } | null = null;
+      let hopTargets: HTMLElement[] = [];
+      const previousSlot = `${orb.getAttribute(`${MARK}-folded`) ?? ""}|${badge.textContent ?? ""}|${orb.getAttribute("aria-label") ?? ""}`;
+      let signatureChanged = false;
       if (signature !== next) {
-        if (signature) pulse();
+        signatureChanged = signature !== "";
         signature = next;
         for (const [key, button] of buttons) if (!exposed.includes(key) || !showEmpty && !items.some(item => item.key === key)) {
           if (!readOnlyLabel) leave(key, button);
@@ -1845,7 +1943,7 @@ export function injectComposerInfo(document: Document): () => void {
             button = document.createElement("button");
             button.type = "button";
             button.setAttribute(`${MARK}-trigger`, key);
-            button.addEventListener("click", () => { press(button!); open(key, button!); });
+            button.addEventListener("click", () => { open(key, button!); });
             buttons.set(key, button);
           }
           const previousText = button.textContent;
@@ -1859,7 +1957,9 @@ export function injectComposerInfo(document: Document): () => void {
             key === "children" ? stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`) : null,
             key === "children" ? childIcons : null,
             key === "diff" ? [diff?.presentation, diff?.detail?.commitCount] : null]);
-          if (buttonContent.get(button) !== content) {
+          const previousContent = buttonContent.get(button);
+          if (previousContent !== content) {
+            if (signatureChanged && previousContent !== undefined && wasVisible && !entering.has(button)) hopTargets.push(button);
             buttonContent.set(button, content);
             if (item) decorate(button, item, true);
             else {
@@ -1915,11 +2015,21 @@ export function injectComposerInfo(document: Document): () => void {
         };
         if (readOnlyLabel || !listed.includes("queue") || bar.hidden) cancelQueueMotion();
         else for (let index = 0; index < added; index++) queueAddition(index * 45);
+        if (added > 0) hopTargets = hopTargets.filter(button => button !== buttons.get("queue"));
       } else {
         // Native rendering can briefly remove the whole queue. Keep its arrival
         // history rather than treating all restored messages as additions.
         queueSnapshot ??= { count:0, seenIds:new Set(), pendingRows:0, pendingCount:0 };
         cancelQueueMotion();
+      }
+      const slotNow = `${orb.getAttribute(`${MARK}-folded`) ?? ""}|${badge.textContent ?? ""}|${orb.getAttribute("aria-label") ?? ""}`;
+      if (signatureChanged && previousSlot !== slotNow && !entering.has(slot())) hopTargets.push(slot());
+      if (signatureChanged && !reduced() && !bar.hidden) for (const button of hopTargets) {
+        if (!button.isConnected || button.hidden || entering.has(button)) continue;
+        forgetMotion(button);
+        const done = remember(button);
+        eventHop(button);
+        done();
       }
       if (widthChange && !widthChange.button.hidden) {
         const { button, from } = widthChange;
@@ -1946,9 +2056,13 @@ export function injectComposerInfo(document: Document): () => void {
       trackSecrets();
     };
     return { sync, bar, close, editing, resize, cleanup() {
+      document.removeEventListener("pointerup", releasePress);
+      document.removeEventListener("pointercancel", cancelPress);
+      view!.removeEventListener("blur", cancelPress);
       releaseSecrets();
       clearTitleIcon();
       cancelQueueMotion();
+      cancelOwnedMotion();
       cancelExit(); positions.clear(); moves.clear();
       close(false, true);
       for (const animation of entryAnimations) animation.cancel();

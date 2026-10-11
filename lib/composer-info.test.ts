@@ -34,6 +34,29 @@ function fixture() {
   return { dom, document, tick, click };
 }
 
+function stubAnimations(window: { HTMLElement: { prototype: HTMLElement & { animate: Function; getAnimations: Function } } }) {
+  const live = new WeakMap<Element, Animation[]>();
+  window.HTMLElement.prototype.getAnimations = function() { return (live.get(this) ?? []).slice(); };
+  return function(this: HTMLElement, frames?: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions) {
+    const record = {
+      node: this,
+      frames: (Array.isArray(frames) ? frames : []) as Keyframe[],
+      options: (typeof options === "number" ? { duration: options } : options ?? {}) as KeyframeAnimationOptions,
+      animation: null as unknown as Animation,
+      cancelled: false,
+    };
+    const animation = {
+      effect: { target: this, getTiming: () => ({ fill: (typeof options === "object" ? options?.fill : undefined) ?? "none" }) },
+      cancel() { record.cancelled = true; this.oncancel?.(); },
+    } as Animation;
+    record.animation = animation;
+    const list = live.get(this) ?? [];
+    list.push(animation);
+    live.set(this, list);
+    return record;
+  };
+}
+
 function pointer(f: ReturnType<typeof fixture>, type: 'pointerover' | 'pointerout', target: Element, relatedTarget: Element | null = null, pointerType = 'mouse') {
   const event = new f.dom.window.MouseEvent(type, { bubbles:true, relatedTarget });
   Object.defineProperty(event, 'pointerType', { value:pointerType });
@@ -1093,16 +1116,16 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   f.dom.window.close();
 });
 
-test("the all-information glyph reacts briefly to information and disclosure events, staying still between them", async () => {
+test("a changed information pill hops once, while disclosure, entry and queue arrival stay quiet", async () => {
   for (const reduced of [false, true]) {
     const f=fixture();
     Object.defineProperty(f.dom.window,'matchMedia',{value:() => ({matches:reduced})});
     const records:{node:Element; frames:Keyframe[]; options:KeyframeAnimationOptions; animation:Animation; cancelled:boolean}[]=[];
+    const animate = stubAnimations(f.dom.window);
     f.dom.window.HTMLElement.prototype.animate=function(frames,options) {
-      const record={node:this,frames:frames as Keyframe[],options:options as KeyframeAnimationOptions,animation:null as unknown as Animation,cancelled:false};
-      record.animation={cancel:() => {record.cancelled=true;}} as Animation; records.push(record); return record.animation;
+      const record=animate.call(this, frames, options);
+      records.push(record); return record.animation;
     };
-    f.dom.window.SVGElement.prototype.animate=f.dom.window.HTMLElement.prototype.animate;
     const stop=injectComposerInfo(f.document);
     try {
       const glyph=() => f.document.querySelector<SVGSVGElement>('[data-bb-chat-ui-info-glyph]')!;
@@ -1110,26 +1133,45 @@ test("the all-information glyph reacts briefly to information and disclosure eve
       assert.equal(css.width,'16px'); assert.equal(css.height,'16px');
       assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-all] img, [data-bb-chat-ui-info-all] image').length,0,'no downloaded asset is bundled');
       assert.ok(!css.animation || css.animation==='none','the resting glyph has no continuous animation');
-      const reactions=() => records.filter(record=>record.node.matches('[data-bb-chat-ui-info-glyph]'));
-      assert.equal(reactions().length,0,'entry uses the capsule droplet, without an extra glyph reaction');
-      for (const record of records) record.animation.onfinish?.(new f.dom.window.Event('finish') as unknown as AnimationPlaybackEvent);
+      const hops=() => records.filter(record=>record.options.duration===420);
+      const glyphMotion=() => records.filter(record=>record.node.matches('[data-bb-chat-ui-info-glyph], svg'));
+      assert.equal(glyphMotion().length,0,'the glyph itself does not animate');
+      f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent='+13 −4 · 3 files';
+      await f.tick();
+      assert.equal(hops().length,0,'a pill still playing its entry droplet does not hop');
+      for (const record of records) if (record.options.duration===460) record.animation.onfinish?.(new f.dom.window.Event('finish') as unknown as AnimationPlaybackEvent);
       f.click('[data-bb-chat-ui-info-all]');
-      assert.equal(reactions().length,reduced?0:1,'opening a popover briefly moves the glyph');
       f.click('[data-bb-chat-ui-info-all]');
-      assert.equal(reactions().length,reduced?0:2,'closing briefly moves it too');
-      if(!reduced) assert.equal(reactions()[0].cancelled,true,'rapid events replace the prior motion instead of stacking it');
+      assert.equal(hops().length,0,'opening and closing do not hop');
       f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent='+18 −4 · 3 files';
       await f.tick();
-      assert.equal(reactions().length,reduced?0:3,'a changed pill gives the glyph one activity reaction');
-      const count=reactions().length;
-      await f.tick(); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
-      assert.equal(reactions().length,count,'idle and layout updates do not restart activity');
-      if(!reduced) {
-        assert.ok(reactions().every(record=>record.options.duration===380 && !record.options.iterations));
-        assert.deepEqual(reactions()[0].frames.map(frame=>frame.transform),['none','scale(.78) rotate(-10deg)','scale(1.08)','none'],'the glyph dips, overshoots and settles back');
+      const diff=f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!;
+      if (reduced) assert.equal(hops().length,0,'reduced motion skips the hop');
+      else {
+        assert.equal(hops().length,1,'a changed pill hops once');
+        assert.equal(hops()[0].node,diff);
+        assert.deepEqual(hops()[0].frames.map(frame=>frame.transform),[
+          'translateY(0) scale(1,1)','translateY(-7px) scale(.95,1.06)','translateY(0) scale(1.08,.9)','translateY(-2px) scale(.98,1.02)','translateY(0) scale(1,1)',
+        ]);
+        assert.ok(diff.querySelector('[data-bb-chat-ui-info-diff-current]'),'the diff number roulette still plays with the hop');
       }
+      const count=hops().length;
+      await f.tick(); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+      assert.equal(hops().length,count,'idle and layout updates do not hop');
+      const queue=f.document.querySelector('section[aria-label="Queued messages"]')!;
+      queue.querySelector('header button')!.innerHTML='<span data-queued-messages-count>2</span>';
+      await f.tick();
+      const queueHops=() => hops().filter(record=>record.node.matches('[data-bb-chat-ui-info-trigger="queue"]')).length;
+      const beforeAdd=queueHops();
+      const settled=hops().length;
+      const row=f.document.createElement('div'); row.setAttribute('data-queued-message-id','new-send');
+      queue.querySelector('#queue')!.append(row);
+      queue.querySelector('[data-queued-messages-count]')!.textContent='3';
+      await f.tick();
+      assert.equal(queueHops(),beforeAdd,'a queue addition does not hop the queue pill');
+      assert.equal(hops().length,settled,'a queue addition does not hop anything else');
       stop();
-      assert.ok(reactions().every(record=>record.cancelled),'unload cancels remaining glyph motion');
+      assert.ok(hops().every(record=>record.cancelled),'unload cancels a hop still in progress');
     } finally {stop();f.dom.window.close();}
   }
 });
@@ -3896,16 +3938,25 @@ test("every queued addition sends a droplet, including equal-count replacement a
   const rows = queue.querySelector('#queue')!;
   const add = (id:string) => { const row = f.document.createElement('div'); row.setAttribute('data-queued-message-id',id); rows.append(row); return row; };
   const a = add('a'); const b = add('b');
+  f.document.querySelector('[data-promptbox-shell]')!.insertAdjacentHTML('beforeend','<button data-promptbox-submit-action type="submit">Send</button>');
   const records:{ node:HTMLElement; options:KeyframeAnimationOptions; animation:Animation; cancelled:boolean }[] = [];
+  const animate = stubAnimations(f.dom.window);
   f.dom.window.HTMLElement.prototype.animate = function(_frames,options) {
-    const record = { node:this,options:options as KeyframeAnimationOptions,animation:null as unknown as Animation,cancelled:false };
-    record.animation = { cancel:() => { record.cancelled=true; } } as Animation; records.push(record); return record.animation;
+    const record = animate.call(this, _frames, options); records.push(record); return record.animation;
   };
   const stop = injectComposerInfo(f.document);
-  const flights = () => records.filter(record => record.node.hasAttribute('data-bb-chat-ui-info-queue-drop'));
+  const flights = () => records.filter(record => record.node.classList.contains('bbk-drop'));
   assert.equal(flights().length,0,'existing queue content is not a new send');
   add('c'); count.textContent='3'; await f.tick();
   assert.equal(flights().length,1);
+  assert.equal(flights()[0].options.duration,460,'the drop flies for the kit sticky duration');
+  assert.equal(records.find(record => record.options.duration===360)?.node,f.document.querySelector('[data-promptbox-submit-action]'),'the send button is the visible source');
+  assert.match(composerInfoCss,/body > \.bbk-drop \{[^}]*z-index:54/);
+  assert.match(composerInfoCss,/--bbk-drop-face:oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.68\)/);
+  assert.match(composerInfoCss,/\.dark body > \.bbk-drop, body\.dark > \.bbk-drop \{[^}]*--bbk-drop-face:oklch\(from var\(--bb-chat-ui-glass-base, var\(--background\)\) min\(1, calc\(l \+ 0\.075\)\) c h \/ 0\.76\)/);
+  assert.match(composerInfoCss,/--bbk-drop-edge:color-mix\(in oklab,var\(--popover\) 35%,transparent\)/);
+  assert.match(composerInfoCss,/--bbk-drop-edge:color-mix\(in oklab,var\(--foreground\) 8%,transparent\)/);
+  assert.doesNotMatch(composerInfoCss,/data-bb-chat-ui-info-queue-drop/);
   assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]')?.textContent,'3','count updates without waiting for the flight');
   add('d'); count.textContent='4'; await f.tick();
   assert.equal(flights().length,2,'the second send also flies while the first animation is running');
@@ -3914,21 +3965,29 @@ test("every queued addition sends a droplet, including equal-count replacement a
   assert.equal(flights().length,3,'a new message is detected even when the count stays the same');
   const finish = flights()[2].animation.onfinish as (() => void) | null; finish?.();
   assert.equal(flights()[2].node.isConnected,false);
-  assert.equal(records.find(record => record.options.duration===150)?.node,f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]'),'the receiving pill absorbs the droplet');
+  const finishedSource = records.find(record => record.options.duration===360)!;
+  const finishedLand = records.find(record => record.options.duration===380)!;
+  finishedSource.animation.onfinish?.(new f.dom.window.Event('finish') as unknown as AnimationPlaybackEvent);
+  finishedLand.animation.onfinish?.(new f.dom.window.Event('finish') as unknown as AnimationPlaybackEvent);
+  assert.equal(finishedLand.node,f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]'),'the receiving pill lands when the drop arrives');
   settings.setAttribute('data-bb-chat-ui-info-settings','{"showQueue":"목록에만 표시"}'); await f.tick();
   add('e'); count.textContent='4'; await f.tick();
   assert.equal(flights().length,4);
   const finishOrb = flights()[3].animation.onfinish as (() => void) | null; finishOrb?.();
-  assert.equal(records.filter(record => record.options.duration===150).at(-1)?.node,f.document.querySelector('[data-bb-chat-ui-info-all]'),'without a queue pill the all-information button absorbs the droplet');
+  assert.equal(records.filter(record => record.options.duration===380).at(-1)?.node,f.document.querySelector('[data-bb-chat-ui-info-all]'),'without a queue pill the all-information button absorbs the droplet');
   settings.setAttribute('data-bb-chat-ui-info-thread','other-thread'); await f.tick();
   assert.equal(flights().length,4,'thread changes reset the baseline');
   assert.ok(flights().filter(record => record.node.isConnected).length===0,'scope changes remove flying droplets');
   assert.ok(flights().slice(0,2).every(record=>record.cancelled));
+  assert.equal(finishedSource.cancelled,false,'a finished send squash is no longer tracked');
+  assert.equal(finishedLand.cancelled,false,'a finished landing is no longer tracked');
   add('f'); count.textContent='5'; await f.tick(); assert.equal(flights().length,5);
   count.textContent='6'; await f.tick(); assert.equal(flights().length,6,'a collapsed list can update its count before rendering the new row');
   add('late-row'); await f.tick(); assert.equal(flights().length,6,'later detail rendering does not repeat the send');
-  stop(); assert.equal(f.document.querySelector('[data-bb-chat-ui-info-queue-drop]'),null);
+  stop(); assert.equal(f.document.querySelector('.bbk-drop'),null);
   assert.equal(flights().at(-1)?.cancelled,true);
+  assert.equal(finishedSource.cancelled,false);
+  assert.equal(finishedLand.cancelled,false);
   f.dom.window.close();
 });
 
@@ -3940,7 +3999,7 @@ test("queued addition motion respects reduced motion and disabled queue settings
     const header=f.document.querySelector('section[aria-label="Queued messages"] header button')!;
     header.innerHTML='<span data-queued-messages-count>1</span>';
     let flights=0;
-    f.dom.window.HTMLElement.prototype.animate=function() { if(this.hasAttribute('data-bb-chat-ui-info-queue-drop')) flights++; return {cancel(){}} as Animation; };
+    f.dom.window.HTMLElement.prototype.animate=function() { if(this.classList.contains('bbk-drop')) flights++; return {cancel(){}} as Animation; };
     const stop=injectComposerInfo(f.document);
     header.querySelector('span')!.textContent='2'; await f.tick();
     assert.equal(flights,0);
@@ -3996,7 +4055,7 @@ test("queued arrivals survive row-first and count-first rendering without missin
   const add=(id:string)=>{const row=f.document.createElement('div');row.setAttribute('data-queued-message-id',id);rows.append(row);return row;};
   add('a'); const b=add('b');
   const drops:HTMLElement[]=[];
-  f.dom.window.HTMLElement.prototype.animate=function(){if(this.hasAttribute('data-bb-chat-ui-info-queue-drop')) drops.push(this);return {cancel(){}} as Animation;};
+  f.dom.window.HTMLElement.prototype.animate=function(){if(this.classList.contains('bbk-drop')) drops.push(this);return {cancel(){}} as Animation;};
   const stop=injectComposerInfo(f.document);
   add('c'); await f.tick(); assert.equal(drops.length,1,'row-first arrivals are immediate');
   count.textContent='3'; await f.tick(); assert.equal(drops.length,1,'the later counter does not repeat the same arrival');
@@ -4005,7 +4064,7 @@ test("queued arrivals survive row-first and count-first rendering without missin
   b.remove(); add('e'); count.textContent='3'; await f.tick(); assert.equal(drops.length,3,'an arrival concurrent with dispatch still flies');
   assert.equal(drops.at(-1)?.style.position,'fixed','flight escapes composer clipping and stacking');
   assert.equal(drops.at(-1)?.parentNode,f.document.body);
-  stop();assert.equal(f.document.querySelector('[data-bb-chat-ui-info-queue-drop]'),null);f.dom.window.close();
+  stop();assert.equal(f.document.querySelector('.bbk-drop'),null);f.dom.window.close();
 });
 
 test("queue rerendering does not turn existing messages into extra droplets", async () => {
@@ -4016,7 +4075,7 @@ test("queue rerendering does not turn existing messages into extra droplets", as
   const add=(id:string)=>{const row=f.document.createElement('div');row.setAttribute('data-queued-message-id',id);rows.append(row);return row;};
   const a=add('a'); add('b');
   let flights=0;
-  f.dom.window.HTMLElement.prototype.animate=function(){if(this.hasAttribute('data-bb-chat-ui-info-queue-drop')) flights++;return {cancel(){}} as Animation;};
+  f.dom.window.HTMLElement.prototype.animate=function(){if(this.classList.contains('bbk-drop')) flights++;return {cancel(){}} as Animation;};
   const stop=injectComposerInfo(f.document);
   a.remove(); await f.tick();
   add('a'); add('c'); count.textContent='3'; await f.tick();
@@ -4032,7 +4091,9 @@ test("queue rerendering does not turn existing messages into extra droplets", as
   add('e'); count.textContent='5'; await f.tick();
   assert.equal(flights,3,'a rerender between the row and counter preserves their shared arrival');
   add('f'); add('g'); count.textContent='7'; await f.tick();
-  assert.equal(flights,5,'two real messages still receive two droplets');
+  assert.equal(flights,4,'the first of two sends leaves immediately');
+  await new Promise<void>(resolve => f.dom.window.setTimeout(resolve, 40));
+  assert.equal(flights,5,'the second send follows 45ms later');
   stop();f.dom.window.close();
 });
 
@@ -4268,41 +4329,79 @@ test("the Child Thread stack shows three, two or one latest avatars by the room 
   } finally { stop(); f.dom.window.close(); }
 });
 
-test("pressing a pill gives it one tiny additive upward bounce without moving its neighbours", async () => {
+test("pressing a pill squashes and pops it without moving its neighbours", async () => {
   for (const device of ["desktop", "phone"] as const) for (const reduced of [false, true]) {
     const f = jumpFixture();
     markDevice(f.document, device, device === "desktop" ? { viewport:"narrow" } : { viewport:"wide", orientation:"landscape" });
     f.setWidth(2000);
     Object.defineProperty(f.dom.window, 'matchMedia', { value:() => ({ matches:reduced }) });
-    const records: { node:Element; frames:Keyframe[]; options:KeyframeAnimationOptions; cancelled:boolean }[] = [];
+    const records: { node:Element; frames:Keyframe[]; options:KeyframeAnimationOptions; animation:Animation; cancelled:boolean }[] = [];
+    const animate = stubAnimations(f.dom.window);
     f.dom.window.HTMLElement.prototype.animate = function(frames, options) {
-      const record = { node:this, frames:frames as Keyframe[], options:(options ?? {}) as KeyframeAnimationOptions, cancelled:false };
+      const record = animate.call(this, frames, options);
       records.push(record);
-      return { cancel() { record.cancelled = true; } } as Animation;
+      return record.animation;
     };
     const stop = injectComposerInfo(f.document);
     try {
-      const presses = () => records.filter(record => (record.options as { composite?:string }).composite === 'add');
+      const presses = () => records.filter(record => record.options.duration === 120 || record.options.duration === 380);
+      const point = (node:Element, type:string) => node.dispatchEvent(new f.dom.window.MouseEvent(type, { bubbles:true }));
       const goal = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-trigger="goal"]')!;
       records.length = 0;
       goal.click();
-      assert.ok(f.document.querySelector('[data-bb-chat-ui-info-open]'), 'the popover still opens');
-      if (reduced) { assert.equal(presses().length, 0, `${device}: reduced motion skips the bounce`); continue; }
-      assert.equal(presses().length, 1, `${device}: one bounce per press`);
-      const bounce = presses()[0];
-      assert.equal(bounce.node, goal);
-      assert.deepEqual(bounce.frames.map(frame => frame.transform), ['translateY(0px)', 'translateY(-2px)', 'translateY(0px)']);
-      assert.ok(bounce.frames.every(frame => Object.keys(frame).every(key => ['transform', 'offset', 'easing'].includes(key))), 'only the visual transform moves; width, margin and translate stay untouched');
-      assert.ok((bounce.options.duration as number) <= 240);
+      assert.ok(f.document.querySelector('[data-bb-chat-ui-info-open]'), 'the popover still opens from the click');
+      assert.equal(presses().length, 0, 'the click itself does not add a second press');
+      point(goal, 'pointerdown');
+      if (reduced) { assert.equal(presses().length, 0, `${device}: reduced motion skips the press`); continue; }
+      assert.equal(presses().length, 1, `${device}: holding plays the squash`);
+      assert.equal(presses()[0].node, goal);
+      assert.deepEqual(presses()[0].frames.map(frame => frame.transform), ['scale(1)', 'scale(.9)']);
+      assert.equal(presses()[0].options.duration, 120);
+      assert.equal(presses()[0].options.fill, 'forwards');
+      point(goal, 'pointerup');
+      assert.equal(presses().length, 2, `${device}: release plays the pop`);
+      assert.equal(presses()[0].cancelled, true, 'release replaces the held squash');
+      assert.deepEqual(presses()[1].frames.map(frame => frame.transform), ['scale(.9)', 'scale(1.1)', 'scale(.97)', 'scale(1)']);
+      assert.equal(presses()[1].options.duration, 380);
+      assert.ok(presses().every(record => record.frames.every(frame => Object.keys(frame).every(key => ['transform', 'offset', 'easing'].includes(key)))), 'only transform moves');
       assert.ok(records.every(record => record.node === goal || !record.node.matches('[data-bb-chat-ui-info-trigger]')), 'neighbouring pills do not animate');
-      goal.click(); goal.click();
-      assert.equal(presses().length, 3);
-      assert.ok(presses().slice(0, 2).every(record => record.cancelled), 'rapid presses restart instead of stacking');
-      f.click('[data-bb-chat-ui-info-all]');
-      const slot = device === "desktop" ? f.document.querySelector('[data-bb-chat-ui-info-dock]') : f.document.querySelector('[data-bb-chat-ui-info-all]');
-      assert.equal(presses().at(-1)!.node, slot, 'the all-information control bounces as one visible object');
+      point(goal, 'pointerdown');
+      assert.equal(presses()[1].cancelled, true, 'a new press cancels the previous pop');
+      point(goal, 'pointercancel');
+      assert.equal(presses().at(-1)!.cancelled, true, 'cancel releases the held squash');
+      assert.equal(presses().filter(record => record.options.duration === 380).length, 1, 'cancel does not play another pop');
+      const key = (type:string, repeat = false) => {
+        const event = new f.dom.window.KeyboardEvent(type, { key:'Enter', bubbles:true });
+        Object.defineProperty(event, 'repeat', { value:repeat });
+        goal.dispatchEvent(event);
+      };
+      key('keydown'); key('keydown', true); key('keyup');
+      assert.equal(presses().filter(record => record.options.duration === 120).length, 3, 'keyboard press squashes once and ignores repeat');
+      assert.equal(presses().filter(record => record.options.duration === 380).length, 2);
+      point(goal, 'pointerdown');
+      f.document.body.dispatchEvent(new f.dom.window.MouseEvent('pointerup', { bubbles:true }));
+      assert.equal(presses().at(-1)!.options.duration, 380, `${device}: releasing outside the bar still pops`);
+      assert.equal(presses().at(-2)!.cancelled, true, `${device}: the held squash does not stick after an outside release`);
+      point(goal, 'pointerdown');
+      f.dom.window.dispatchEvent(new f.dom.window.Event('blur'));
+      assert.equal(presses().at(-1)!.cancelled, true, `${device}: a window blur cancels the held squash`);
+      assert.equal(presses().filter(record => record.options.duration === 380).length, 3, `${device}: blur does not play a pop`);
+      const beforeDisabled = presses().filter(record => record.options.duration === 120).length;
+      goal.disabled = true;
+      point(goal, 'pointerdown');
+      assert.equal(presses().filter(record => record.options.duration === 120).length, beforeDisabled, 'a disabled pill does not squash');
+      goal.disabled = false;
+      point(goal, 'pointerdown');
+      const removed = presses().at(-1)!;
+      goal.remove();
+      await f.tick();
+      assert.equal(removed.cancelled, true, `${device}: removing the pill cancels its held press`);
+      const all = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-all]')!;
+      point(all, 'pointerdown');
+      const slot = device === "desktop" ? f.document.querySelector('[data-bb-chat-ui-info-dock]') : all;
+      assert.equal(presses().at(-1)!.node, slot, 'the all-information control presses as one visible object');
       stop();
-      assert.ok(presses().every(record => record.cancelled), 'unload cancels bounces');
+      assert.ok(presses().every(record => record.cancelled), 'unload cancels presses');
     } finally { stop(); f.dom.window.close(); }
   }
 });
