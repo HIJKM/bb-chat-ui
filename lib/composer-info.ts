@@ -452,6 +452,7 @@ export function injectComposerInfo(document: Document): () => void {
     const wrappers = new Set<HTMLElement>();
     const buttons = new Map<InfoKind, HTMLButtonElement>();
     const buttonContent = new WeakMap<HTMLElement, string>();
+    const diffHopContent = new WeakMap<HTMLElement, string>();
     const appeared = new Set<InfoKind | "all">();
     const entryAnimations = new Set<Animation>();
     const entering = new Set<HTMLElement>();
@@ -1817,7 +1818,7 @@ export function injectComposerInfo(document: Document): () => void {
         close(false, true);
         for (const animation of entryAnimations) animation.cancel();
         entryAnimations.clear(); widthAnimations.clear(); entering.clear(); appeared.clear(); childStates.clear();
-        for (const button of buttons.values()) buttonContent.delete(button);
+        for (const button of buttons.values()) { buttonContent.delete(button); diffHopContent.delete(button); }
         signature = ""; threadId = nextThreadId;
       }
       const feedback = emptyIcon("annotations");
@@ -1948,7 +1949,6 @@ export function injectComposerInfo(document: Document): () => void {
             key === "diff" ? [diff?.presentation, diff?.detail?.commitCount] : null]);
           const previousContent = buttonContent.get(button);
           if (previousContent !== content) {
-            if (signatureChanged && previousContent !== undefined && wasVisible && !entering.has(button)) hopTargets.push(button);
             buttonContent.set(button, content);
             if (item) decorate(button, item, true);
             else {
@@ -1959,6 +1959,21 @@ export function injectComposerInfo(document: Document): () => void {
               button.title = `${labelOf(key)} · 현재 없음`;
               button.setAttribute("aria-label", button.title);
             }
+            let changedBeyondNumbers = true;
+            if (key === "diff") {
+              const copy = button.cloneNode(true) as HTMLElement;
+              for (const number of Array.from(copy.querySelectorAll(`[${MARK}-diff-number]`))) {
+                number.removeAttribute(`${MARK}-diff-value`);
+                number.replaceChildren("#");
+                if (number.getAttribute(`${MARK}-diff-number`) === "files" && number.nextSibling?.nodeType === 3)
+                  number.nextSibling.textContent = number.nextSibling.textContent?.replace(/\bfiles?\b/, "files") ?? "";
+              }
+              for (const count of Array.from(copy.querySelectorAll(`[${MARK}-commit-count]`))) count.removeAttribute("aria-label");
+              const hopContent = JSON.stringify([copy.innerHTML, diff?.presentation?.branch ?? item?.trigger?.title]);
+              changedBeyondNumbers = diffHopContent.get(button) !== hopContent;
+              diffHopContent.set(button, hopContent);
+            }
+            if (changedBeyondNumbers && signatureChanged && previousContent !== undefined && wasVisible && !entering.has(button)) hopTargets.push(button);
           }
           const order = exposed.filter(kind => buttons.has(kind));
           const nextButton = Array.from(pills.children).filter(node => !node.hasAttribute(`${MARK}-exiting`))[order.indexOf(key)];

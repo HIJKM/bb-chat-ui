@@ -1154,14 +1154,24 @@ test("a changed information pill hops once, while disclosure, entry and queue ar
       f.document.querySelector('#thread-prompt-banner-git-toggle')!.textContent='+18 −4 · 3 files';
       await f.tick();
       const diff=f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!;
-      if (reduced) assert.equal(hops().length,0,'reduced motion skips the hop');
+      assert.equal(hops().length,0,'Diff numbers roll without hopping the pill');
+      assert.equal(!!diff.querySelector('[data-bb-chat-ui-info-diff-current]'),!reduced,'roulette is retained except with reduced motion');
+      const annotations=f.document.createElement('div');
+      annotations.className='agentation-staging-shell';
+      annotations.innerHTML='<button aria-expanded="false"><span class="tabular-nums">1</span></button><ul><li>Feedback</li></ul>';
+      f.document.querySelector('[data-promptbox-shell] > .grid')!.append(annotations);
+      await f.tick();
+      for (const record of records) if (record.options.duration===460) record.animation.onfinish?.(new f.dom.window.Event('finish') as unknown as AnimationPlaybackEvent);
+      records.length=0;
+      annotations.querySelector('ul')!.insertAdjacentHTML('beforeend','<li>More feedback</li>');
+      await f.tick();
+      if (reduced) assert.equal(hops().length,0,'reduced motion skips annotation hops');
       else {
-        assert.equal(hops().length,1,'a changed pill hops once');
-        assert.equal(hops()[0].node,diff);
-        assert.deepEqual(hops()[0].frames.map(frame=>frame.transform),[
+        const annotationHops=hops().filter(record=>record.node.matches('[data-bb-chat-ui-info-trigger="annotations"]'));
+        assert.equal(annotationHops.length,1,'new feedback still hops its information pill');
+        assert.deepEqual(annotationHops[0].frames.map(frame=>frame.transform),[
           'translateY(0) scale(1,1)','translateY(-7px) scale(.95,1.06)','translateY(0) scale(1.08,.9)','translateY(-2px) scale(.98,1.02)','translateY(0) scale(1,1)',
         ]);
-        assert.ok(diff.querySelector('[data-bb-chat-ui-info-diff-current]'),'the diff number roulette still plays with the hop');
       }
       const count=hops().length;
       await f.tick(); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
@@ -3866,7 +3876,13 @@ test("Diff roulette supports PR and main commit counts without rolling digits in
       detail:{ commitCount:count },
     }));
     publish(); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+    const records: ReturnType<ReturnType<typeof stubAnimations>>[]=[];
+    const animate=stubAnimations(f.dom.window);
+    f.dom.window.HTMLElement.prototype.animate=function(frames,options) {
+      const record=animate.call(this,frames,options); records.push(record); return record.animation;
+    };
     const stop = injectComposerInfo(f.document);
+    for (const record of records) if (record.options.duration===460) record.animation.onfinish?.(new f.dom.window.Event('finish') as unknown as AnimationPlaybackEvent);
     const pill = f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!;
     assert.equal(pill.querySelectorAll('[data-bb-chat-ui-info-diff-number]').length,1);
     count = 8; publish(); await f.tick();
@@ -3875,6 +3891,7 @@ test("Diff roulette supports PR and main commit counts without rolling digits in
     assert.equal(number.querySelector('[data-bb-chat-ui-info-diff-previous]')?.getAttribute('data-bb-chat-ui-info-diff-value'),'3');
     if (mode === 'branch') assert.equal(pill.querySelector('[data-bb-chat-ui-info-commit-count]')?.getAttribute('aria-label'),'커밋 8개');
     else assert.equal(pill.textContent,'↑8');
+    assert.equal(records.filter(record=>record.options.duration===420).length,0,'PR and main commit counts only roll');
     const current = number.querySelector('[data-bb-chat-ui-info-diff-current]');
     f.document.querySelector('[aria-label="Goal"]')!.append(' updated'); await f.tick();
     assert.equal(number.querySelector('[data-bb-chat-ui-info-diff-current]'),current,'unrelated data preserves the current transition');
@@ -3882,6 +3899,38 @@ test("Diff roulette supports PR and main commit counts without rolling digits in
     assert.equal(pill.isConnected,false,'unloading removes the transitioning pill');
     f.dom.window.close();
   }
+});
+
+test("Diff ignores file-count grammar changes but retains branch and icon hops", async () => {
+  const f=fixture();
+  const records: ReturnType<ReturnType<typeof stubAnimations>>[]=[];
+  const animate=stubAnimations(f.dom.window);
+  f.dom.window.HTMLElement.prototype.animate=function(frames,options) {
+    const record=animate.call(this,frames,options); records.push(record); return record.animation;
+  };
+  const source=f.document.createElement('span');
+  let files=1, branch='feature/2026';
+  const publish=() => source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({
+    insertions:files,deletions:0,files,
+    presentation:{mode:'working',visible:true,branch,label:`+${files} −0 · ${files} ${files===1 ? 'file' : 'files'}`},
+  }));
+  publish(); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
+  const stop=injectComposerInfo(f.document);
+  try {
+    for (const record of records) if (record.options.duration===460) record.animation.onfinish?.(new f.dom.window.Event('finish') as unknown as AnimationPlaybackEvent);
+    records.length=0;
+    const diffHops=() => records.filter(record=>record.options.duration===420 && record.node.matches('[data-bb-chat-ui-info-trigger="diff"]'));
+    for (const count of [2,10,1]) {
+      files=count; publish(); await f.tick();
+      assert.equal(diffHops().length,0,'singular/plural and digit-width changes are numeric-only');
+      assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"] [data-bb-chat-ui-info-diff-current]'),'numeric changes retain roulette');
+    }
+    branch='feature/2027'; publish(); await f.tick();
+    assert.equal(diffHops().length,1,'branch-name digits are not treated as counters');
+    f.document.querySelector('[data-bb-chat-ui-info-settings]')!.insertAdjacentHTML('beforeend','<span data-bb-chat-ui-info-icon="diff"><svg data-new-diff-icon /></span>');
+    await f.tick();
+    assert.equal(diffHops().length,2,'a different icon still hops');
+  } finally { stop(); f.dom.window.close(); }
 });
 
 test("a loading Diff with no result fades away, staying inert and cancelling when data returns", async () => {
