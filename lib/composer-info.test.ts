@@ -4048,6 +4048,40 @@ test("every queued addition sends a droplet, including equal-count replacement a
   f.dom.window.close();
 });
 
+test("queue droplets use fallback input coordinates without animating the composer", async () => {
+  for (const fallback of ['composer','textarea']) {
+    const f=fixture();
+    f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings','{"showQueue":"상단 표시"}');
+    if (fallback==='textarea') f.document.querySelector('[data-follow-up-composer]')!.removeAttribute('data-follow-up-composer');
+    const origin=f.document.querySelector<HTMLElement>(fallback==='composer' ? '[data-follow-up-composer]' : 'textarea')!;
+    origin.getBoundingClientRect=() => ({left:40,top:100,width:200,height:80,right:240,bottom:180,x:40,y:100,toJSON:()=>({})});
+    const records: ReturnType<ReturnType<typeof stubAnimations>>[]=[];
+    const animate=stubAnimations(f.dom.window);
+    f.dom.window.HTMLElement.prototype.animate=function(frames,options) {
+      const record=animate.call(this,frames,options); records.push(record); return record.animation;
+    };
+    const queue=f.document.querySelector('section[aria-label="Queued messages"]')!;
+    queue.querySelector('header button')!.innerHTML='<span data-queued-messages-count>2</span>';
+    const counter=queue.querySelector('[data-queued-messages-count]')!;
+    const stop=injectComposerInfo(f.document);
+    try {
+      for (const count of [3,4]) {
+        counter.textContent=String(count); await f.tick();
+        const flights=records.filter(record=>record.node.classList.contains('bbk-drop'));
+        assert.equal(flights.length,count-2,'each addition sends exactly one droplet');
+        assert.equal(records.filter(record=>record.options.duration===360).length,0,'the input source never squashes');
+        assert.equal(records.filter(record=>record.node===origin).length,0,'no animation touches the fallback composer');
+        assert.equal(flights.at(-1)!.node.style.left,'133px','the drop starts at the unchanged input centre');
+        assert.equal(flights.at(-1)!.node.style.top,'133px');
+        assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="queue"]')?.textContent,String(count),'counter is immediate');
+        flights.at(-1)!.animation.onfinish?.(new f.dom.window.Event('finish') as unknown as AnimationPlaybackEvent);
+        assert.equal(records.filter(record=>record.options.duration===380).length,count-2,'queue absorption stays animated');
+        assert.equal(f.document.querySelector('.bbk-drop'),null,'finished droplets leave no DOM');
+      }
+    } finally { stop(); f.dom.window.close(); }
+  }
+});
+
 test("a queue addition without WAAPI does not throw or leave a drop", async () => {
   const f = fixture();
   f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings','{"showQueue":"상단 표시"}');

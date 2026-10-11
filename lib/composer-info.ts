@@ -1066,7 +1066,14 @@ export function injectComposerInfo(document: Document): () => void {
           animation.onfinish = event => { finish?.call(animation, event); dropTracked(); };
           animation.oncancel = event => { cancel?.call(animation, event); dropTracked(); };
         };
-        stickyDrop(origin, target);
+        // A fallback supplies the start coordinates, never the input's squash.
+        let departure = origin;
+        if (!origin.matches('[data-promptbox-submit-action][type="submit"]')) {
+          departure = document.createElement("span");
+          departure.getBoundingClientRect = () => origin.getBoundingClientRect();
+          Object.defineProperty(departure, "animate", { value:undefined });
+        }
+        stickyDrop(departure, target);
         for (const animation of origin.getAnimations?.() ?? []) if (!beforeOrigin.has(animation)) watchQueue(animation);
         for (const drop of Array.from(document.querySelectorAll<HTMLElement>(".bbk-drop"))) {
           if (beforeDrops.has(drop)) continue;
