@@ -52,6 +52,7 @@ interface DiffStats {
   insertions: number;
   deletions: number;
   files: readonly unknown[];
+  truncated?: boolean;
 }
 
 interface HeadWorkspace {
@@ -75,6 +76,7 @@ export interface HeadDiffDetail {
   branch:string | null; basis:string; baseRef:string | null; files:readonly DiffFile[]; commits:readonly DiffCommit[];
   commitKind?:"pr" | "unpushed"; commitCount?:number | null; unpushedCount?:number | null; unpushedRef?:string | null;
   remoteBaseMissing?:boolean;
+  truncated?:boolean;
 }
 
 function shortBranch(name: string): string {
@@ -100,6 +102,7 @@ export function headDiffSummary(workspace: HeadWorkspace, options: HeadDiffOptio
   };
 }
 
+// Build the detailed view from the current HEAD-relative workspace snapshot.
 export function headDiffDetail(workspace: DetailedWorkspace, options: HeadDiffOptions = {}): HeadDiffDetail {
   const baseRef = workspace.mergeBase?.baseRef ?? workspace.mergeBase?.mergeBaseBranch ?? null;
   return {
@@ -108,6 +111,7 @@ export function headDiffDetail(workspace: DetailedWorkspace, options: HeadDiffOp
     baseRef,
     files:workspace.workingTree.files,
     commits:workspace.mergeBase?.commits ?? [],
+    ...(workspace.workingTree.truncated ? { truncated:true } : {}),
   };
 }
 

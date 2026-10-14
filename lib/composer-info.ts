@@ -1115,6 +1115,7 @@ export function injectComposerInfo(document: Document): () => void {
         || (item.node === diffSupplement && item.trigger?.title !== "Code Diff" ? item.trigger?.title : null);
       return `${describe(item)}${branch ? `\nBranch · ${branch}` : ""}`;
     };
+    // Render the current Code Diff summary, file rows, and commit rows.
     const renderDiff = (container: HTMLElement, item: InfoItem) => {
       const expanded = new Set(Array.from(container.querySelectorAll(`[${MARK}-diff-toggle][aria-expanded="true"]`))
         .map(button => button.getAttribute(`${MARK}-diff-toggle`)));
@@ -1162,12 +1163,18 @@ export function injectComposerInfo(document: Document): () => void {
       const snapshot = readDiff();
       const basis = document.createElement("p");
       basis.setAttribute(`${MARK}-diff-meta`, "head");
-      basis.title = detail.basis;
+      basis.title = detail.truncated ? `${detail.basis} · 파일 목록 일부만 포함됨` : detail.basis;
       basis.setAttribute("aria-label", `${detail.basis} · +${snapshot?.insertions ?? 0} −${snapshot?.deletions ?? 0} · ${detail.files.length} files`);
       const added = document.createElement("span"); added.className = "text-diff-added"; added.textContent = `+${snapshot?.insertions ?? 0}`;
       const removed = document.createElement("span"); removed.className = "text-diff-removed"; removed.textContent = `−${snapshot?.deletions ?? 0}`;
       basis.append("HEAD · ", added, " ", removed, ` · ${detail.files.length} files`);
       overview.append(basis);
+      if (detail.truncated) {
+        const warning = document.createElement("p");
+        warning.textContent = "파일 목록이 일부만 포함되어 줄 수 합계도 일부일 수 있습니다.";
+        warning.setAttribute(`${MARK}-diff-truncated`, "");
+        overview.append(warning);
+      }
       container.append(document.createElement("hr"));
       const files = document.createElement("div"); files.setAttribute(`${MARK}-diff-files`, "");
       const filesHeading = document.createElement("h4"); filesHeading.textContent = `변경 파일 · ${detail.files.length}`; files.append(filesHeading);
