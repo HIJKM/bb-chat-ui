@@ -45,6 +45,7 @@ test('enabled Diff keeps visible 5-second refresh and focus refresh; dispose rem
   f.view.document.visibilityState='visible';t.mock.timers.tick(5000);await tick();
   assert.equal(f.calls.filter(call=>call==='status').length,2);
   f.events.get('focus')?.();await tick();assert.equal(f.calls.filter(call=>call==='status').length,3);
+  assert.equal(f.calls.filter(call=>call==='pr').length,2,'focus bypasses the PR cache while polling reuses it');
   stop();assert.equal(f.handlers.size,0);assert.equal(f.events.size,0);assert.equal(f.timers.size,0);
   assert.equal(f.signals[0].aborted,true);const count=f.calls.length;
   t.mock.timers.tick(10000);await tick();assert.equal(f.calls.length,count);

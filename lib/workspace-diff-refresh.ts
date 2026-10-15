@@ -13,12 +13,16 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
   let fetching = false;
   let pending = false;
   let published = false;
+  let prDirty = true;
+  let prCache:{ environmentId:string; expiresAt:number; value:Awaited<ReturnType<Sdk["environments"]["pullRequest"]>> } | null = null;
   const startedAt = Date.now();
-  const refresh = async () => {
+  const refresh = async (forcePr = false) => {
     if (signal.aborted) return;
+    if (forcePr) { prDirty = true; revision++; }
     if (fetching) { pending = true; return; }
     fetching = true;
     const current = revision;
+    const refreshAt = Date.now();
     const stale = () => signal.aborted || current !== revision;
     const update = async (summary:WorkspaceDiffSnapshot | null) => {
       if (stale()) return;
@@ -44,7 +48,26 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
         contextDirty = false;
       }
       if (!environmentId) return;
-      const result = await readWorkspaceDiff(sdk.environments, environmentId, mergeBaseBranch, signal);
+      const result = await readWorkspaceDiff({
+        status:args => sdk.environments.status(args),
+        diffFiles:args => sdk.environments.diffFiles(args),
+        pullRequest:async args => {
+          const cached = prCache?.environmentId === args.environmentId ? prCache : null;
+          if (!prDirty && cached && Date.now() < cached.expiresAt) return cached.value;
+          // Keep the regular 30s boundary even after a forced read between ticks.
+          const expiresAt = startedAt + (Math.floor((refreshAt - startedAt) / 30000) + 1) * 30000;
+          try {
+            const value = await sdk.environments.pullRequest(args);
+            if (value.outcome === "unavailable") return cached?.value ?? value;
+            if (!stale()) { prCache = { environmentId:args.environmentId, expiresAt, value }; prDirty = false; }
+            return value;
+          } catch (error) {
+            // Preserve a known PR base during failure, but retry next tick.
+            if (cached) return cached.value;
+            throw error;
+          }
+        },
+      }, environmentId, mergeBaseBranch, signal);
       if (!stale()) {
         if (result) await update(result);
         else if (result === undefined || !published) await update(null);
@@ -60,6 +83,7 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
   const invalidate = () => {
     revision++;
     contextDirty = true;
+    prDirty = true;
     void refresh();
   };
   const stopThread = sdk.subscribe({

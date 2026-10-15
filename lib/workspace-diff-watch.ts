@@ -9,7 +9,7 @@ export function watchWorkspaceDiff(
 ):()=>void {
   if (!enabled) { publish(null); return ()=>{}; }
   const {refresh,stop}=startWorkspaceDiffRefresh(sdk,threadId,publish);
-  const onFocus=()=>{void refresh();};
+  const onFocus=()=>{void refresh(true);};
   view.addEventListener("focus",onFocus);
   const timer=view.setInterval(()=>{
     if (view.document.visibilityState!=="hidden") void refresh();

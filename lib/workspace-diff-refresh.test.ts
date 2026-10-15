@@ -14,11 +14,17 @@ function deferred<T>() {
   return { promise, resolve };
 }
 type DiffSnapshot = NonNullable<Awaited<ReturnType<typeof readWorkspaceDiff>>>;
+type PrResponse = Awaited<ReturnType<Parameters<typeof readWorkspaceDiff>[0]['pullRequest']>>;
 type StatusResponse = Awaited<ReturnType<Parameters<typeof readWorkspaceDiff>[0]["status"]>>;
 function fixture(initialStatus?:() => Promise<StatusResponse>) {
   let environmentId:string | null = 'env_main';
   let count = 3;
   let reads = 0;
+  let prReads = 0;
+  let statusReads = 0;
+  let fileReads = 0;
+  let fileLines = 0;
+  let loadPr:()=>Promise<PrResponse> = async()=>({outcome:"absent"});
   const handlers = new Map<string,(event:{ id:string; changes:string[] }) => void>();
   const output:(DiffSnapshot | null)[] = [];
   let loadThread = async () => { reads++; return { environmentId }; };
@@ -29,11 +35,12 @@ function fixture(initialStatus?:() => Promise<StatusResponse>) {
   } }));
   const sdk = {
     threads:{ get:() => loadThread() },
-    environments:{ diffFiles:async () => ({outcome:'available',files:[],truncated:false}), get:async () => ({ mergeBaseBranch:'main' }), status:(args:Parameters<typeof loadStatus>[0]) => loadStatus(args), pullRequest:async () => ({ outcome:'absent' }) },
+    environments:{ diffFiles:async () => {fileReads++;return {outcome:'available',files:fileLines?[{path:'draft.ts',additions:fileLines,deletions:0}]:[],truncated:false};}, get:async () => ({ mergeBaseBranch:'main' }), status:(args:Parameters<typeof loadStatus>[0]) => {statusReads++;return loadStatus(args);}, pullRequest:async () => {prReads++;return loadPr();} },
     subscribe:(args:{ event:string; callback:(event:{ id:string; changes:string[] }) => void }) => { handlers.set(args.event,args.callback); return () => { handlers.delete(args.event); }; },
   };
   const running = startWorkspaceDiffRefresh(sdk, 'thread', summary => output.push(summary));
-  return { ...running, output, get reads() { return reads; }, sdk,
+  return { ...running, output, get reads() { return reads; }, get prReads(){return prReads;}, get gitReads(){return statusReads+fileReads;}, sdk,
+    setPr:(read:typeof loadPr)=>{loadPr=read;}, setFileLines:(next:number)=>{fileLines=next;},
     emit:(event:string,id:string,changes:string[]) => handlers.get(event)?.({ id, changes }),
     setEnvironment:(id:string | null) => { environmentId = id; }, setCount:(next:number) => { count = next; },
     setStatus:(read:typeof loadStatus) => { loadStatus = read; }, setThread:(read:typeof loadThread) => { loadThread = read; },
@@ -155,4 +162,99 @@ test('a first result taking longer than 500ms does not get an extra loading hold
   const gate=deferred<StatusResponse>(); const f=fixture(()=>gate.promise); await tick();
   t.mock.timers.tick(700); gate.resolve({ outcome:'not_applicable',reason:'non_git_environment' });
   await tick(); assert.deepEqual(f.labels(),['<empty>']); f.stop();
+});
+
+
+test('PR data is read every 30 seconds while all HEAD and remote-commit data stays on each 5-second tick',async t=>{
+  const f=fixture();await initialResult(t);assert.equal(f.prReads,1);
+  const initialGit=f.gitReads;
+  for(let i=1;i<=12;i++){
+    f.setCount(i+3);f.setFileLines(i);
+    t.mock.timers.tick(i===1?4500:5000);await f.refresh();
+    assert.equal(f.output.at(-1)?.detail.commitCount,i+3);assert.equal(f.output.at(-1)?.insertions,i);
+    assert.equal(f.prReads,1+Math.floor(i/6),`PR lookup at second ${i*5}`);
+    assert.equal(f.gitReads-initialGit,i*3,'main still reads status, files and remote ahead count');
+  }
+  assert.equal(f.gitReads-initialGit+f.prReads-1,38,'60 seconds of steady polling excludes the initial read');f.stop();
+});
+
+test('forced focus refresh and environment changes bypass a fresh PR cache',async t=>{
+  const f=fixture();await initialResult(t);await f.refresh();assert.equal(f.prReads,1);
+  await f.refresh(true);assert.equal(f.prReads,2);
+  f.emit('environment:changed','env_main',['workspace-changed']);await tick();assert.equal(f.prReads,3);
+  f.setEnvironment('env_feature');f.emit('thread:changed','thread',['environment-changed']);await tick();assert.equal(f.prReads,4);
+  assert.equal(f.output.at(-1)?.detail.branch,'feature/chat');f.stop();
+});
+
+test('expired PR errors preserve the last known PR base and retry on the next tick',async t=>{
+  const f=fixture();await initialResult(t);
+  f.setEnvironment('env_feature');
+  f.setPr(async()=>({outcome:'available',pullRequest:{state:'open',baseRefName:'develop',headRefName:'feature/chat'}}));
+  f.emit('thread:changed','thread',['environment-changed']);await tick();
+  assert.equal(f.output.at(-1)?.detail.baseRef,'origin/develop');
+  const before=f.prReads;
+  t.mock.timers.tick(30000);f.setPr(async()=>{throw new Error('PR disconnected');});await f.refresh();
+  assert.equal(f.prReads,before+1);assert.equal(f.output.at(-1)?.detail.baseRef,'origin/develop');
+  f.setPr(async()=>({outcome:'unavailable'}));await f.refresh();
+  assert.equal(f.prReads,before+2);assert.equal(f.output.at(-1)?.detail.baseRef,'origin/develop');
+  f.setPr(async()=>({outcome:'absent'}));await f.refresh();
+  assert.equal(f.prReads,before+3);assert.equal(f.output.at(-1)?.detail.baseRef,'origin/main');
+  await f.refresh();assert.equal(f.prReads,before+3,'a confirmed absence is cached');f.stop();
+});
+
+test('a late PR result from an old environment cannot populate the new environment cache',async t=>{
+  const f=fixture();await initialResult(t);const gate=deferred<PrResponse>();
+  f.setPr(()=>gate.promise);const pending=f.refresh(true);await tick();
+  f.setEnvironment('env_feature');f.emit('thread:changed','thread',['environment-changed']);
+  f.setPr(async()=>({outcome:'available',pullRequest:{state:'open',baseRefName:'release',headRefName:'feature/chat'}}));
+  gate.resolve({outcome:'available',pullRequest:{state:'open',baseRefName:'wrong',headRefName:'feature/chat'}});
+  await pending;await tick();assert.equal(f.output.at(-1)?.detail.baseRef,'origin/release');
+  const count=f.prReads;await f.refresh();assert.equal(f.prReads,count);assert.equal(f.output.at(-1)?.detail.baseRef,'origin/release');f.stop();
+});
+
+test('focus during an in-flight PR read requires a fresh result before publishing',async t=>{
+  const f=fixture();await initialResult(t);const gate=deferred<PrResponse>();
+  t.mock.timers.tick(30000);f.setPr(()=>gate.promise);const pending=f.refresh();await tick();
+  const before=f.output.length;void f.refresh(true);
+  f.setPr(async()=>({outcome:'absent'}));gate.resolve({outcome:'absent'});await pending;await tick();
+  assert.equal(f.output.length,before+1,'the old generation never publishes');
+  assert.equal(f.prReads,3,'initial, expired and forced PR reads');f.stop();
+});
+
+
+test('a changed PR target is used after expiry without slowing feature-branch commit comparisons',async t=>{
+  const f=fixture();await initialResult(t);f.setEnvironment('env_feature');
+  f.setPr(async()=>({outcome:'available',pullRequest:{state:'open',baseRefName:'develop',headRefName:'feature/chat'}}));
+  f.emit('thread:changed','thread',['environment-changed']);await tick();
+  const before=f.prReads;const git=f.gitReads;
+  f.setPr(async()=>({outcome:'available',pullRequest:{state:'open',baseRefName:'release',headRefName:'feature/chat'}}));
+  t.mock.timers.tick(29999-Date.now());await f.refresh();assert.equal(f.prReads,before);
+  assert.equal(f.output.at(-1)?.detail.baseRef,'origin/develop');
+  t.mock.timers.tick(1);await f.refresh();assert.equal(f.prReads,before+1);
+  assert.equal(f.output.at(-1)?.detail.baseRef,'origin/release');
+  assert.equal(f.gitReads-git,8,'both remote comparisons, HEAD and files are read in each feature refresh');f.stop();
+});
+
+test('a forced same-environment PR failure retains its base; a different environment never inherits it',async t=>{
+  const f=fixture();await initialResult(t);f.setEnvironment('env_feature');
+  f.setPr(async()=>({outcome:'available',pullRequest:{state:'open',baseRefName:'develop',headRefName:'feature/chat'}}));
+  f.emit('thread:changed','thread',['environment-changed']);await tick();
+  f.setPr(async()=>({outcome:'unavailable'}));
+  f.emit('environment:changed','env_feature',['workspace-changed']);await tick();
+  assert.equal(f.output.at(-1)?.detail.baseRef,'origin/develop','same environment retains its last confirmed PR during failure');
+  f.setEnvironment('env_other');f.emit('thread:changed','thread',['environment-changed']);await tick();
+  assert.equal(f.output.at(-1)?.detail.baseRef,'origin/main','another environment cannot reuse the old base');f.stop();
+});
+
+test('initial metadata latency does not push the 30-second PR refresh into the next poll',async t=>{
+  const f=fixture();f.sdk.environments.get=async()=>{t.mock.timers.tick(20);return {mergeBaseBranch:'main'};};
+  await initialResult(t);assert.equal(f.prReads,1);
+  t.mock.timers.tick(30000-Date.now());await f.refresh();
+  assert.equal(f.prReads,2,'the 30-second deadline starts with the refresh, before context lookup latency');f.stop();
+});
+
+test('a forced focus refresh between polls does not postpone the next 30-second PR boundary',async t=>{
+  const f=fixture();await initialResult(t);t.mock.timers.tick(500);await f.refresh(true);assert.equal(f.prReads,2);
+  t.mock.timers.tick(30000-Date.now());await f.refresh();
+  assert.equal(f.prReads,3,'focus must not postpone the boundary to the 35-second worktree tick');f.stop();
 });
