@@ -13,13 +13,14 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done; });
   return { promise, resolve };
 }
+type DiffSnapshot = NonNullable<Awaited<ReturnType<typeof readWorkspaceDiff>>>;
 type StatusResponse = Awaited<ReturnType<Parameters<typeof readWorkspaceDiff>[0]["status"]>>;
 function fixture(initialStatus?:() => Promise<StatusResponse>) {
   let environmentId:string | null = 'env_main';
   let count = 3;
   let reads = 0;
   const handlers = new Map<string,(event:{ id:string; changes:string[] }) => void>();
-  const output:string[] = [];
+  const output:(DiffSnapshot | null)[] = [];
   let loadThread = async () => { reads++; return { environmentId }; };
   let loadStatus:(args:{ environmentId:string; mergeBaseBranch?:string }) => Promise<StatusResponse> = initialStatus ?? (async (args:{ environmentId:string; mergeBaseBranch?:string }) => ({ outcome:'available', workspace:{
     branch:{ currentBranch:args.environmentId === 'env_main' ? 'main' : 'feature/chat', defaultBranch:'main' },
@@ -28,7 +29,7 @@ function fixture(initialStatus?:() => Promise<StatusResponse>) {
   } }));
   const sdk = {
     threads:{ get:() => loadThread() },
-    environments:{ get:async () => ({ mergeBaseBranch:'main' }), status:(args:Parameters<typeof loadStatus>[0]) => loadStatus(args), pullRequest:async () => ({ outcome:'absent' }) },
+    environments:{ diffFiles:async () => ({outcome:'available',files:[],truncated:false}), get:async () => ({ mergeBaseBranch:'main' }), status:(args:Parameters<typeof loadStatus>[0]) => loadStatus(args), pullRequest:async () => ({ outcome:'absent' }) },
     subscribe:(args:{ event:string; callback:(event:{ id:string; changes:string[] }) => void }) => { handlers.set(args.event,args.callback); return () => { handlers.delete(args.event); }; },
   };
   const running = startWorkspaceDiffRefresh(sdk, 'thread', summary => output.push(summary));
@@ -36,13 +37,14 @@ function fixture(initialStatus?:() => Promise<StatusResponse>) {
     emit:(event:string,id:string,changes:string[]) => handlers.get(event)?.({ id, changes }),
     setEnvironment:(id:string | null) => { environmentId = id; }, setCount:(next:number) => { count = next; },
     setStatus:(read:typeof loadStatus) => { loadStatus = read; }, setThread:(read:typeof loadThread) => { loadThread = read; },
-    labels:() => output.map(s => s ? JSON.parse(s).presentation.label : '<empty>'),
+    labels:() => output.map(s => s ? s.presentation.label : '<empty>'),
   };
 }
 
 test('message streaming does not reset or refetch a stable main Diff', async t => {
   const f = fixture(); await initialResult(t);
   assert.deepEqual(f.labels(), ['↑3']);
+  assert.equal(typeof f.output[0], 'object', 'the renderer receives an SDK snapshot, not a JSON string');
   for (let i=0;i<5;i++) f.emit('thread:changed','thread',['events-appended']);
   await tick();
   assert.deepEqual(f.labels(), ['↑3']);

@@ -1,5 +1,6 @@
-import { createElement, Fragment, useEffect, useMemo, useState } from "react";
+import { createElement, Fragment, useEffect, useMemo, useState, useLayoutEffect, useRef, useCallback } from "react";
 import { experimental_Icon, experimental_ProviderIcon, experimental_useProviders, UrlLink, useBbNavigate, useComposer, useSdk, useSettings } from "@get-bb/plugin-sdk/app";
+import { publishInfoData, clearComposerData } from "./composer-data.ts";
 import { infoKinds } from "./composer-info-settings.ts";
 import { childEventRefreshes, childListArgs, childState, visibleChildren } from "./composer-child.ts";
 import { loadParent, type ParentSummary } from "./composer-parent.ts";
@@ -23,6 +24,20 @@ export function ComposerInfoBridge() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState(false);
   const [restoreStates, setRestoreStates] = useState<Record<string, RestoreState>>({});
+  const source = useRef<HTMLSpanElement>(null);
+  const openThread = useCallback((id: string) => navigate.toThread(id), [navigate]);
+  useLayoutEffect(() => {
+    const node = source.current;
+    return () => { if (node) clearComposerData(node); };
+  }, [threadId]);
+  useLayoutEffect(() => {
+    if (!source.current) return;
+    const data = snapshot?.threadId === threadId ? snapshot : null;
+    publishInfoData(source.current, {
+      settings: values ?? {}, parent: data?.parent ?? null, openThread,
+      children: (data?.children ?? []).map(child => ({ id: child.id, title: child.title ?? child.titleFallback ?? "Child Thread", providerId: child.providerId, state: childState(child.runtime.displayStatus, child.hasPendingInteraction) })),
+    });
+  }, [threadId, snapshot, values, openThread]);
   const restore = useMemo(() => createThreadRestorer(sdk.threads, state => setRestoreStates(previous => ({ ...previous, [state.threadId]:state }))), [sdk]);
   useEffect(() => {
     if (!threadId) return;
@@ -117,18 +132,14 @@ export function ComposerInfoBridge() {
     kind === "children" ? createElement("button", { type:"button", [`${mark}-dismiss`]:kind, "aria-label":"Child Threads 닫기" }, "×") : null), content);
   return createElement(Fragment, null,
     createElement("span", {
-      hidden:true,
+      ref:source, hidden:true,
       [`${mark}-thread`]:threadId,
-      [`${mark}-settings`]:JSON.stringify(values ?? {}),
+      [`${mark}-settings`]:"",
       [`${mark}-read-only-label`]:data?.readOnly.label ?? undefined,
-      [`${mark}-parent`]:parent ? JSON.stringify(parent) : undefined,
-      [`${mark}-children`]:JSON.stringify(children.map(child => ({ id:child.id, title:child.title ?? child.titleFallback ?? "Child Thread", providerId:child.providerId, state:childState(child.runtime.displayStatus, child.hasPendingInteraction) }))),
-      [`${mark}-child-providers`]:JSON.stringify(providers.map(provider => [provider.id, provider.logoUrl, provider.icon, provider.strings?.iconTint])),
     }, ...infoKinds.map(kind => createElement("span", { key:kind.key, [`${mark}-icon`]:kind.key },
       createElement(experimental_Icon, { name:kind.icon, "aria-hidden":true }))),
       ...children.map(child => createElement("span", { key:child.id, [`${mark}-child-icon`]:child.id }, providerIcon(child.providerId))),
       parent ? createElement("span", { key:"parent-icon", [`${mark}-parent-icon`]:parent.id }, providerIcon(parent.providerId)) : null,
-      parent ? createElement("button", { key:"parent-open", type:"button", [`${mark}-parent-open`]:parent.id, onClick:() => navigate.toThread(parent.id) }) : null,
       createElement("button", { type:"button", [`${mark}-restore-source`]:"unarchive", disabled:restoring?.pending === true,
         [`${mark}-restore-error`]:restoring?.error ?? undefined, onClick:() => void restore(threadId, "unarchive") }, restoring?.pending ? "Unarchiving..." : "Unarchive"),
       createElement("button", { type:"button", [`${mark}-restore-source`]:"environment", disabled:restoring?.pending === true || !data?.readOnly.canRestore,

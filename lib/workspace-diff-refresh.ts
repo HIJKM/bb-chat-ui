@@ -1,9 +1,9 @@
 import type { useSdk } from "@get-bb/plugin-sdk/app";
-import { readWorkspaceDiff } from "./workspace-diff-data.ts";
+import { readWorkspaceDiff, type WorkspaceDiffSnapshot } from "./workspace-diff-data.ts";
 
 type Sdk = Pick<ReturnType<typeof useSdk>, "threads" | "environments" | "subscribe">;
 
-export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(summary:string) => void) {
+export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(summary:WorkspaceDiffSnapshot | null) => void) {
   const controller = new AbortController();
   const { signal } = controller;
   let environmentId:string | null = null;
@@ -20,7 +20,7 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
     fetching = true;
     const current = revision;
     const stale = () => signal.aborted || current !== revision;
-    const update = async (summary:string) => {
+    const update = async (summary:WorkspaceDiffSnapshot | null) => {
       if (stale()) return;
       const remaining = published ? 0 : 500 - (Date.now() - startedAt);
       if (remaining > 0) await new Promise<void>(resolve => {
@@ -36,7 +36,7 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
         const thread = await sdk.threads.get({ threadId, signal });
         if (stale()) return;
         const id = thread.environmentId;
-        if (!id) { environmentId = null; await update(""); return; }
+        if (!id) { environmentId = null; await update(null); return; }
         const environment = await sdk.environments.get({ environmentId:id, signal });
         if (stale()) return;
         environmentId = id;
@@ -46,12 +46,12 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
       if (!environmentId) return;
       const result = await readWorkspaceDiff(sdk.environments, environmentId, mergeBaseBranch, signal);
       if (!stale()) {
-        if (result) await update(JSON.stringify(result));
-        else if (result === undefined || !published) await update("");
+        if (result) await update(result);
+        else if (result === undefined || !published) await update(null);
       }
     } catch {
       // Keep the last summary during a temporary disconnect.
-      if (!stale() && !published) await update("");
+      if (!stale() && !published) await update(null);
     } finally {
       fetching = false;
       if (pending && !signal.aborted) { pending = false; void refresh(); }

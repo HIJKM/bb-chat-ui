@@ -1,3 +1,4 @@
+import { composerDataChanged, readDiffData } from "./composer-data.ts";
 const TOGGLE_ID = "thread-prompt-banner-git-toggle";
 const BODY_ID = "thread-prompt-banner-git-body";
 const STYLE_ID = "bb-chat-ui-diff-pill";
@@ -178,13 +179,18 @@ export function injectWorkspaceDiffPill(document: Document): () => void {
   observer.observe(document.body, {
     childList: true,
     subtree: true,
-    attributes: true,
-    attributeFilter: [HEAD_DIFF_MARK],
   });
+  const onData = (event: Event) => {
+    const source = event.target;
+    if (!(source instanceof Element) || !source.hasAttribute(HEAD_DIFF_MARK)) return;
+    source.closest(".chat-prompt-box")?.querySelectorAll<HTMLButtonElement>(`#${TOGGLE_ID}`).forEach(paintToggle);
+  };
+  document.addEventListener(composerDataChanged, onData);
   paint();
 
   return () => {
     observer.disconnect();
+    document.removeEventListener(composerDataChanged, onData);
     document.removeEventListener("click", onClick, true);
     style.remove();
     document.querySelectorAll(`[${BRANCH_MARK}]`).forEach((node) => node.remove());
@@ -192,6 +198,8 @@ export function injectWorkspaceDiffPill(document: Document): () => void {
 }
 
 function paintToggle(button: HTMLButtonElement) {
+  // The information row renders its own SDK summary; do not also rewrite the hidden host card.
+  if (button.closest("[data-bb-chat-ui-info-stack]")) return;
   const icons = Array.from(button.querySelectorAll("[data-icon-root]"))
     .filter((icon) => !icon.closest(`[${BRANCH_MARK}]`));
   const chevron = icons.length > 1 ? icons[icons.length - 1] : null;
@@ -217,9 +225,8 @@ function paintToggle(button: HTMLButtonElement) {
 
 function paintHeadSummary(button: HTMLButtonElement) {
   const source = button.closest(".chat-prompt-box")?.querySelector(`[${HEAD_DIFF_MARK}]`);
-  const serialized = source?.getAttribute(HEAD_DIFF_MARK);
-  if (!serialized) return;
-  const summary: ReturnType<typeof headDiffSummary> = JSON.parse(serialized);
+  const summary = readDiffData(source)?.value.summary;
+  if (!summary) return;
   const files = button.querySelector(`[${FILES_MARK}]`);
   const label = files?.parentElement;
   if (!label) return;
