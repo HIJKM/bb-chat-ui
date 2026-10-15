@@ -6,6 +6,7 @@ import { childInitial, type ChildState, type ChildSummary } from "./composer-chi
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
 import { eventHop, pressPop, stickyDrop } from "./motion.ts";
 import { isDesktopChrome } from "./device-chrome.ts";
+import { infoStack } from "./composer-info-stack.ts";
 import { bodyFadeBox, readBodyFadeClips } from "./body-fade.ts";
 
 const STACK = "[data-promptbox-shell] > .grid";
@@ -15,10 +16,12 @@ const WRAP = `${MARK}-wrap`;
 const OPEN = `${MARK}-open`;
 const SOURCE = `${MARK}-settings`;
 const REQUEST = ['tool-use-ask', 'plugin-request-banner', 'plan-review-request', 'approval-banner', 'user-question-banner', 'plan-review-banner'].map(id => `[data-testid="${id}"]`).join(", ");
+const GUARDED_STACK = `:where(${STACK}):is([${MARK}-stack], :has([${SOURCE}]))`;
+const PENDING_CARD = `:not(:where([${WRAP}], [${MARK}-bar], [${MARK}-body-fade], [${OPEN}], ${REQUEST}, :has(${REQUEST})))`;
 const QUESTION = ['tool-use-ask', 'plugin-request-banner', 'user-question-banner'].map(id => `[data-testid="${id}"]`).join(", ");
 const HOST_JUMP = 'button[aria-label="Scroll to latest event"]';
-// Child avatars are 30px circles overlapping by 8px, so each circle adds 22px.
-const AVATAR_STEP = 22;
+// Child avatars are 30px circles overlapping by 12px, so each circle adds 18px.
+const AVATAR_STEP = 18;
 const NATIVE = `section[aria-label], .agentation-staging-shell, [${MARK}-kind]`;
 const WORKFLOW_COLLAPSE = 'button[aria-label^="Collapse "][aria-label$=" workflows"][aria-controls]';
 const ARCHIVED = '[aria-label="Thread archived"], [aria-label="Thread is archived"], [aria-label="Archived thread"]';
@@ -57,6 +60,9 @@ export const composerInfoCss = `
 [${MARK}-stack]::after { display:none !important; }
 [${WRAP}] { display:contents !important; }
 [${UNIT}] { display:none !important; }
+/* Native replacements must not paint full cards while the next frame classifies them. */
+${GUARDED_STACK} > ${PENDING_CARD}, ${GUARDED_STACK} [${WRAP}] > ${PENDING_CARD} { display:none !important; }
+[${MARK}-stack]:not(:has([${SOURCE}])) [${MARK}-bar] { visibility:hidden !important; pointer-events:none !important; }
 [${MARK}-bar] { position:relative; display:flex; align-items:center; gap:8px; height:32px; min-width:0; padding-right:0; }
 [${MARK}-bar][hidden] { display:none; }
 [${MARK}-all][hidden] { display:none; }
@@ -66,8 +72,9 @@ export const composerInfoCss = `
 [${MARK}-bar] button { font:inherit; cursor:pointer; color:var(--foreground); }
 [${MARK}-unarchive] { min-height:32px; border-radius:8px; padding:6px 10px; font-size:12px !important; line-height:18px !important; }
 [${MARK}-bar] button:focus-visible { outline:2px solid var(--ring); outline-offset:3px; }
-[${MARK}-trigger], [${MARK}-all] { display:inline-flex; flex:none; align-items:center; justify-content:center; gap:6px; height:32px; max-width:100%; padding:4px 11px; border:0; border-radius:999px; font-size:12px !important; line-height:18px; white-space:nowrap; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px color-mix(in oklab,var(--foreground) 22%,transparent),inset 0 1px 3px color-mix(in oklab,var(--popover) 35%,transparent); transition:transform 260ms cubic-bezier(.2,.9,.22,1.25); }
-[${MARK}-trigger], [${MARK}-all], [${MARK}-choice], [${MARK}-menu] button, ${DETAIL} button { background:var(--bb-chat-ui-info-face) !important; border:0 !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); }
+[${MARK}-trigger], [${MARK}-stack-kind], [${MARK}-all] { display:inline-flex; flex:none; align-items:center; justify-content:center; gap:6px; height:32px; max-width:100%; padding:4px 11px; border:0; border-radius:999px; font-size:12px !important; line-height:18px; white-space:nowrap; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px color-mix(in oklab,var(--foreground) 22%,transparent),inset 0 1px 3px color-mix(in oklab,var(--popover) 35%,transparent); transition:transform 260ms cubic-bezier(.2,.9,.22,1.25); }
+[${MARK}-trigger] { width:auto; min-width:0; }
+[${MARK}-trigger], [${MARK}-stack-kind], [${MARK}-all], [${MARK}-choice], [${MARK}-menu] button, ${DETAIL} button { background:var(--bb-chat-ui-info-face) !important; border:0 !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); }
 [${MARK}-menu] header button { width:24px; height:24px; padding:0; border-radius:50%; }
 [${MARK}-panel-source] { display:none !important; }
 [${MARK}-panel-heading] { display:flex; align-items:center; gap:6px; }
@@ -123,9 +130,9 @@ ${DETAIL}[${OPEN}="workflow"] button[aria-expanded] { background:transparent !im
 ${DETAIL}[${OPEN}="workflow"] button[aria-expanded]:is(:hover, :focus-visible) { background-color:color-mix(in oklab, var(--foreground) 6%, transparent) !important; }
 [${MARK}-panel-action], [${MARK}-action="diff"] { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; padding:0 !important; border-radius:50% !important; color:var(--subtle-foreground); }
 [${MARK}-panel-action] svg, [${MARK}-action="diff"] svg { width:14px; height:14px; }
-[${MARK}-trigger]:hover, [${MARK}-all]:hover { transform:translateY(-1px); }
-[${MARK}-trigger]:active, [${MARK}-all]:active { transform:scale(.95); }
-[${MARK}-trigger][aria-expanded=true], [${MARK}-all][aria-expanded=true] { box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge),inset 0 0 0 1px var(--border); }
+[${MARK}-trigger]:hover, [${MARK}-stack-kind]:hover, [${MARK}-all]:hover { transform:translateY(-1px); }
+[${MARK}-trigger]:active, [${MARK}-stack-kind]:active, [${MARK}-all]:active { transform:scale(.95); }
+[${MARK}-trigger][aria-expanded=true], [${MARK}-stack-kind][aria-expanded=true], [${MARK}-all][aria-expanded=true] { box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge),inset 0 0 0 1px var(--border); }
 [${MARK}-trigger][hidden] { display:none; }
 [${MARK}-trigger][${MARK}-unavailable] { width:32px; min-height:32px; padding:0; border-radius:50%; color:var(--subtle-foreground); background:var(--bb-chat-ui-info-face) !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; }
 [${MARK}-trigger] > span:not([${MARK}-avatars]) { overflow:hidden; text-overflow:ellipsis; }
@@ -152,42 +159,36 @@ body > .bbk-drop { z-index:54; --bbk-drop-face:${LIGHT_GLASS_FACE}; --bbk-drop-e
 .dark body > .bbk-drop, body.dark > .bbk-drop { --bbk-drop-face:${DARK_GLASS_FACE}; --bbk-drop-edge:color-mix(in oklab,var(--foreground) 8%,transparent); }
 [${MARK}-all] { position:relative; width:32px; padding:0; }
 [${MARK}-glyph] { display:block; width:16px; height:16px; pointer-events:none; color:var(--subtle-foreground); transition:opacity 200ms, scale 280ms cubic-bezier(.2,.9,.22,1.25); }
-[${MARK}-all]:hover [${MARK}-glyph], [${MARK}-all][aria-expanded=true] [${MARK}-glyph] { color:var(--foreground); }
+[${MARK}-stack-kind]:hover, [${MARK}-all]:hover [${MARK}-glyph], [${MARK}-all][aria-expanded=true] [${MARK}-glyph] { color:var(--foreground); }
 [${MARK}-count] { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; opacity:0; scale:.6; pointer-events:none; transition:opacity 200ms, scale 280ms cubic-bezier(.2,.9,.22,1.25); }
-[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-all] { margin-left:auto; transition:width 280ms cubic-bezier(.22,1,.36,1), transform 260ms cubic-bezier(.2,.9,.22,1.25); }
-[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-all][${MARK}-folded] { width:40px; }
-[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-all][${MARK}-folded="wide"] { width:48px; }
-[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-all][${MARK}-folded] [${MARK}-glyph] { opacity:0; scale:.5; }
-[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-all][${MARK}-folded] [${MARK}-count] { opacity:1; scale:1; }
-[${MARK}-dock] { display:inline-flex; flex:none; align-items:center; height:32px; margin-left:auto; padding:0 1px; border-radius:999px; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); }
-[${MARK}-dock][hidden] { display:none; }
-[${MARK}-dock] > [${MARK}-all], [${MARK}-dock] > [${MARK}-jump] { width:30px; height:30px; background:transparent !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; box-shadow:none !important; }
-[${MARK}-dock] > [${MARK}-all]:hover, [${MARK}-dock] > [${MARK}-all]:active { transform:none; }
-[${MARK}-dock] > [${MARK}-all][aria-expanded=true] { box-shadow:inset 0 0 0 1px var(--border) !important; }
-[${MARK}-dock-sep] { flex:none; width:0; height:16px; background:var(--border); transition:width 420ms cubic-bezier(.22,1,.36,1), margin 420ms cubic-bezier(.22,1,.36,1); }
-[${MARK}-dock][${MARK}-jumping] > [${MARK}-dock-sep] { width:1px; margin:0 .5px; }
+[${MARK}-stack-icons] { position:relative; display:flex; flex:none; align-items:center; width:auto; min-width:0; isolation:isolate; }
+[${MARK}-stack-icons][hidden] { display:none; }
+[${MARK}-stack-kind], [${MARK}-stack-icons] > [${MARK}-all] { position:relative; flex:none; width:32px; height:32px; padding:0; margin-left:-14px; border-radius:999px; box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)),inset 0 1px 3px var(--bb-chat-ui-info-edge); }
+[${MARK}-stack-kind]:first-child, [${MARK}-stack-icons] > [${MARK}-all]:first-child { margin-left:0; }
+[${MARK}-stack-kind] svg, [${MARK}-stack-kind] [data-icon-root] { width:16px; height:16px; flex:none; color:var(--subtle-foreground); }
+[${MARK}-stack-kind] > [data-icon-root] { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+[${MARK}-stack-kind][${MARK}-active] svg { color:var(--foreground); }
+[${MARK}-stack-icons] > [${MARK}-all] [${MARK}-glyph] { display:none; }
+[${MARK}-stack-icons] > [${MARK}-all] [${MARK}-count] { opacity:1; scale:1; }
+[${MARK}-stack-kind][${MARK}-active]::after, [${MARK}-all][${MARK}-active]::after { content:""; position:absolute; left:0; bottom:0; width:6px; height:6px; border-radius:50%; background:var(--success-text,var(--foreground)); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)); pointer-events:none; }
 [${MARK}-jump] { display:inline-flex; flex:none; align-items:center; justify-content:center; gap:5px; padding:0; border:0; border-radius:999px; font-size:12px !important; line-height:18px; white-space:nowrap; color:var(--foreground); cursor:pointer; }
 [${MARK}-jump] svg { width:16px; height:16px; flex-shrink:0; transition:scale 420ms cubic-bezier(.22,1,.36,1); }
 [${MARK}-jump][${MARK}-jump-off] { visibility:hidden; opacity:0; pointer-events:none; }
-[${MARK}-dock] > [${MARK}-jump] { overflow:hidden; transition:width 420ms cubic-bezier(.22,1,.36,1), opacity 260ms ease-out 100ms, visibility 0s; }
-[${MARK}-dock] > [${MARK}-jump][${MARK}-jump-off] { width:0; transition:width 360ms cubic-bezier(.4,0,.2,1) 80ms, opacity 180ms ease-in, visibility 0s 440ms; }
-[${MARK}-dock] > [${MARK}-jump][${MARK}-jump-off] svg { scale:.6; }
-[${MARK}-dock] [${MARK}-jump-label] { display:none; }
-[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-jump] { position:absolute; left:50%; bottom:40px; z-index:2; height:32px; padding:0 12px 0 9px; translate:-50% 0; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); transition:opacity 280ms ease-out, translate 460ms cubic-bezier(.22,1,.36,1), scale 460ms cubic-bezier(.22,1,.36,1), visibility 0s; }
-[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-jump][${MARK}-jump-off] { translate:-50% 10px; scale:.92; transition:opacity 220ms ease-in, translate 340ms cubic-bezier(.4,0,.2,1), scale 340ms cubic-bezier(.4,0,.2,1), visibility 0s 340ms; }
+[${MARK}-bar][${MARK}-layout="dock"] > [${MARK}-jump] { position:absolute; right:0; top:0; z-index:2; width:32px; height:32px; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); transition:opacity 280ms ease-out, translate 460ms cubic-bezier(.22,1,.36,1), scale 460ms cubic-bezier(.22,1,.36,1), visibility 0s; }
+[${MARK}-bar][${MARK}-layout="dock"] > [${MARK}-jump][${MARK}-jump-off] { translate:0 10px; scale:.92; transition:opacity 220ms ease-in, translate 340ms cubic-bezier(.4,0,.2,1), scale 340ms cubic-bezier(.4,0,.2,1), visibility 0s 340ms; }
+[${MARK}-bar][${MARK}-layout="dock"] [${MARK}-jump-label] { display:none; }
 [${MARK}-jump]:focus-visible { outline:2px solid var(--ring); outline-offset:3px; }
 [data-bb-chat-ui-info-jump-source] { visibility:hidden !important; pointer-events:none !important; }
-[${MARK}-badge] { position:absolute; right:-3px; top:-4px; font-size:9px; min-width:14px; line-height:14px; padding:0 3px; border-radius:999px; background:var(--bb-chat-ui-info-face); color:var(--subtle-foreground); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)); }
-[${MARK}-avatar], [${MARK}-badge] { backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); }
-[${MARK}-trigger="children"] { padding:0 7px 0 0; min-height:34px; border-radius:0; background:transparent !important; backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:none !important; }
+[${MARK}-avatar] { backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); }
+[${MARK}-trigger="children"] { padding:0; min-height:34px; border-radius:0; background:transparent !important; backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:none !important; }
 [${MARK}-trigger="children"]:hover { transform:none; }
 [${MARK}-avatars] { display:flex; align-items:center; isolation:isolate; }
-[${MARK}-avatar], [${MARK}-avatar-more] { position:relative; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:30px; height:30px; margin-left:-8px; border-radius:50%; background:var(--bb-chat-ui-info-face); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)),inset 0 1px 3px var(--bb-chat-ui-info-edge); font-size:10px; font-weight:600; line-height:1; transition:transform 400ms cubic-bezier(.2,.9,.22,1.25); }
+[${MARK}-avatar], [${MARK}-avatar-more] { position:relative; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:30px; height:30px; margin-left:-12px; border-radius:50%; background:var(--bb-chat-ui-info-face); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)),inset 0 1px 3px var(--bb-chat-ui-info-edge); font-size:10px; font-weight:600; line-height:1; transition:transform 400ms cubic-bezier(.2,.9,.22,1.25); }
 [${MARK}-avatar]:first-child { margin-left:0; }
 [${MARK}-avatar]:nth-child(3n+1) { background:color-mix(in oklch,var(--bb-chat-ui-info-face) 76%,oklch(.75 .13 250) 24%); }
 [${MARK}-avatar]:nth-child(3n+2) { background:color-mix(in oklch,var(--bb-chat-ui-info-face) 78%,oklch(.75 .1 155) 22%); }
 [${MARK}-avatar]:nth-child(3n) { background:color-mix(in oklch,var(--bb-chat-ui-info-face) 78%,oklch(.78 .09 60) 22%); }
-[${MARK}-trigger="children"]:hover [${MARK}-avatar], [${MARK}-trigger="children"]:hover [${MARK}-avatar-more] { transform:translateY(-2px); margin-right:1px; }
+[${MARK}-trigger="children"]:hover [${MARK}-avatar], [${MARK}-trigger="children"]:hover [${MARK}-avatar-more] { transform:translateY(-2px); }
 [${MARK}-avatar-more] { color:var(--subtle-foreground); backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); }
 [${MARK}-avatar-dot] { position:absolute; left:0; right:auto; bottom:0; width:6px; height:6px; border-radius:50%; background:var(--success-text,#80b995); box-shadow:0 0 0 2px var(--bb-chat-ui-glass-base,var(--background)); }
 [${MARK}-avatar][data-state="run"] [${MARK}-avatar-dot] { animation:bb-info-breathe 2.6s ease-in-out infinite; }
@@ -326,6 +327,7 @@ ${DETAIL} [${MARK}-dismiss], [${MARK}-menu] [${MARK}-close], ${DETAIL}.agentatio
 @keyframes bb-info-loading { 0%,80%,100% { opacity:.35; transform:none; } 40% { opacity:1; transform:translateY(-2px); } }
 @keyframes bb-info-count-in { from { translate:0 100%; opacity:0; } to { translate:0 0; opacity:1; } }
 @keyframes bb-info-count-out { from { translate:0 0; opacity:1; } to { translate:0 -100%; opacity:0; } }
+${STACK}[${MARK}-stack]:not(:has([${SOURCE}])) [${UNIT}][${OPEN}]:not([hidden]) { display:none !important; }
 @media (prefers-reduced-motion:reduce) { [${MARK}-bar] *, [${MARK}-stack] [${UNIT}][${OPEN}] { animation:none !important; transition:none !important; } }
 @media (prefers-reduced-motion:reduce) { [${MARK}-stack] :is(${QUESTION}) { animation:none !important; transition:none !important; } }
 @media (prefers-reduced-motion:reduce) { [${MARK}-diff-previous] { display:none; } }
@@ -393,21 +395,16 @@ export function injectComposerInfo(document: Document): () => void {
       for (const d of paths) { const path = document.createElementNS(icon.namespaceURI, "path"); path.setAttribute("d", d); icon.append(path); }
       return icon;
     };
-    // Both layouts use the same stacked-layers glyph.
+    // The information stack uses a stacked-layers glyph.
     const glyph = svg(["m12 3 9 5-9 5-9-5z", "m3 13 9 5 9-5"], { [`${MARK}-glyph`]:"" });
-    const badge = document.createElement("span");
-    badge.setAttribute(`${MARK}-badge`, "");
-    badge.setAttribute("aria-hidden", "true");
-    badge.hidden = true;
     const foldedCount = document.createElement("span");
     foldedCount.setAttribute(`${MARK}-count`, "");
     foldedCount.setAttribute("aria-hidden", "true");
-    orb.append(glyph, badge);
-    const dock = document.createElement("span");
-    dock.setAttribute(`${MARK}-dock`, "");
-    const dockSep = document.createElement("span");
-    dockSep.setAttribute(`${MARK}-dock-sep`, "");
-    dockSep.setAttribute("aria-hidden", "true");
+    orb.append(glyph, foldedCount);
+    const iconStack = document.createElement("span");
+    iconStack.setAttribute(`${MARK}-stack-icons`, ""); iconStack.setAttribute("role", "group"); iconStack.setAttribute("aria-label", "접힌 정보");
+    const stackIcons = new Map<InfoKind, HTMLButtonElement>();
+    iconStack.append(orb);
     const jump = document.createElement("button");
     jump.type = "button";
     // Not [hidden]: BB's layered `[hidden]{display:none!important}` would skip the transition.
@@ -419,15 +416,8 @@ export function injectComposerInfo(document: Document): () => void {
     jump.append(svg(["M12 3v12", "m7 10 5 5 5-5", "M5 21h14"]), jumpLabel);
     bar.append(pills);
     stack.append(bar);
-    let layout: "dock" | "center" | null = null;
-    const applyLayout = (next: "dock" | "center") => {
-      if (layout === next) return;
-      layout = next;
-      bar.setAttribute(`${MARK}-layout`, next);
-      if (next === "dock") { if (!badge.isConnected) orb.append(badge); foldedCount.remove(); dock.append(orb, dockSep, jump); pills.after(dock); }
-      else { dock.remove(); badge.remove(); orb.append(foldedCount); pills.after(orb, jump); }
-    };
-    applyLayout("center");
+    bar.setAttribute(`${MARK}-layout`, "dock");
+    pills.after(iconStack, jump);
     // The host keeps its own scroll logic; the visible control forwards to it.
     let jumpSource: HTMLButtonElement | null = null;
     let jumpVisible = false;
@@ -441,8 +431,8 @@ export function injectComposerInfo(document: Document): () => void {
         if (host) { host.setAttribute(`${MARK}-jump-source`, ""); jumpWatch.observe(host, { attributes:true, attributeFilter:["class", "disabled"] }); }
       }
       jumpVisible = !!host && !host.disabled && !host.classList.contains("invisible");
-      jump.toggleAttribute(`${MARK}-jump-off`, !jumpVisible || layout === "center" && active !== null);
-      dock.toggleAttribute(`${MARK}-jumping`, jumpVisible);
+      jump.toggleAttribute(`${MARK}-jump-off`, !jumpVisible);
+
     };
     jump.addEventListener("click", () => jumpSource?.click());
     let items: InfoItem[] = [];
@@ -503,6 +493,24 @@ export function injectComposerInfo(document: Document): () => void {
     };
     let signature = "";
     let catalogCount = 0;
+    let stackMore = 0;
+    const stackCountTimers = new Map<HTMLElement, number>();
+    const renderStackCount = () => {
+      const pending = Array.from(stackCountTimers.keys()).filter(node => node.parentElement === iconStack).length;
+      const more = stackMore + pending;
+      const count = `+${more}`;
+      if (foldedCount.textContent !== count) foldedCount.textContent = count;
+      const label = `전체 정보 ${catalogCount}개 · 더 보기 ${more}개`;
+      if (orb.getAttribute("aria-label") !== label) { orb.setAttribute("aria-label", label); orb.title = label; }
+    };
+    const finishStackCount = (node:HTMLElement, timer:number | undefined) => {
+      if (timer === undefined || stackCountTimers.get(node) !== timer) return;
+      view!.clearTimeout(timer); stackCountTimers.delete(node); renderStackCount();
+    };
+    const cancelStackCount = () => {
+      for (const timer of stackCountTimers.values()) view!.clearTimeout(timer);
+      stackCountTimers.clear(); renderStackCount();
+    };
     let avatarCap = 3;
     let childTotal = 0;
     let childStates = new Map<string, ChildState>();
@@ -868,7 +876,7 @@ export function injectComposerInfo(document: Document): () => void {
     stack.addEventListener("touchcancel", endTouch);
     const editing = () => stack.querySelector('[data-queued-message-inline-editor]') !== null;
     const reduced = () => view!.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    const slot = () => layout === "dock" ? dock : orb;
+    const slot = () => iconStack;
     const ownedMotion = new Map<Element, Set<Animation>>();
     const pressHeld = new Set<HTMLElement>();
     const pressControls = new WeakMap<HTMLElement, { down(): void; up(): void }>();
@@ -921,9 +929,9 @@ export function injectComposerInfo(document: Document): () => void {
       return control;
     };
     const pressTarget = (target: EventTarget | null) => {
-      const button = target instanceof view!.Element ? target.closest<HTMLElement>(`[${MARK}-trigger], [${MARK}-all]`) : null;
+      const button = target instanceof view!.Element ? target.closest<HTMLElement>(`[${MARK}-trigger], [${MARK}-stack-kind], [${MARK}-all]`) : null;
       if (!button || !bar.contains(button)) return null;
-      return button.hasAttribute(`${MARK}-all`) ? slot() : button;
+      return button;
     };
     const canPress = (node: HTMLElement) => !reduced() && !bar.hidden && !node.hidden
       && !node.hasAttribute("disabled") && node.getAttribute("aria-disabled") !== "true"
@@ -1050,7 +1058,7 @@ export function injectComposerInfo(document: Document): () => void {
       const timer = view!.setTimeout(() => {
         queueTimers.delete(timer);
         const pill = buttons.get("queue");
-        const target = pill && !pill.hidden ? pill : slot();
+        const target = pill && !pill.hidden ? pill : stackIcons.get("queue") ?? (!orb.hidden ? orb : slot());
         if (bar.hidden || reduced() || !target.isConnected || !target.animate) return;
         const shell = stack.closest("[data-promptbox-shell]");
         const origin = shell?.querySelector<HTMLElement>('[data-promptbox-submit-action][type="submit"]')
@@ -1115,7 +1123,6 @@ export function injectComposerInfo(document: Document): () => void {
         || (item.node === diffSupplement && item.trigger?.title !== "Code Diff" ? item.trigger?.title : null);
       return `${describe(item)}${branch ? `\nBranch · ${branch}` : ""}`;
     };
-    // Render the current Code Diff summary, file rows, and commit rows.
     const renderDiff = (container: HTMLElement, item: InfoItem) => {
       const expanded = new Set(Array.from(container.querySelectorAll(`[${MARK}-diff-toggle][aria-expanded="true"]`))
         .map(button => button.getAttribute(`${MARK}-diff-toggle`)));
@@ -1163,18 +1170,12 @@ export function injectComposerInfo(document: Document): () => void {
       const snapshot = readDiff();
       const basis = document.createElement("p");
       basis.setAttribute(`${MARK}-diff-meta`, "head");
-      basis.title = detail.truncated ? `${detail.basis} · 파일 목록 일부만 포함됨` : detail.basis;
+      basis.title = detail.basis;
       basis.setAttribute("aria-label", `${detail.basis} · +${snapshot?.insertions ?? 0} −${snapshot?.deletions ?? 0} · ${detail.files.length} files`);
       const added = document.createElement("span"); added.className = "text-diff-added"; added.textContent = `+${snapshot?.insertions ?? 0}`;
       const removed = document.createElement("span"); removed.className = "text-diff-removed"; removed.textContent = `−${snapshot?.deletions ?? 0}`;
       basis.append("HEAD · ", added, " ", removed, ` · ${detail.files.length} files`);
       overview.append(basis);
-      if (detail.truncated) {
-        const warning = document.createElement("p");
-        warning.textContent = "파일 목록이 일부만 포함되어 줄 수 합계도 일부일 수 있습니다.";
-        warning.setAttribute(`${MARK}-diff-truncated`, "");
-        overview.append(warning);
-      }
       container.append(document.createElement("hr"));
       const files = document.createElement("div"); files.setAttribute(`${MARK}-diff-files`, "");
       const filesHeading = document.createElement("h4"); filesHeading.textContent = `변경 파일 · ${detail.files.length}`; files.append(filesHeading);
@@ -1385,8 +1386,8 @@ export function injectComposerInfo(document: Document): () => void {
       syncNativeControls();
       updateScrollHints();
       orb.setAttribute("aria-expanded", "false");
-      for (const button of buttons.values()) button.setAttribute("aria-expanded", "false");
-      if (restoreFocus) (lastTrigger?.isConnected ? lastTrigger : orb).focus();
+      for (const button of [...buttons.values(), ...stackIcons.values()]) button.setAttribute("aria-expanded", "false");
+      if (restoreFocus) (lastTrigger?.isConnected && !lastTrigger.hidden ? lastTrigger : !orb.hidden ? orb : iconStack.querySelector<HTMLElement>("button") ?? [...buttons.values()].find(button=>!button.hidden))?.focus();
       return true;
     };
     const archiveAction = (item?:InfoItem) => {
@@ -1433,6 +1434,7 @@ export function injectComposerInfo(document: Document): () => void {
       close(false, false);
       hoverPreview = preview;
       lastTrigger = trigger;
+      for (const [kind, button] of stackIcons) button.setAttribute("aria-expanded", String(kind === key));
       if (key === "all") {
         active = "all";
         menu = document.createElement("section");
@@ -1543,11 +1545,11 @@ export function injectComposerInfo(document: Document): () => void {
       (lastTrigger?.contains(target) || (menu ?? activeNode)?.contains(target));
     const onHoverOver = (event: PointerEvent) => {
       if (!isDesktopChrome(document) || event.pointerType !== "mouse") return;
-      const button = (event.target as Element).closest<HTMLElement>(`[${MARK}-trigger], [${MARK}-all]`);
+      const button = (event.target as Element).closest<HTMLElement>(`[${MARK}-trigger], [${MARK}-stack-kind], [${MARK}-all]`);
       if (button && bar.contains(button) && !button.hidden && !bar.hidden) {
         if (event.relatedTarget instanceof view!.Node && button.contains(event.relatedTarget)) return;
         cancelHover();
-        const key = button.hasAttribute(`${MARK}-all`) ? "all" : button.getAttribute(`${MARK}-trigger`) as InfoKind;
+        const key = button.hasAttribute(`${MARK}-all`) ? "all" : (button.getAttribute(`${MARK}-trigger`) ?? button.getAttribute(`${MARK}-stack-kind`)) as InfoKind;
         if (active === key || active !== null && !hoverPreview) return;
         hoverOpenTimer = view!.setTimeout(() => {
           hoverOpenTimer = undefined;
@@ -1557,7 +1559,7 @@ export function injectComposerInfo(document: Document): () => void {
     };
     const onHoverOut = (event: PointerEvent) => {
       if (event.pointerType !== "mouse") return;
-      const button = (event.target as Element).closest<HTMLElement>(`[${MARK}-trigger], [${MARK}-all]`);
+      const button = (event.target as Element).closest<HTMLElement>(`[${MARK}-trigger], [${MARK}-stack-kind], [${MARK}-all]`);
       if (button && event.relatedTarget instanceof view!.Node && button.contains(event.relatedTarget)) return;
       view!.clearTimeout(hoverOpenTimer); hoverOpenTimer = undefined;
       if (!hoverPreview || inHoverArea(event.relatedTarget)) return;
@@ -1573,27 +1575,31 @@ export function injectComposerInfo(document: Document): () => void {
     stack.addEventListener("focusin", pinPreview);
     orb.addEventListener("click", () => { open("all", orb); });
     const fit = (motion = true) => {
+      const hadStack = appeared.has("all") && !iconStack.hidden && stackIcons.size > 0;
       const previouslyVisible = new Set([...buttons.values()].filter(button => !button.hidden && positions.has(button)));
+      // Reveal candidates together so width reads share one layout calculation.
+      for (const button of buttons.values()) button.hidden = false;
       const widths = [...buttons].map(([key, button]) => {
-        button.hidden = false;
         // Entry transforms change visual bounds, but must not change which pills fit.
         return { key, width:widthAnimations.get(button)?.width ?? (button.offsetWidth || button.getBoundingClientRect().width) };
       });
       for (const [key, exit] of exits) if (!buttons.has(key)) widths.push({ key, width:exit.node.offsetWidth });
       const width = stack.getBoundingClientRect().width;
-      // The capsule grows by 32px for latest-event; the centred button by 8px per folded digit.
-      const room = (extra: number) => width > 0 ? width - extra : Number.POSITIVE_INFINITY;
-      const hiddenCount = (shown: Set<string>) => [...buttons.keys()].filter(key => !shown.has(key)).length;
+      const activeKinds = new Set(items.filter(item=>item.key!=="diff" || readDiff()?.presentation?.visible!==false).map(item => item.key));
       const place = () => {
-        let shown = new Set(readOnlyLabel ? ["status"] : fitComposerInfo(widths, room(layout === "dock" && jumpVisible ? 32 : 0)));
-        if (!readOnlyLabel && layout === "center" && hiddenCount(shown)) {
-          shown = new Set(fitComposerInfo(widths, room(8)));
-          if (hiddenCount(shown) > 9) shown = new Set(fitComposerInfo(widths, room(16)));
+        if (readOnlyLabel) return new Set<InfoKind>(["status"]);
+        let shown:Set<string> = new Set(widths.map(item=>item.key));
+        for (let attempt=0; attempt<=listed.length; attempt++) {
+          const folded=infoStack(listed,activeKinds,new Set([...shown].filter(key=>buttons.has(key as InfoKind))));
+          const available=width>0 ? width - (jumpVisible ? 40 : 0) - (folded.width ? folded.width + 8 : 0) : Number.POSITIVE_INFINITY;
+          const next=new Set(fitComposerInfo(widths,available+40));
+          if (next.size===shown.size && [...next].every(key=>shown.has(key))) break;
+          shown=next;
         }
         return shown;
       };
       // Child Thread keeps three avatars when there is room, then two or one before folding.
-      const childEntry = readOnlyLabel ? null : widths.find(item => item.key === "children");
+      const childEntry = readOnlyLabel || !buttons.has("children") ? null : widths.find(item => item.key === "children");
       const childItem = items.find(item => item.key === "children");
       if (childEntry && childItem) {
         const circles = (cap: number) => Math.min(cap, childTotal) + (childTotal > cap ? 1 : 0);
@@ -1606,24 +1612,34 @@ export function injectComposerInfo(document: Document): () => void {
         childEntry.width = base + AVATAR_STEP * (circles(cap) - circles(avatarCap));
         if (cap !== avatarCap) { avatarCap = cap; decorate(buttons.get("children")!, childItem, true); }
       }
-      const visible = place();
-      // Write only changes: the document observer would otherwise schedule this fit again.
-      const folded = readOnlyLabel ? 0 : hiddenCount(visible);
-      const text = (node: HTMLElement, value: string) => { if (node.textContent !== value) node.textContent = value; };
-      text(badge, `+${folded}`); text(foldedCount, `+${folded}`); badge.hidden = !folded;
-      const foldedSize = folded > 9 ? "wide" : folded ? "" : null;
-      if (orb.getAttribute(`${MARK}-folded`) !== foldedSize) {
-        if (foldedSize === null) orb.removeAttribute(`${MARK}-folded`); else orb.setAttribute(`${MARK}-folded`, foldedSize);
-      }
-      const label = `전체 정보 ${catalogCount}개${folded ? ` · 접힘 ${folded}개` : ""}`;
-      if (orb.getAttribute("aria-label") !== label) { orb.setAttribute("aria-label", label); orb.title = label; }
+      const visible = new Set([...place()].filter(key=>buttons.has(key as InfoKind)));
+      const folded = infoStack(readOnlyLabel ? [] : listed,activeKinds,visible);
+      const keep=new Set(folded.icons);
+      for (const [key, node] of stackIcons) if (!keep.has(key)) {node.remove();stackIcons.delete(key);}
+      folded.icons.forEach((key,index)=>{
+        let node=stackIcons.get(key);
+        if (!node) {node=document.createElement("button");node.type="button";node.setAttribute(`${MARK}-stack-kind`,key);node.addEventListener("click",()=>open(key,node!));stackIcons.set(key,node);}
+        const item=items.find(item=>item.key===key);
+        const artwork=emptyIcon(key) ?? item?.trigger?.querySelector("svg,[data-icon-root]") ?? item?.node.querySelector("svg,[data-icon-root]");
+        const html=artwork?.outerHTML ?? glyph.outerHTML;
+        if (node.innerHTML!==html) node.innerHTML=html;
+        const label=`${labelOf(key)} · ${activeKinds.has(key)?"접힘":"현재 없음"}`;
+        if(node.getAttribute("aria-label")!==label){node.setAttribute("aria-label",label);node.title=label;}
+        if(node.getAttribute("aria-expanded")!==String(active===key))node.setAttribute("aria-expanded",String(active===key));node.toggleAttribute(`${MARK}-active`,activeKinds.has(key));node.style.zIndex=String(index+1);
+        const at=iconStack.children[index];if(at!==node) iconStack.insertBefore(node,at??orb);
+      });
+      stackMore = folded.more; renderStackCount();
+      orb.hidden=folded.more===0 || readOnlyLabel!==null;orb.toggleAttribute(`${MARK}-active`,folded.moreActive);orb.style.zIndex="4";
+      iconStack.hidden=readOnlyLabel!==null || folded.width===0;
       for (const [key, button] of buttons) {
         if (visible.has(key)) cancelExit(key);
-        else if (previouslyVisible.has(button) && !exits.has(key)) leave(key, button);
+        else if (previouslyVisible.has(button) && !exits.has(key)) {
+          leave(key, button);
+        }
         button.hidden = !visible.has(key);
       }
-      // The all-information slot is anchored to the right edge and never slides.
-      const moving = [...buttons.values()].filter(button => !button.hidden && !bar.hidden);
+      // The tail follows the last pill, including the closing exit slots.
+      const moving = [...buttons.values(), iconStack].filter(button => !button.hidden && !bar.hidden);
       for (const button of moving) {
         const before = positions.get(button), after = button.offsetLeft;
         if (before !== undefined && before !== after && motion && !reduced() && !widthAnimations.size) {
@@ -1638,13 +1654,44 @@ export function injectComposerInfo(document: Document): () => void {
         positions.set(button,after);
       }
       for (const button of positions.keys()) if (!moving.includes(button as HTMLButtonElement)) { positions.delete(button); moves.get(button)?.cancel(); moves.delete(button); }
+      if (bar.hidden || reduced()) cancelStackCount();
       if (bar.hidden) return;
       let entryDelay = 0;
-      for (const button of [...Array.from(pills.children) as HTMLElement[], slot()]) {
+      const tailFans: Animation[] = [];
+      for (let button of [...Array.from(pills.children) as HTMLElement[], slot()]) {
         const key = button === slot() ? "all" : button.getAttribute(`${MARK}-trigger`) as InfoKind;
         if (button.hidden || appeared.has(key)) continue;
         appeared.add(key);
         if (reduced()) continue;
+        if (key === "all") {
+          const circles = Array.from(iconStack.children).filter(node => !(node as HTMLElement).hidden) as HTMLElement[];
+          const anchor = circles.at(-1);
+          if (!anchor) continue;
+          // One circle starts beside the last pill; the icons open and push it right.
+          if (circles.length > 1) {
+            const options = { duration:280 + (circles.length - 2) * 45, delay:entryDelay + 460, fill:"backwards" as FillMode, easing:"cubic-bezier(.22,1,.36,1)" };
+            const growth = iconStack.animate?.([{ width:"32px" }, { width:`${iconStack.offsetWidth || 32 + (circles.length - 1) * 18}px` }], options);
+            const push = anchor.animate?.([{ translate:`${-anchor.offsetLeft}px 0` }, { translate:"0px 0" }], options);
+            for (const animation of [growth, push]) if (animation) { tailFans.push(animation); entryAnimations.add(animation); animation.onfinish = animation.oncancel = () => entryAnimations.delete(animation); }
+          }
+          for (const [index, circle] of circles.slice(0, -1).entries()) {
+            const fan = circle.animate?.([
+              { translate:`${-circle.offsetLeft}px 0`, opacity:0 },
+              { translate:"0px 0", opacity:1 },
+            ], { duration:280, delay:entryDelay + 460 + index * 45, fill:"backwards", easing:"cubic-bezier(.22,1,.36,1)" });
+            if (fan) {
+              tailFans.push(fan); entryAnimations.add(fan);
+              let timer:number | undefined;
+              if (!orb.hidden) {
+                timer = view!.setTimeout(() => finishStackCount(circle, timer), entryDelay + 460 + index * 45);
+                stackCountTimers.set(circle, timer);
+              }
+              fan.onfinish = fan.oncancel = () => { entryAnimations.delete(fan); finishStackCount(circle, timer); };
+            }
+          }
+          renderStackCount();
+          button = anchor;
+        }
         if (button.querySelector(`[${MARK}-avatars]`)) {
           const avatars = button.querySelectorAll<HTMLElement>(`[${MARK}-avatar][data-new]`);
           avatars.forEach((avatar, index) => { avatar.style.animationDelay = `${entryDelay + index * 45}ms`; });
@@ -1661,8 +1708,9 @@ export function injectComposerInfo(document: Document): () => void {
         entryDelay += 45;
         if (animation) {
           entering.add(button);
+          if (key === "all") entering.add(iconStack);
           entryAnimations.add(animation);
-          animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); entering.delete(button); };
+          animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); entering.delete(button); if (key === "all") entering.delete(iconStack); };
         }
       }
     };
@@ -1821,13 +1869,28 @@ export function injectComposerInfo(document: Document): () => void {
       for (const shell of secretMotions.keys()) if (!shell.isConnected) dropSecretMotion(shell);
     });
     secretObserver.observe(stack, { childList:true, subtree:true, attributes:true, attributeFilter:["data-expanded", "hidden"] });
+    let suspended = false;
     const sync = () => {
       pruneDisconnected();
       const source = stack.querySelector(`[${SOURCE}]`);
-      if (!source) return;
+      if (!source) {
+        stack.toggleAttribute(`${MARK}-request`, stack.querySelector(REQUEST) !== null);
+        if (!suspended) {
+          suspended = true; bar.inert = true; bar.setAttribute("aria-hidden", "true");
+          cancelStackCount(); cancelQueueMotion(); cancelOwnedMotion(); queueSnapshot = null;
+          cancelExit(); close(false, true);
+          for (const animation of entryAnimations) animation.cancel();
+          entryAnimations.clear();
+        }
+        return;
+      }
+      if (suspended) {
+        suspended = false; bar.inert = false; bar.removeAttribute("aria-hidden");
+        signature = "";
+      }
       const nextThreadId = source.getAttribute(`${MARK}-thread`);
       if (nextThreadId !== threadId) {
-        cancelQueueMotion(); cancelOwnedMotion(); queueSnapshot = null;
+        cancelStackCount(); cancelQueueMotion(); cancelOwnedMotion(); queueSnapshot = null;
         cancelExit(); positions.clear(); moves.clear();
         close(false, true);
         for (const animation of entryAnimations) animation.cancel();
@@ -1871,7 +1934,7 @@ export function injectComposerInfo(document: Document): () => void {
       const nextReadOnlyLabel = status ? source.getAttribute(`${MARK}-read-only-label`) ?? (status.node.matches(ARCHIVED) || status.node.querySelector(ARCHIVED) ? "Archived thread" : unavailable?.getAttribute("aria-label") ?? null) : null;
       if (readOnlyLabel !== nextReadOnlyLabel) { readOnlyLabel = nextReadOnlyLabel; cancelQueueMotion(); cancelExit(); close(false, true); }
       bar.toggleAttribute(`${MARK}-archived`, readOnlyLabel !== null);
-      orb.hidden = dock.hidden = readOnlyLabel !== null;
+      iconStack.hidden = readOnlyLabel !== null;
       syncPanelActions();
       if (!items.some(item => item.key === "diff")) {
         try {
@@ -1888,7 +1951,8 @@ export function injectComposerInfo(document: Document): () => void {
             const button = diffSupplement.querySelector("button")!;
             const text = awaitingDiff() ? "불러오는 중" : summary.presentation?.label ?? `+${summary.insertions} −${summary.deletions} · ${summary.files} files`;
             if (button.textContent !== text) button.textContent = text;
-            button.title = summary?.branch ?? "Code Diff";
+            const title = summary?.branch ?? "Code Diff";
+            if (button.title !== title) button.title = title;
             items.unshift({ key:"diff", node:diffSupplement, trigger:button, label:"Code Diff" });
           }
         } catch { /* A disconnected environment has no invented Diff tally. */ }
@@ -1916,31 +1980,32 @@ export function injectComposerInfo(document: Document): () => void {
       if (active && active !== "all" && !listed.includes(active)) close();
       if (!listed.length) close();
       bar.hidden = request || !listed.length && !editing();
-      applyLayout(isDesktopChrome(document) ? "dock" : "center");
       syncJump();
       const diff = readDiff();
       const unavailableDiff = stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(`${HEAD_DIFF_MARK}-state`) === "unavailable";
       const exposed: InfoKind[] = readOnlyLabel ? ["status"] : exposedInfo(settings).filter(key => key !== "diff" || !unavailableDiff && diff?.presentation?.visible !== false);
       if (request || reduced() || bar.hidden) { cancelExit(); cancelOwnedMotion(); }
-      const showEmpty = settings.showEmptyIcons === true;
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
       const childIcons = Array.from(source.querySelectorAll(`[${MARK}-child-icon]`)).map(node => node.outerHTML);
       const next = JSON.stringify([settings, readOnlyLabel, infoKinds.map(kind => emptyIcon(kind.key)?.outerHTML), childIcons, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
       let widthChange: { button:HTMLButtonElement; from:number } | null = null;
       let hopTargets: HTMLElement[] = [];
-      const previousSlot = `${orb.getAttribute(`${MARK}-folded`) ?? ""}|${badge.textContent ?? ""}|${orb.getAttribute("aria-label") ?? ""}`;
+      const stackContent = () => JSON.stringify(Array.from(iconStack.children).map(node => [node.getAttribute("aria-label"), node.hasAttribute(`${MARK}-active`), node.innerHTML]));
+      const previousSlot = stackContent();
       let signatureChanged = false;
       if (signature !== next) {
         signatureChanged = signature !== "";
         signature = next;
-        for (const [key, button] of buttons) if (!exposed.includes(key) || !showEmpty && !items.some(item => item.key === key)) {
-          if (!readOnlyLabel) leave(key, button);
+        for (const [key, button] of buttons) if (!exposed.includes(key) || !items.some(item => item.key === key)) {
+          if (!readOnlyLabel) {
+            leave(key, button);
+          }
           widthAnimations.get(button)?.animation.cancel();
           button.remove(); buttons.delete(key);
         }
         for (const key of exposed) {
           const item = items.find(item => item.key === key);
-          if (!item && !showEmpty) continue;
+          if (!item) continue;
           cancelExit(key);
           let button = buttons.get(key);
           if (!button) {
@@ -1954,7 +2019,7 @@ export function injectComposerInfo(document: Document): () => void {
           const previousWidth = button.offsetWidth || button.getBoundingClientRect().width;
           const wasVisible = button.isConnected && !button.hidden && !bar.hidden && appeared.has(key);
           button.setAttribute("aria-expanded", String(active === key));
-          button.toggleAttribute(`${MARK}-unavailable`, !item);
+          button.removeAttribute(`${MARK}-unavailable`);
           const content = JSON.stringify([item ? describe(item) : null, item?.trigger?.title,
             key === "status" ? readOnlyLabel : null,
             emptyIcon(key)?.outerHTML ?? item?.trigger?.querySelector("svg, [data-icon-root]")?.outerHTML ?? item?.node.querySelector("svg, [data-icon-root]")?.outerHTML,
@@ -1964,15 +2029,7 @@ export function injectComposerInfo(document: Document): () => void {
           const previousContent = buttonContent.get(button);
           if (previousContent !== content) {
             buttonContent.set(button, content);
-            if (item) decorate(button, item, true);
-            else {
-              button.removeAttribute("aria-busy");
-              const icon = emptyIcon(key)?.cloneNode(true) as Element | undefined;
-              icon?.setAttribute("aria-hidden", "true");
-              button.replaceChildren(...(icon ? [icon] : []));
-              button.title = `${labelOf(key)} · 현재 없음`;
-              button.setAttribute("aria-label", button.title);
-            }
+            decorate(button, item, true);
             let changedBeyondNumbers = true;
             if (key === "diff") {
               const copy = button.cloneNode(true) as HTMLElement;
@@ -2040,7 +2097,7 @@ export function injectComposerInfo(document: Document): () => void {
         queueSnapshot ??= { count:0, seenIds:new Set(), pendingRows:0, pendingCount:0 };
         cancelQueueMotion();
       }
-      const slotNow = `${orb.getAttribute(`${MARK}-folded`) ?? ""}|${badge.textContent ?? ""}|${orb.getAttribute("aria-label") ?? ""}`;
+      const slotNow = stackContent();
       if (signatureChanged && previousSlot !== slotNow && !entering.has(slot())) hopTargets.push(slot());
       if (signatureChanged && !reduced() && !bar.hidden) for (const button of hopTargets) {
         if (!button.isConnected || button.hidden || entering.has(button)) continue;
@@ -2078,6 +2135,7 @@ export function injectComposerInfo(document: Document): () => void {
       document.removeEventListener("pointercancel", cancelPress);
       view!.removeEventListener("blur", cancelPress);
       releaseSecrets();
+      cancelStackCount();
       clearTitleIcon();
       cancelQueueMotion();
       cancelOwnedMotion();
@@ -2122,16 +2180,26 @@ export function injectComposerInfo(document: Document): () => void {
   function sync() {
     frame = 0;
     if (disposed) return;
-    for (const [stack, state] of states) if (!stack.isConnected || !stack.querySelector(`[${SOURCE}]`)) { state.cleanup(); states.delete(stack); }
+    for (const [stack, state] of states) if (!stack.isConnected) { state.cleanup(); states.delete(stack); }
     for (const stack of Array.from(document.querySelectorAll<HTMLElement>(STACK))) {
-      if (!stack.querySelector(`[${SOURCE}]`)) continue;
+      if (!states.has(stack) && !stack.querySelector(`[${SOURCE}]`)) continue;
       const state = states.get(stack) ?? mount(stack);
       states.set(stack, state);
       state.sync();
     }
   }
   const schedule = () => { if (!frame && !disposed) frame = view.requestAnimationFrame(sync); };
-  const observer = new view.MutationObserver(schedule);
+  const discovery = `[data-promptbox-shell], [data-bb-chat-ui-device], ${HOST_JUMP}`;
+  const observer = new view.MutationObserver(records => {
+    const discoversInfo = (node: Node) => node instanceof view.Element &&
+      (node.matches(discovery) || !!node.querySelector(discovery));
+    if (records.some(record => {
+      const target = record.target instanceof view.Element ? record.target : record.target.parentElement;
+      // Only changed subtrees are searched: searching body would always find an existing composer.
+      return record.attributeName === "data-bb-chat-ui-device" || !!target?.closest(`[data-promptbox-shell], ${HOST_JUMP}`) ||
+        Array.from(record.addedNodes).some(discoversInfo) || Array.from(record.removedNodes).some(discoversInfo);
+    })) schedule();
+  });
   observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-parent`, `${MARK}-children`, `${MARK}-child-providers`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "data-bb-chat-ui-device", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;

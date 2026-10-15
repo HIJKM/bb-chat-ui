@@ -20,8 +20,7 @@ test('visibility supports top, catalog-only and off while retaining legacy check
     assert.equal(descriptor.default, '상단 표시');
     assert.deepEqual(descriptor.options, ['상단 표시','목록에만 표시','끄기']);
   }
-  assert.equal(composerInfoSettings.showEmptyIcons.type, 'boolean');
-  assert.equal(composerInfoSettings.showEmptyIcons.default, false);
+  assert.equal(Object.hasOwn(composerInfoSettings,'showEmptyIcons'),false,'inactive icons always live in the stack');
 });
 
 test('chat ui settings omit the latest layout choice and ignore a stored value', () => {
