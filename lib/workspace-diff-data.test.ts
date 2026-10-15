@@ -221,3 +221,14 @@ test("unavailable or non-applicable file reads cannot publish a partial Git snap
     assert.equal(await readWorkspaceDiff(sdk,'env_test',undefined,new AbortController().signal),null);
   }
 });
+
+test("file reads receive the cancellation signal and cannot start comparisons after being switched off", async () => {
+  const f=reader('main');const controller=new AbortController();let received:AbortSignal|undefined;
+  let finish!:(value:any)=>void;
+  const gate=new Promise<any>(resolve=>{finish=resolve;});
+  const sdk={...f.sdk,diffFiles:(args:{signal?:AbortSignal})=>{received=args.signal;return gate;}};
+  const pending=readWorkspaceDiff(sdk,'env_test',undefined,controller.signal);
+  assert.equal(received,controller.signal,'the SDK file request must share the refresh lifetime');
+  controller.abort();finish({outcome:'available',files:[],truncated:false});
+  assert.equal(await pending,null);assert.deepEqual(f.calls,['HEAD']);
+});

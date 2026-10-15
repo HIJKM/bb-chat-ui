@@ -1,3 +1,4 @@
+import type { composerInfoReads } from "./composer-info-settings.ts";
 import type { useSdk } from "@get-bb/plugin-sdk/app";
 import { childEventRefreshes, childListArgs, visibleChildren, type ChildChangeEvent } from "./composer-child.ts";
 import { loadParent, parentEventMatters, type ParentSummary } from "./composer-parent.ts";
@@ -8,7 +9,7 @@ type Children = Awaited<ReturnType<Sdk["threads"]["list"]>>;
 type Queue = Awaited<ReturnType<Sdk["threads"]["queuedMessages"]["list"]>>;
 type PullRequest = Awaited<ReturnType<Sdk["environments"]["pullRequest"]>>;
 export interface ComposerInfoSnapshot {
-  threadId:string; timeline:Timeline; children:Children; parent:ParentSummary|null;
+  threadId:string; timeline:Timeline|null; children:Children; parent:ParentSummary|null;
   queue:Queue; pullRequest:PullRequest|null; readOnly:{label:string|null;canRestore:boolean};
 }
 type Part = "timeline" | "children" | "context" | "parent";
@@ -37,7 +38,10 @@ function refreshTargets(event:ChildChangeEvent, scope:Scope):readonly Part[] {
 
 export function startComposerInfoRefresh(
   sdk:Sdk, threadId:string, publish:(snapshot:ComposerInfoSnapshot)=>void, onError:(error:boolean)=>void,
+  reads:Partial<ReturnType<typeof composerInfoReads>> = {},
 ) {
+  const enabled = (part:Part) => part==="context" || reads[part]!==false;
+  const active=all.filter(enabled);
   const controller = new AbortController();
   const { signal } = controller;
   let timer:ReturnType<typeof setTimeout>|undefined;
@@ -50,9 +54,10 @@ export function startComposerInfoRefresh(
   const pending = new Set<Part>();
   const failed = new Set<Part>();
   const schedule = (parts:readonly Part[]) => {
-    if (signal.aborted || !parts.length) return;
+    const targets=[...parts,...failed].filter(enabled);
+    if (signal.aborted || !targets.length) return;
     revision++;
-    for (const part of [...parts,...failed]) pending.add(part);
+    for (const part of targets) pending.add(part);
     if (!timer) timer = setTimeout(() => { timer=undefined; void run(); },250);
   };
   const readChildren = async () => {
@@ -66,6 +71,7 @@ export function startComposerInfoRefresh(
   };
   const readContext = async () => {
     const thread=await sdk.threads.get({threadId,include:"environment",signal});
+    if (signal.aborted) throw new Error("Composer info refresh stopped");
     const environment="environment" in thread ? thread.environment : null;
     const lifecycle=environment?.hostLifecycle;
     const label=thread.archivedAt!==null ? "Archived thread" : lifecycle==="removed" ? "Machine removed"
@@ -74,8 +80,8 @@ export function startComposerInfoRefresh(
     const readOnly={label,canRestore:thread.canRestoreEnvironment};
     if (!label) return {queue:[] as Queue,pullRequest:null,readOnly,parentThreadId:thread.parentThreadId};
     const results=await Promise.allSettled([
-      sdk.threads.queuedMessages.list({threadId,signal}),
-      thread.environmentId ? sdk.environments.pullRequest({environmentId:thread.environmentId,signal}) : Promise.resolve(null),
+      reads.queue!==false ? sdk.threads.queuedMessages.list({threadId,signal}) : Promise.resolve([] as Queue),
+      reads.pullRequest!==false && thread.environmentId ? sdk.environments.pullRequest({environmentId:thread.environmentId,signal}) : Promise.resolve(null),
     ]);
     return {queue:results[0].status==="fulfilled" ? results[0].value : [],
       pullRequest:results[1].status==="fulfilled" ? results[1].value : null,readOnly,parentThreadId:thread.parentThreadId};
@@ -83,17 +89,17 @@ export function startComposerInfoRefresh(
   const run = async () => {
     if (signal.aborted || fetching || !pending.size) return;
     fetching=true;
-    const parts=new Set(snapshot ? pending : all);
+    const parts=new Set(snapshot ? pending : active);
     pending.clear();
     const current=revision;
     try {
       const [timeline,children,context]=await Promise.all([
-        parts.has("timeline") ? sdk.threads.timeline({threadId,summaryOnly:"true",signal}) : snapshot!.timeline,
-        parts.has("children") ? readChildren() : snapshot!.children,
+        parts.has("timeline") ? sdk.threads.timeline({threadId,summaryOnly:"true",signal}) : snapshot?.timeline ?? null,
+        parts.has("children") ? readChildren() : snapshot?.children ?? [],
         parts.has("context") ? readContext() : null,
       ]);
       if (signal.aborted) return;
-      const nextParentId=context ? context.parentThreadId : parentId;
+      const nextParentId=reads.parent===false ? null : context ? context.parentThreadId : parentId;
       readingParentId=nextParentId;
       const parent=parts.has("parent") || nextParentId!==parentId
         ? await loadParent((id,parentSignal)=>sdk.threads.get({threadId:id,signal:parentSignal}),threadId,{id:threadId,parentThreadId:nextParentId},signal)
@@ -132,7 +138,7 @@ export function startComposerInfoRefresh(
   const stopConnection=sdk.subscribe({event:"realtime:connection",callback:event=>{
     if (event.state==="connected" && event.reconnected) schedule(all);
   }});
-  for (const part of all) pending.add(part);
+  for (const part of active) pending.add(part);
   void run();
   return {
     refresh:()=>schedule(all),

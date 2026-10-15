@@ -7,7 +7,7 @@ interface Workspace extends DetailedWorkspace {
 }
 interface Reader {
   status(args:{ environmentId:string; signal:AbortSignal; mergeBaseBranch?:string }):Promise<{ outcome:string; workspace?:Workspace; reason?:string; failure?:{ code:string } }>;
-  diffFiles(args:{ environmentId:string; target:"uncommitted" }):Promise<
+  diffFiles(args:{ environmentId:string; target:"uncommitted"; signal:AbortSignal }):Promise<
     { outcome:"available"; files:readonly { path:string; additions:number; deletions:number }[]; truncated:boolean }
     | { outcome:"not_applicable" | "unavailable" }
   >;
@@ -63,7 +63,7 @@ export async function readWorkspaceDiff(sdk:Reader, environmentId:string, baseBr
   const prQuery = Promise.allSettled([sdk.pullRequest({ environmentId, signal })]);
   const [status, diff] = await Promise.allSettled([
     sdk.status({ environmentId, signal }),
-    sdk.diffFiles({ environmentId, target:"uncommitted" }),
+    sdk.diffFiles({ environmentId, target:"uncommitted", signal }),
   ]);
   if (signal.aborted || status.status !== "fulfilled" || diff.status !== "fulfilled") return null;
   // undefined confirms absence; null leaves a previous coherent snapshot intact.

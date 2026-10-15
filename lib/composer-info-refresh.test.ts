@@ -11,7 +11,7 @@ function deferred<T>() {
   const promise = new Promise<T>((yes,no) => { resolve=yes; reject=no; });
   return { promise, resolve, reject };
 }
-function fixture() {
+function fixture(reads:Record<string,boolean> = {}) {
   const calls:string[]=[];
   const handlers=new Map<string,(event:any)=>void>();
   const snapshots:any[]=[];
@@ -36,7 +36,7 @@ function fixture() {
     environments:{pullRequest:async()=>{calls.push('pr');return {outcome:'absent'};}},
     subscribe:(args:{event:string;callback:(event:any)=>void})=>{handlers.set(args.event,args.callback);return()=>{handlers.delete(args.event);};},
   };
-  const controller=startComposerInfoRefresh(sdk,'thread',snapshot=>snapshots.push(snapshot),error=>errors.push(error));
+  const controller=startComposerInfoRefresh(sdk,'thread',snapshot=>snapshots.push(snapshot),error=>errors.push(error),reads);
   return {...controller,calls,snapshots,errors,handlers,
     emit:(id:string|undefined,changes:string[],eventTypes?:string[])=>handlers.get('thread:changed')?.({id,changes,...(eventTypes?{metadata:{eventTypes}}:{})}),
     reconnect:()=>handlers.get('realtime:connection')?.({state:'connected',reconnected:true}),
@@ -176,4 +176,42 @@ test('a timeline-only refresh retains all unrelated source objects',async t=>{
   assert.equal(after.children,before.children);assert.equal(after.parent,before.parent);
   assert.equal(after.readOnly,before.readOnly);assert.equal(after.queue,before.queue);
   assert.notEqual(after.timeline,before.timeline);f.stop();
+});
+
+
+test('disabled information skips its dedicated sources at entry, on events, focus and reconnect',async t=>{
+  const f=fixture({timeline:false,children:false,parent:false,queue:false,pullRequest:false});await tick();
+  assert.deepEqual(f.calls,['get:thread'],'read-only restoration status remains mandatory');
+  assert.equal(f.snapshots.at(-1).timeline,null);assert.deepEqual(f.snapshots.at(-1).children,[]);
+  assert.equal(f.snapshots.at(-1).parent,null);
+  f.calls.length=0;
+  f.emit('thread',['events-appended'],['thread/goal/updated']);f.emit('new',['thread-created']);
+  f.emit('parent',['title-changed']);await flush(t);assert.deepEqual(f.calls,[]);
+  f.refresh();await flush(t);assert.deepEqual(f.calls,['get:thread']);
+  f.calls.length=0;f.reconnect();await flush(t);assert.deepEqual(f.calls,['get:thread']);
+  f.calls.length=0;f.setArchived(true);f.emit('thread',['archived-changed']);await flush(t);
+  assert.deepEqual(f.calls,['get:thread']);assert.equal(f.snapshots.at(-1).readOnly.label,'Archived thread');
+  assert.deepEqual(f.snapshots.at(-1).queue,[]);assert.equal(f.snapshots.at(-1).pullRequest,null);f.stop();
+});
+
+test('switching off children or parent leaves other sources active; readonly queue and PR are separate',async t=>{
+  for(const disabled of ['children','parent']){
+    const f=fixture({[disabled]:false});await tick();
+    assert.equal(f.calls.includes(disabled==='children'?'children:0':'get:parent'),false);
+    assert.equal(f.calls.includes('timeline'),true);f.stop();
+  }
+  for(const disabled of ['queue','pullRequest']){
+    const f=fixture({[disabled]:false});await tick();f.calls.length=0;
+    f.setArchived(true);f.emit('thread',['archived-changed']);await flush(t);
+    assert.equal(f.calls.includes('queue'),disabled!=='queue');
+    assert.equal(f.calls.includes('pr'),disabled!=='pullRequest');f.stop();
+  }
+});
+
+test('stopping an in-flight readonly context prevents follow-up queue and PR queries',async t=>{
+  const f=await ready();const gate=deferred<any>();f.setThreadRead(()=>gate.promise);
+  f.setArchived(true);f.emit('thread',['archived-changed']);await flush(t);
+  const before=f.snapshots.length;f.stop();
+  gate.resolve({id:'thread',parentThreadId:'parent',environmentId:'env',archivedAt:1,environment:null,canRestoreEnvironment:false});
+  await tick();assert.deepEqual(f.calls,['get:thread']);assert.equal(f.snapshots.length,before);
 });
