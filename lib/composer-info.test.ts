@@ -4249,12 +4249,12 @@ test("Latest stays on the right across devices, widths, rotation and stored choi
   const stopPhone = injectComposerInfo(phone.document);
   try {
     const layout = () => phone.document.querySelector("[data-bb-chat-ui-info-bar]")!.getAttribute("data-bb-chat-ui-info-layout");
-    assert.equal(layout(), "center", "a phone keeps its centered Latest");
+    assert.equal(layout(), "dock", "a phone uses the right edge");
     for (const width of [240, 2000]) {
       phone.setWidth(width);
       phone.dom.window.dispatchEvent(new phone.dom.window.Event("resize"));
       await phone.tick();
-      assert.equal(layout(), "center", `phone width ${width} stays centred`);
+      assert.equal(layout(), "dock", `phone width ${width} stays on the right`);
     }
     assert.equal(phone.jump.hasAttribute("data-bb-chat-ui-info-jump-source"), true);
   } finally { stopPhone(); }
@@ -4265,7 +4265,7 @@ test("Latest stays on the right across devices, widths, rotation and stored choi
   const stop = injectComposerInfo(desktop.document);
   try {
     const layout = () => desktop.document.querySelector("[data-bb-chat-ui-info-bar]")!.getAttribute("data-bb-chat-ui-info-layout");
-    assert.equal(layout(), "center", "without a device marker Latest stays centered");
+    assert.equal(layout(), "dock", "the row stays on the right until a desktop marker exists");
     const marker = desktop.document.createElement("span");
     marker.hidden = true;
     marker.setAttribute("data-bb-chat-ui-device", "desktop");
@@ -4282,10 +4282,10 @@ test("Latest stays on the right across devices, widths, rotation and stored choi
     marker.setAttribute("data-bb-chat-ui-orientation", "landscape");
     marker.setAttribute("data-bb-chat-ui-viewport", "wide");
     await desktop.tick();
-    assert.equal(layout(), "center", "a wide landscape phone stays centered");
+    assert.equal(layout(), "dock", "a wide landscape phone stays on the right");
     marker.setAttribute("data-bb-chat-ui-device", "tablet");
     await desktop.tick();
-    assert.equal(layout(), "center", "tablet stays centered");
+    assert.equal(layout(), "dock", "tablet stays on the right");
     marker.setAttribute("data-bb-chat-ui-device", "desktop");
     await desktop.tick();
     assert.equal(layout(), "dock");
@@ -4323,17 +4323,52 @@ test("a desktop row keeps an A tail and a separate Latest button at the right ed
     assert.equal(f.folded(),0);assert.equal(all.hidden,false,'inactive families remain in the overflow circle');
   } finally {stop();f.dom.window.close();}
 });
-test("a phone keeps centered Latest beside an independent information stack", async () => {
- const f=jumpFixture();markDevice(f.document,'phone');const stop=injectComposerInfo(f.document);
- try{const bar=f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
- assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'),'center');
- assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'),null);
- f.jump.classList.remove('invisible');await f.tick();
- const jump=f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-jump]')!;
- assert.equal(jump.getAttribute('data-bb-chat-ui-info-jump-off'),null);jump.click();assert.equal(f.jumps(),1);
- }finally{stop();f.dom.window.close();}
-});
 
+test("a phone row keeps an A tail and reserves a separate Latest at the right edge", async () => {
+  const f = jumpFixture({ infoButtonLayout:"오른쪽 캡슐" });
+  const marker = markDevice(f.document, "phone", { viewport:"wide", orientation:"landscape" });
+  const stop = injectComposerInfo(f.document);
+  try {
+    const bar = f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
+    assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'), 'dock');
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'), null);
+    const all = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-all]')!;
+    const proxy = f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-jump]')!;
+    assert.equal(all.parentElement!.parentElement, bar); assert.equal(proxy.parentElement, bar);
+    for (const pill of f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(all) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+    assert.deepEqual([...all.querySelectorAll('svg[data-bb-chat-ui-info-glyph] path')].map(path => path.getAttribute('d')), ['m12 3 9 5-9 5-9-5z', 'm3 13 9 5 9-5']);
+    const glyph = all.querySelector('svg[data-bb-chat-ui-info-glyph]');
+    assert.equal(proxy.querySelector('[data-bb-chat-ui-info-jump-label]')!.textContent, 'Latest');
+    assert.deepEqual([...proxy.querySelectorAll('svg path')].map(path => path.getAttribute('d')), ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'], 'the chip points down to a bottom line');
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true);
+    assert.equal(f.shown(), 2, 'a folded count widens the button by 8px before fitting');
+    assert.equal(all.hidden,false);
+    assert.equal(all.querySelector('[data-bb-chat-ui-info-count]')!.textContent, `+${15-f.shown()-3}`);
+    f.jump.classList.remove('invisible'); await f.tick();
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), false);
+    assert.equal(f.shown(), 1, 'Latest reserves 32px plus an 8px gap on a phone');
+    assert.equal(f.dom.window.getComputedStyle(proxy).right,'0px');
+    assert.equal(f.dom.window.getComputedStyle(proxy.querySelector('[data-bb-chat-ui-info-jump-label]')!).display,'none');
+    f.click('[data-bb-chat-ui-info-all]');
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), false, 'the right-edge button stays usable with a popover open');
+    f.click('[data-bb-chat-ui-info-all]');
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), false);
+    proxy.click(); assert.equal(f.jumps(), 1);
+    f.setWidth(2000); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+    assert.equal(all.hidden,false,'empty information still occupies the icon stack');
+    marker.setAttribute("data-bb-chat-ui-device", "desktop");
+    marker.setAttribute("data-bb-chat-ui-viewport", "narrow");
+    await f.tick();
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'),null,'changing device never merges the independent tail');
+    assert.equal(all.querySelector('svg[data-bb-chat-ui-info-glyph]'), glyph, 'switching layouts keeps one icon');
+    assert.equal(all.parentElement!.parentElement, bar); assert.equal(proxy.parentElement, bar);
+    assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'), 'dock');
+    marker.setAttribute("data-bb-chat-ui-device", "phone");
+    await f.tick();
+    assert.equal(all.parentElement!.parentElement, bar);
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'), null);
+  } finally { stop(); f.dom.window.close(); }
+});
 
 test("read-only rows and input requests leave the host latest-event button unmanaged", async () => {
   const f = jumpFixture();

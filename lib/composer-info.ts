@@ -171,8 +171,6 @@ body > .bbk-drop { z-index:54; --bbk-drop-face:${LIGHT_GLASS_FACE}; --bbk-drop-e
 [${MARK}-bar][${MARK}-layout="dock"] > [${MARK}-jump] { position:absolute; right:0; top:0; z-index:2; width:32px; height:32px; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); transition:opacity 280ms ease-out, translate 460ms cubic-bezier(.22,1,.36,1), scale 460ms cubic-bezier(.22,1,.36,1), visibility 0s; }
 [${MARK}-bar][${MARK}-layout="dock"] > [${MARK}-jump][${MARK}-jump-off] { translate:0 10px; scale:.92; transition:opacity 220ms ease-in, translate 340ms cubic-bezier(.4,0,.2,1), scale 340ms cubic-bezier(.4,0,.2,1), visibility 0s 340ms; }
 [${MARK}-bar][${MARK}-layout="dock"] [${MARK}-jump-label] { display:none; }
-[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-jump] { position:absolute; left:50%; bottom:40px; z-index:2; height:32px; padding:0 12px 0 9px; translate:-50% 0; background:var(--bb-chat-ui-info-face); backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 6px 18px -12px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge); transition:opacity 280ms ease-out, translate 460ms cubic-bezier(.22,1,.36,1), scale 460ms cubic-bezier(.22,1,.36,1), visibility 0s; }
-[${MARK}-bar][${MARK}-layout="center"] > [${MARK}-jump][${MARK}-jump-off] { translate:-50% 10px; scale:.92; transition:opacity 220ms ease-in, translate 340ms cubic-bezier(.4,0,.2,1), scale 340ms cubic-bezier(.4,0,.2,1), visibility 0s 340ms; }
 [${MARK}-jump]:focus-visible { outline:2px solid var(--ring); outline-offset:3px; }
 [data-bb-chat-ui-info-jump-source] { visibility:hidden !important; pointer-events:none !important; }
 [${MARK}-avatar] { backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); }
@@ -426,7 +424,7 @@ export function injectComposerInfo(document: Document): () => void {
         if (host) { host.setAttribute(`${MARK}-jump-source`, ""); jumpWatch.observe(host, { attributes:true, attributeFilter:["class", "disabled"] }); }
       }
       jumpVisible = !!host && !host.disabled && !host.classList.contains("invisible");
-      jump.toggleAttribute(`${MARK}-jump-off`, !jumpVisible || bar.getAttribute(`${MARK}-layout`) === "center" && active !== null);
+      jump.toggleAttribute(`${MARK}-jump-off`, !jumpVisible);
 
     };
     jump.addEventListener("click", () => jumpSource?.click());
@@ -1567,7 +1565,7 @@ export function injectComposerInfo(document: Document): () => void {
         let shown:Set<string> = new Set(widths.map(item=>item.key));
         for (let attempt=0; attempt<=listed.length; attempt++) {
           const folded=infoStack(listed,activeKinds,new Set([...shown].filter(key=>buttons.has(key as InfoKind))));
-          const available=width>0 ? width - (jumpVisible && bar.getAttribute(`${MARK}-layout`) === "dock" ? 40 : 0) - (folded.width ? folded.width + 8 : 0) : Number.POSITIVE_INFINITY;
+          const available=width>0 ? width - (jumpVisible ? 40 : 0) - (folded.width ? folded.width + 8 : 0) : Number.POSITIVE_INFINITY;
           const next=new Set(fitComposerInfo(widths,available+40));
           if (next.size===shown.size && [...next].every(key=>shown.has(key))) break;
           shown=next;
@@ -1910,7 +1908,6 @@ export function injectComposerInfo(document: Document): () => void {
       if (active && active !== "all" && !listed.includes(active)) close();
       if (!listed.length) close();
       bar.hidden = request || !listed.length && !editing();
-      bar.setAttribute(`${MARK}-layout`, isDesktopChrome(document) ? "dock" : "center");
       syncJump();
       const diff = readDiff();
       const unavailableDiff = stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(`${HEAD_DIFF_MARK}-state`) === "unavailable";
