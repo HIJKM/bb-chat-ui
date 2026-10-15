@@ -16,6 +16,8 @@ const WRAP = `${MARK}-wrap`;
 const OPEN = `${MARK}-open`;
 const SOURCE = `${MARK}-settings`;
 const REQUEST = ['tool-use-ask', 'plugin-request-banner', 'plan-review-request', 'approval-banner', 'user-question-banner', 'plan-review-banner'].map(id => `[data-testid="${id}"]`).join(", ");
+const GUARDED_STACK = `:where(${STACK}):is([${MARK}-stack], :has([${SOURCE}]))`;
+const PENDING_CARD = `:not(:where([${WRAP}], [${MARK}-bar], [${MARK}-body-fade], [${OPEN}], ${REQUEST}, :has(${REQUEST})))`;
 const QUESTION = ['tool-use-ask', 'plugin-request-banner', 'user-question-banner'].map(id => `[data-testid="${id}"]`).join(", ");
 const HOST_JUMP = 'button[aria-label="Scroll to latest event"]';
 // Child avatars are 30px circles overlapping by 12px, so each circle adds 18px.
@@ -58,6 +60,9 @@ export const composerInfoCss = `
 [${MARK}-stack]::after { display:none !important; }
 [${WRAP}] { display:contents !important; }
 [${UNIT}] { display:none !important; }
+/* Native replacements must not paint full cards while the next frame classifies them. */
+${GUARDED_STACK} > ${PENDING_CARD}, ${GUARDED_STACK} [${WRAP}] > ${PENDING_CARD} { display:none !important; }
+[${MARK}-stack]:not(:has([${SOURCE}])) [${MARK}-bar] { visibility:hidden !important; pointer-events:none !important; }
 [${MARK}-bar] { position:relative; display:flex; align-items:center; gap:8px; height:32px; min-width:0; padding-right:0; }
 [${MARK}-bar][hidden] { display:none; }
 [${MARK}-all][hidden] { display:none; }
@@ -322,6 +327,7 @@ ${DETAIL} [${MARK}-dismiss], [${MARK}-menu] [${MARK}-close], ${DETAIL}.agentatio
 @keyframes bb-info-loading { 0%,80%,100% { opacity:.35; transform:none; } 40% { opacity:1; transform:translateY(-2px); } }
 @keyframes bb-info-count-in { from { translate:0 100%; opacity:0; } to { translate:0 0; opacity:1; } }
 @keyframes bb-info-count-out { from { translate:0 0; opacity:1; } to { translate:0 -100%; opacity:0; } }
+${STACK}[${MARK}-stack]:not(:has([${SOURCE}])) [${UNIT}][${OPEN}]:not([hidden]) { display:none !important; }
 @media (prefers-reduced-motion:reduce) { [${MARK}-bar] *, [${MARK}-stack] [${UNIT}][${OPEN}] { animation:none !important; transition:none !important; } }
 @media (prefers-reduced-motion:reduce) { [${MARK}-stack] :is(${QUESTION}) { animation:none !important; transition:none !important; } }
 @media (prefers-reduced-motion:reduce) { [${MARK}-diff-previous] { display:none; } }
@@ -1862,10 +1868,25 @@ export function injectComposerInfo(document: Document): () => void {
       for (const shell of secretMotions.keys()) if (!shell.isConnected) dropSecretMotion(shell);
     });
     secretObserver.observe(stack, { childList:true, subtree:true, attributes:true, attributeFilter:["data-expanded", "hidden"] });
+    let suspended = false;
     const sync = () => {
       pruneDisconnected();
       const source = stack.querySelector(`[${SOURCE}]`);
-      if (!source) return;
+      if (!source) {
+        stack.toggleAttribute(`${MARK}-request`, stack.querySelector(REQUEST) !== null);
+        if (!suspended) {
+          suspended = true; bar.inert = true; bar.setAttribute("aria-hidden", "true");
+          cancelStackCount(); cancelQueueMotion(); cancelOwnedMotion(); queueSnapshot = null;
+          cancelExit(); close(false, true);
+          for (const animation of entryAnimations) animation.cancel();
+          entryAnimations.clear();
+        }
+        return;
+      }
+      if (suspended) {
+        suspended = false; bar.inert = false; bar.removeAttribute("aria-hidden");
+        signature = "";
+      }
       const nextThreadId = source.getAttribute(`${MARK}-thread`);
       if (nextThreadId !== threadId) {
         cancelStackCount(); cancelQueueMotion(); cancelOwnedMotion(); queueSnapshot = null;
@@ -2157,9 +2178,9 @@ export function injectComposerInfo(document: Document): () => void {
   function sync() {
     frame = 0;
     if (disposed) return;
-    for (const [stack, state] of states) if (!stack.isConnected || !stack.querySelector(`[${SOURCE}]`)) { state.cleanup(); states.delete(stack); }
+    for (const [stack, state] of states) if (!stack.isConnected) { state.cleanup(); states.delete(stack); }
     for (const stack of Array.from(document.querySelectorAll<HTMLElement>(STACK))) {
-      if (!stack.querySelector(`[${SOURCE}]`)) continue;
+      if (!states.has(stack) && !stack.querySelector(`[${SOURCE}]`)) continue;
       const state = states.get(stack) ?? mount(stack);
       states.set(stack, state);
       state.sync();

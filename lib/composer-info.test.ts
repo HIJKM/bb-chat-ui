@@ -113,6 +113,79 @@ test("late nested composers and device markers still trigger discovery and remov
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("fresh native cards stay hidden before the next frame without hiding requests or open details", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+  const stop = injectComposerInfo(f.document);
+  try {
+    const previous = stack.querySelector('section[aria-label="Goal"]')!;
+    const goal = previous.cloneNode(true) as HTMLElement;
+    goal.removeAttribute('data-bb-chat-ui-info-unit'); goal.removeAttribute('data-bb-chat-ui-info-open');
+    previous.replaceWith(goal);
+    assert.equal(f.dom.window.getComputedStyle(goal).display, 'none', 'replacement cannot paint a native card before marking');
+    const plugin = f.document.createElement('div'); plugin.textContent = 'new plugin notice'; stack.append(plugin);
+    assert.equal(f.dom.window.getComputedStyle(plugin).display, 'none', 'new unknown banner also waits for classification');
+    const request = f.document.createElement('section'); request.innerHTML = '<div data-testid="user-question-banner">Question<button>Answer</button></div>';
+    stack.append(request);
+    assert.notEqual(f.dom.window.getComputedStyle(request).display, 'none', 'request wrapper stays visible immediately');
+    assert.notEqual(f.dom.window.getComputedStyle(request.firstElementChild!).display, 'none');
+    request.remove(); await f.tick();
+    f.click('[data-bb-chat-ui-info-trigger="goal"]');
+    assert.notEqual(f.dom.window.getComputedStyle(goal).display, 'none', 'selected detail still opens');
+    const shell = f.document.querySelector('[data-promptbox-shell]')!.cloneNode(true) as HTMLElement;
+    for (const node of [shell, ...shell.querySelectorAll('*')]) {
+      node.removeAttribute('data-bb-chat-ui-info-stack'); node.removeAttribute('data-bb-chat-ui-info-wrap');
+      node.removeAttribute('data-bb-chat-ui-info-unit'); node.removeAttribute('data-bb-chat-ui-info-open');
+    }
+    shell.querySelector('[data-bb-chat-ui-info-bar]')!.remove(); f.document.body.append(shell);
+    const freshGoal = shell.querySelector('section[aria-label="Goal"]')!;
+    assert.equal(f.dom.window.getComputedStyle(freshGoal).display, 'none', 'a new composer with a bridge is guarded before mounting');
+    shell.remove();
+    stop();
+    assert.notEqual(f.dom.window.getComputedStyle(goal).display, 'none', 'unload restores native rendering');
+    assert.notEqual(f.dom.window.getComputedStyle(plugin).display, 'none');
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("a settings bridge gap suspends the row without restoring native cards or stale actions", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+  const source = stack.querySelector('[data-bb-chat-ui-info-settings]')!;
+  const parent = source.parentElement!;
+  const stop = injectComposerInfo(f.document);
+  try {
+    await f.tick();
+    const bar = stack.querySelector<HTMLElement>('[data-bb-chat-ui-info-bar]')!;
+    const goal = stack.querySelector('section[aria-label="Goal"]')!;
+    f.click('[data-bb-chat-ui-info-trigger="goal"]'); source.remove();
+    assert.equal(f.dom.window.getComputedStyle(bar).visibility, 'hidden', 'stale controls disappear before the next frame');
+    assert.equal(f.dom.window.getComputedStyle(goal).display, 'none', 'even an open detail hides immediately');
+    await f.tick(); await f.tick();
+    assert.equal(stack.querySelector('[data-bb-chat-ui-info-bar]'), bar, 'brief bridge gaps keep the managed row');
+    assert.equal(bar.inert, true); assert.equal(bar.getAttribute('aria-hidden'), 'true');
+    assert.equal(goal.hasAttribute('data-bb-chat-ui-info-open'), false);
+    assert.equal(f.dom.window.getComputedStyle(goal).display, 'none');
+    assert.equal(f.document.querySelector('textarea')!.value, 'keep draft');
+    const request = f.document.createElement('section'); request.setAttribute('data-testid', 'approval-banner');
+    request.innerHTML = '<button>Approve</button>'; stack.append(request); await f.tick();
+    assert.notEqual(f.dom.window.getComputedStyle(request).display, 'none', 'a request remains usable during a bridge gap');
+    assert.equal(f.dom.window.getComputedStyle(f.document.querySelector('[data-follow-up-composer-anchor]')!).display, 'none', 'request priority still hides the editor');
+    request.remove(); await f.tick();
+    parent.append(source); await f.tick();
+    assert.equal(bar.inert, false, 'same-thread bridge restoration also resumes the row');
+    source.remove(); await f.tick();
+    source.setAttribute('data-bb-chat-ui-info-thread', 'replacement-thread');
+    parent.append(source); await f.tick();
+    assert.equal(stack.querySelector('[data-bb-chat-ui-info-bar]'), bar);
+    assert.equal(bar.inert, false); assert.equal(bar.hasAttribute('aria-hidden'), false);
+    assert.notEqual(f.dom.window.getComputedStyle(bar).visibility, 'hidden');
+    f.click('[data-bb-chat-ui-info-trigger="goal"]');
+    assert.notEqual(f.dom.window.getComputedStyle(goal).display, 'none');
+    source.remove(); await f.tick(); stop();
+    assert.notEqual(f.dom.window.getComputedStyle(goal).display, 'none', 'unload during a gap restores the host');
+  } finally { stop(); f.dom.window.close(); }
+});
+
 function pointer(f: ReturnType<typeof fixture>, type: 'pointerover' | 'pointerout', target: Element, relatedTarget: Element | null = null, pointerType = 'mouse') {
   const event = new f.dom.window.MouseEvent(type, { bubbles:true, relatedTarget });
   Object.defineProperty(event, 'pointerType', { value:pointerType });
@@ -2954,6 +3027,7 @@ test("plan review body sits in the card and fades only the scroll directions tha
     assert.ok(at("below", 616, 30, 300), "approval command fade uses the pre viewport");
     assert.equal(at("above", 480, 30, 300), undefined);
     assert.equal(visible("below").length, 2);
+    for (const fade of visible("below")) assert.notEqual(f.dom.window.getComputedStyle(fade).display, "none", "request overlays remain outside the pending-card guard");
     assert.equal(visible("above").length, 0);
     assert.equal(at("below", 404, 24, 320)!.parentElement, stack);
     assert.equal(scroller.contains(at("below", 404, 24, 320)!), false);
