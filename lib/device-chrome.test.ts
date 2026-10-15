@@ -31,10 +31,10 @@ test("rotating a phone keeps its identity and its existing viewport layout", () 
 });
 
 test("phone sizing and desktop motion consume helper axes instead of width/pointer queries", () => {
-  const phoneNarrow = 'html:has([data-bb-chat-ui-device="phone"][data-bb-chat-ui-viewport="narrow"])';
+  const phoneNarrow = 'html[data-bb-chat-ui-root-device="phone"][data-bb-chat-ui-root-viewport="narrow"]';
   for (const css of [quotePillCss(), userAttachmentsCss(), composerGlassCss]) {
     assert.ok(css.includes(phoneNarrow));
     assert.doesNotMatch(css, /@media[^\{]*(?:width|pointer|hover)/);
   }
-  assert.ok(composerGlassCss.includes('[data-bb-chat-ui-hit-target="small"]'));
+  assert.ok(composerGlassCss.includes('[data-bb-chat-ui-root-hit-target="small"]'));
 });
