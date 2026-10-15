@@ -69,8 +69,8 @@ export interface HeadDiffOptions {
 interface DiffFile { path:string; status:string; insertions:number | null; deletions:number | null; }
 export interface DiffCommit { sha:string; shortSha:string; subject:string; authoredAt?:number; }
 export interface DetailedWorkspace extends HeadWorkspace {
-  workingTree: DiffStats & { files:readonly DiffFile[] };
-  mergeBase?: (DiffStats & { files:readonly DiffFile[]; commits:readonly DiffCommit[]; baseRef:string | null; mergeBaseBranch:string }) | null;
+  workingTree: Omit<DiffStats, "files"> & { files:readonly DiffFile[] };
+  mergeBase?: (Omit<DiffStats, "files"> & { files:readonly DiffFile[]; commits:readonly DiffCommit[]; baseRef:string | null; mergeBaseBranch:string }) | null;
 }
 
 export interface HeadDiffDetail {

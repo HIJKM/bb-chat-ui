@@ -21,6 +21,7 @@ function reader(branch = "feature/chat", prCount = 8, unpushedCount = 3) {
       if (ref) w.mergeBase.mergeBaseBranch = ref;
       return { outcome:"available", workspace:w };
     },
+    async diffFiles() { return { outcome:"available", files:[], truncated:false }; },
     async pullRequest() { return { outcome:"absent" }; },
   } };
 }
@@ -179,10 +180,44 @@ test("confirmed non-Git status finishes without waiting for an unrelated PR look
   let settled = false;
   const sdk = {
     async status() { return { outcome:"unavailable", failure:{ code:"not_git_repo" } }; },
+    async diffFiles() { return { outcome:"not_applicable", reason:"non_git_environment" }; },
     pullRequest:() => new Promise<{ outcome:string }>(() => {}),
   };
   const result = readWorkspaceDiff(sdk,"env_test",undefined,new AbortController().signal).then(value => { settled = true; return value; });
   await new Promise<void>(resolve => setImmediate(resolve));
   assert.equal(settled,true,"non-Git detection must not wait for PR data");
   assert.equal(await result,undefined,"confirmed absence differs from a retryable incomplete snapshot");
+});
+
+
+test("file statistics use diffFiles including untracked content while preserving known status icons", async () => {
+  const f = reader('main');
+  const sdk = { ...f.sdk,
+    async status(args:{ mergeBaseBranch?:string }) {
+      const w = workspace('main');
+      w.workingTree = { insertions:999, deletions:999, files:[{ path:'tracked.ts', status:'M', insertions:999, deletions:999 }] };
+      if (args.mergeBaseBranch) w.mergeBase.mergeBaseBranch = args.mergeBaseBranch;
+      return { outcome:'available', workspace:w };
+    },
+    async diffFiles() { return { outcome:'available', truncated:true, files:[
+      { path:'tracked.ts', additions:3, deletions:2 }, { path:'new.ts', additions:7, deletions:0 },
+    ] }; },
+  };
+  const result = await readWorkspaceDiff(sdk,'env_test',undefined,new AbortController().signal);
+  assert.equal(result?.insertions,10);
+  assert.equal(result?.deletions,2);
+  assert.equal(result?.files,2);
+  assert.equal(result?.detail.truncated,true);
+  assert.deepEqual(result?.detail.files,[
+    { path:'tracked.ts', status:'M', insertions:3, deletions:2 },
+    { path:'new.ts', status:'?', insertions:7, deletions:0 },
+  ]);
+});
+
+test("unavailable or non-applicable file reads cannot publish a partial Git snapshot", async () => {
+  const f = reader('main');
+  for (const outcome of ['unavailable','not_applicable']) {
+    const sdk = { ...f.sdk, async diffFiles() { return { outcome }; } };
+    assert.equal(await readWorkspaceDiff(sdk,'env_test',undefined,new AbortController().signal),null);
+  }
 });

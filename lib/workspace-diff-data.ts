@@ -7,7 +7,10 @@ interface Workspace extends DetailedWorkspace {
 }
 interface Reader {
   status(args:{ environmentId:string; signal:AbortSignal; mergeBaseBranch?:string }):Promise<{ outcome:string; workspace?:Workspace; reason?:string; failure?:{ code:string } }>;
-  diffFiles(args:{ environmentId:string; target:"uncommitted" }):Promise<{ outcome:string; files:readonly { path:string; additions:number; deletions:number }[]; truncated:boolean }>;
+  diffFiles(args:{ environmentId:string; target:"uncommitted" }):Promise<
+    { outcome:"available"; files:readonly { path:string; additions:number; deletions:number }[]; truncated:boolean }
+    | { outcome:"not_applicable" | "unavailable" }
+  >;
   pullRequest(args:{ environmentId:string; signal:AbortSignal }):Promise<{ outcome:string; pullRequest?:{ state:string; baseRefName:string; headRefName:string } }>;
 }
 interface Comparison { ref:string | null; count:number | null; commits:readonly DiffCommit[]; remoteBaseMissing:boolean; }
