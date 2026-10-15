@@ -124,6 +124,13 @@ ${FOOTER} [data-promptbox-shell] .agentation-staging-shell--expanded {
 ${FOOTER} [data-follow-up-composer-anchor] [data-promptbox]:not([data-promptbox-compact]) [data-promptbox-editor-scroll] {
   min-height: 68px !important;
 }
+/* Container collapse can omit data-promptbox-compact. Keep its native
+   48px viewport rather than applying the expanded minimum. */
+@container follow-up-composer style(--follow-up-composer-container-compact: true) {
+  ${FOOTER} [data-follow-up-composer]:not([data-follow-up-composer-expanded]) [data-promptbox]:not([data-promptbox-voice-active]) [data-promptbox-editor-scroll] {
+    min-height:48px !important;
+  }
+}
 ${FOOTER} [data-promptbox] {
   display: flex;
   flex-direction: column;
