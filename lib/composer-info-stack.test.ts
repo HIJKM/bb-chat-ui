@@ -4,7 +4,7 @@ import { infoStack } from './composer-info-stack.ts';
 
 test('inactive information becomes at most three icons and one exact overflow circle',()=>{
  const result=infoStack(['diff','children','plan','goal','todos'],new Set(),new Set());
- assert.deepEqual(result.icons,['diff','children','plan']);assert.equal(result.more,2);assert.equal(result.moreActive,false);assert.equal(result.width,98);
+ assert.deepEqual(result.icons,['diff','children','plan']);assert.equal(result.more,2);assert.equal(result.moreActive,false);assert.equal(result.width,86);
 });
 test('folded active information precedes empty icons and lights the overflow dot only when necessary',()=>{
  const keys=['diff','children','plan','goal','todos','queue'];

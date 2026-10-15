@@ -4394,7 +4394,7 @@ test("the Child Thread stack shows three, two or one latest avatars by the room 
   // 30px circles overlap by 12px; the children pill has no extra gutter and the Diff pill is 140px.
   Object.defineProperty(f.dom.window.HTMLElement.prototype, 'offsetWidth', { configurable:true, get() {
     const key = this.getAttribute('data-bb-chat-ui-info-trigger');
-    if (key === 'children') return 7 + 30 + 22 * (this.querySelectorAll('[data-bb-chat-ui-info-avatar], [data-bb-chat-ui-info-avatar-more]').length - 1);
+    if (key === 'children') return 30 + 18 * (this.querySelectorAll('[data-bb-chat-ui-info-avatar], [data-bb-chat-ui-info-avatar-more]').length - 1);
     return key === 'diff' ? 140 : key ? 64 : 0;
   } });
   const stop = injectComposerInfo(f.document);
@@ -4405,23 +4405,23 @@ test("the Child Thread stack shows three, two or one latest avatars by the room 
   try {
     await resize(400);
     assert.deepEqual(shown(), ['child-3','child-4','child-5']); assert.equal(more(), '+3');
-    await resize(342);
+    await resize(320);
     assert.deepEqual(shown(), ['child-4','child-5'], 'a narrower row keeps the two latest avatars');
     assert.equal(more(), '+4'); assert.equal(pill().hidden, false);
-    await resize(321);
+    await resize(303);
     assert.deepEqual(shown(), ['child-5']); assert.equal(more(), '+5');
     assert.equal(f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-trigger="diff"]')!.hidden, false, 'Code Diff stays beside the shortened stack');
     assert.match(pill().getAttribute('aria-label') ?? '', /6개/, 'the label keeps the full child count');
     count = 7; publish(); await f.tick();
     assert.deepEqual(shown(), ['child-6']); assert.equal(more(), '+6', 'new data keeps the current room limit');
-    await resize(363);
+    await resize(337);
     assert.equal(shown().length, 3, 'room returns all three before Latest appears');
     f.jump.classList.remove('invisible'); await f.tick();
     assert.deepEqual(shown(), ['child-6'], 'the standalone Latest takes room from the stack first');
     assert.equal(more(), '+6');
     f.jump.classList.add('invisible'); await f.tick();
     assert.equal(shown().length, 3); assert.equal(more(), '+4');
-    count = 2; publish(); await resize(321);
+    count = 2; publish(); await resize(303);
     assert.deepEqual(shown(), ['child-0','child-1'], 'two faces take the same room as one face and +1');
     assert.equal(more(), null, 'no overflow circle when every child is shown');
     await resize(140);
@@ -4700,3 +4700,17 @@ test('information circles open their own details and disabled families disappear
   assert.equal(f.document.querySelector('[data-bb-chat-ui-info-count]')!.textContent,'+11');
  } finally {stop();f.dom.window.close();}
 });
+
+ test('content pills size themselves and the child stack adds no extra right gutter',()=>{
+  const f=fixture(),stop=injectComposerInfo(f.document);
+  try{
+   for(const node of f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')){
+    const style=f.dom.window.getComputedStyle(node);
+    assert.equal(style.width,'auto','text pills do not reserve a fixed width');
+    assert.equal(style.minWidth,'0px','content can yield to the available row width');
+   }
+   assert.equal(f.dom.window.getComputedStyle(f.document.querySelector('[data-bb-chat-ui-info-trigger="children"]')!).paddingRight,'0px');
+   assert.equal(f.dom.window.getComputedStyle(f.document.querySelector('[data-bb-chat-ui-info-bar]')!).gap,'8px');
+   assert.equal(f.dom.window.getComputedStyle(f.document.querySelector('[data-bb-chat-ui-info-stack-icons]')!).position,'relative','circle offsets start at the stack, not a distant row ancestor');
+  }finally{stop();f.dom.window.close();}
+ });
