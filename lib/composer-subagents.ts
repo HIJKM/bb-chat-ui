@@ -1,8 +1,11 @@
 const CARD = "data-bb-chat-ui-subagent-card";
 // Live rows use the presentation label "Running subagent" with no colon. The older
-// activity copy "Running subagent:" remains valid.
-const LINE = /^(?:Running|Launching) subagent\b:?\s*(.*)$/;
-const COUNT = /(?:Running|Launching) (\d+) subagents?\b/;
+// activity copy "Running subagent:" remains valid. Finished rows stay on the pill
+// until the next user message, because the live label disappears as soon as the call ends.
+const LIVE = /^(?:Running|Launching) subagent\b:?\s*(.*)$/;
+const DONE = /^(?:Subagent finished|Launched subagent)\b:?\s*(.*)$/;
+const LIVE_COUNT = /(?:Running|Launching) (\d+) subagents?\b/;
+const DONE_COUNT = /\bRan (\d+) subagents?\b/;
 
 export interface SubagentHit {
     status: "running" | "done" | "failed" | "interrupted";
@@ -25,30 +28,57 @@ function skipped(node: HTMLElement): boolean {
     return !!node.closest("[data-bb-chat-ui-info-stack], [data-promptbox-shell]");
 }
 
+function inLatestTurn(root: ParentNode, node: HTMLElement): boolean {
+    const markers = Array.from(root.querySelectorAll<HTMLElement>("[data-message-column]"));
+    const last = markers[markers.length - 1];
+    if (!last || last.contains(node)) return !last;
+    return (last.compareDocumentPosition(node) & 4) !== 0;
+}
+
+function innermost(hits: SubagentHit[]): SubagentHit[] {
+    return hits.filter(hit => !hits.some(other => other.node && hit.node && other.node !== hit.node && hit.node.contains(other.node)));
+}
+
 export function readSubagentLines(root: ParentNode): SubagentHit[] {
     const nodes = Array.from(root.querySelectorAll<HTMLElement>("span, div, p, button, li, a"));
-    const hits: SubagentHit[] = [];
-    const counts: SubagentHit[] = [];
+    const live: SubagentHit[] = [];
+    const done: SubagentHit[] = [];
+    const liveCounts: SubagentHit[] = [];
+    const doneCounts: SubagentHit[] = [];
     for (const node of nodes) {
-        if (skipped(node)) continue;
+        if (skipped(node) || !inLatestTurn(root, node)) continue;
         const text = rowText(node);
         if (!text) continue;
-        const line = text.match(LINE);
-        if (line) {
-            hits.push({ status: "running", label: line[1] || "실행 중", node });
+        const running = text.match(LIVE);
+        if (running) {
+            live.push({ status: "running", label: running[1] || "실행 중", node });
             continue;
         }
-        const count = text.match(COUNT);
-        if (count) counts.push({ status: "running", label: `${count[1]}명 실행 중`, node });
+        const finished = text.match(DONE);
+        if (finished) {
+            done.push({ status: "done", label: finished[1] || "완료", node });
+            continue;
+        }
+        const runningCount = text.match(LIVE_COUNT);
+        if (runningCount) {
+            liveCounts.push({ status: "running", label: `${runningCount[1]}명 실행 중`, node });
+            continue;
+        }
+        const finishedCount = text.match(DONE_COUNT);
+        if (finishedCount) doneCounts.push({ status: "done", label: `${finishedCount[1]}명 완료`, node });
     }
-    const inner = hits.filter(hit => !hits.some(other => other.node && hit.node && other.node !== hit.node && hit.node.contains(other.node)));
-    const running = inner.filter(hit => hit.status === "running");
-    if (running.length) return running;
-    return counts.filter(hit => !counts.some(other => other.node && hit.node && other.node !== hit.node && hit.node.contains(other.node)));
+    const lines = innermost(live);
+    if (lines.length) return lines;
+    const finished = innermost(done);
+    if (finished.length) return finished;
+    const runningCounts = innermost(liveCounts);
+    if (runningCounts.length) return runningCounts;
+    return innermost(doneCounts);
 }
 
 function summaryOf(hits: SubagentHit[]): string {
-    return hits.length === 1 ? hits[0].label : `${hits.length}명 실행 중`;
+    if (hits.length === 1) return hits[0].label;
+    return hits.every(hit => hit.status === "done") ? `${hits.length}명 완료` : `${hits.length}명 실행 중`;
 }
 
 export function syncSubagentCards(document: Document): void {

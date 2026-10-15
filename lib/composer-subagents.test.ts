@@ -51,7 +51,7 @@ test("the composer pill shows one running description and lists each row", () =>
         assert.equal(row?.textContent, "review the diff");
         row!.click();
         assert.equal(scrolled, true);
-        document.getElementById("source")!.textContent = "Ran subagent: review the diff";
+        document.getElementById("source")!.textContent = "Edited a file";
         syncSubagentCards(document);
         assert.equal(document.querySelector("[data-bb-chat-ui-subagent-card]"), null);
     } finally {
@@ -59,6 +59,26 @@ test("the composer pill shows one running description and lists each row", () =>
         dom.window.close();
         Reflect.deleteProperty(globalThis, "document");
     }
+});
+
+test("the latest turn keeps a finished subagent and earlier turns stay hidden", () => {
+    const { document } = page(thread(`
+        <span title="Subagent finished Task: older">Subagent finished Task: older</span>
+        <div data-message-column>다시 해봐</div>
+        <span title="Subagent finished Task: 서브에이전트 필 다시 확인">Subagent finished Task: 서브에이전트 필 다시 확인 4s</span>
+    `));
+    const hits = readSubagentLines(document.getElementById("thread")!);
+    assert.deepEqual(hits.map(hit => [hit.status, hit.label]), [["done", "Task: 서브에이전트 필 다시 확인"]]);
+});
+
+test("a collapsed finished count is kept for the latest turn", () => {
+    const { document } = page(thread(`
+        <div data-message-column>이전</div>
+        <span title="Ran 1 subagent">Ran 1 subagent</span>
+        <div data-message-column>이번</div>
+        <span title="Explored 3 files, Ran 2 subagents">Explored 3 files, Ran 2 subagents</span>
+    `));
+    assert.deepEqual(readSubagentLines(document).map(hit => hit.label), ["2명 완료"]);
 });
 
 test("several running subagents collapse to a count and clear with the cards", () => {
