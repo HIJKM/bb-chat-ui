@@ -3532,6 +3532,42 @@ test("remounts and two composer scopes do not leak disclosures or hide each othe
   f.dom.window.close();
 });
 
+test("a supplemental Diff settles while loading and after real summary changes without rewriting its title", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+  stack.querySelector('section[aria-label="Thread context before sending"]')!.remove();
+  const source = f.document.createElement('span');
+  source.hidden = true;
+  source.setAttribute('data-bb-chat-ui-head-diff', '');
+  source.setAttribute('data-bb-chat-ui-head-diff-state', 'loading');
+  stack.append(source);
+  let measurements = 0;
+  stack.getBoundingClientRect = () => { measurements++; return { width:900 } as DOMRect; };
+  const stop = injectComposerInfo(f.document);
+  let titleChanges = 0;
+  const observer = new f.dom.window.MutationObserver(records => { titleChanges += records.length; });
+  try {
+    const button = stack.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-bar] > section[data-bb-chat-ui-info-unit] > button')!;
+    assert.ok(button, 'the SDK summary supplies Diff when the native git card is absent');
+    observer.observe(button, { attributes:true, attributeFilter:['title'] });
+    for (const { ready, branch } of [{ ready:false, branch:null }, { ready:true, branch:null }, { ready:true, branch:'feature/chat' }]) {
+      if (ready) {
+        source.setAttribute('data-bb-chat-ui-head-diff-state', 'ready');
+        source.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify({ insertions:2, deletions:1, files:1, branch,
+          presentation:{ mode:'working', visible:true, branch, branchLabel:branch, label:'+2 −1 · 1 file' },
+        }));
+      }
+      await f.tick(); await f.tick(); await f.tick();
+      assert.equal(button.title, branch ?? 'Code Diff', 'a changed branch still updates the native tooltip');
+      if (ready) assert.match(stack.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!.textContent!, /\+2/);
+      measurements = 0; titleChanges = 0;
+      await f.tick(); await f.tick();
+      assert.equal(titleChanges, 0, 'an unchanged supplemental title does not trigger its own observer');
+      assert.equal(measurements, 0, 'an idle Diff does not keep scheduling layout work');
+    }
+  } finally { observer.disconnect(); stop(); f.dom.window.close(); }
+});
+
 test("Code Diff pill shows one commit meaning and keeps unpushed counts inside its popover", async () => {
   const f = fixture();
   const source = f.document.createElement('span');

@@ -1950,7 +1950,8 @@ export function injectComposerInfo(document: Document): () => void {
             const button = diffSupplement.querySelector("button")!;
             const text = awaitingDiff() ? "불러오는 중" : summary.presentation?.label ?? `+${summary.insertions} −${summary.deletions} · ${summary.files} files`;
             if (button.textContent !== text) button.textContent = text;
-            button.title = summary?.branch ?? "Code Diff";
+            const title = summary?.branch ?? "Code Diff";
+            if (button.title !== title) button.title = title;
             items.unshift({ key:"diff", node:diffSupplement, trigger:button, label:"Code Diff" });
           }
         } catch { /* A disconnected environment has no invented Diff tally. */ }
