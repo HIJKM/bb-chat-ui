@@ -1,6 +1,7 @@
 export const infoKinds = [
   { key: "diff", icon: "GitBranch", setting: "showDiff", label: "Code Diff", default: true },
   { key: "children", icon: "UserRound", setting: "showChildren", label: "Child Thread", default: true },
+  { key: "subagents", icon: "bb-chat-ui-subagent", setting: "showSubagents", label: "서브에이전트", default: true },
   { key: "plan", icon: "FileText", setting: "showPlan", label: "Plan", default: true },
   { key: "goal", icon: "Target", setting: "showGoal", label: "Goal", default: true },
   { key: "todos", icon: "ListTodo", setting: "showTodos", label: "할 일", default: true },

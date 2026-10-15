@@ -7,6 +7,7 @@ import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
 import { eventHop, pressPop, stickyDrop } from "./motion.ts";
 import { isDesktopChrome } from "./device-chrome.ts";
 import { infoStack } from "./composer-info-stack.ts";
+import { clearSubagentCards, syncSubagentCards } from "./composer-subagents.ts";
 import { bodyFadeBox, readBodyFadeClips } from "./body-fade.ts";
 
 const STACK = "[data-promptbox-shell] > .grid";
@@ -272,6 +273,9 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [data-promptbox-shell]:has(> [${MARK}-request]) [data-follow-up-composer-anchor] { display:none !important; }
 [data-scroll-footer]:has([${MARK}-request]) button[aria-label="Scroll to latest event"] { display:none !important; }
 [${MARK}-stack] [${MARK}-supplements] { display:contents; }
+${DETAIL}[aria-label="서브에이전트"] [data-bb-chat-ui-subagent-list] { display:grid; gap:4px; }
+${DETAIL}[aria-label="서브에이전트"] [data-bb-chat-ui-subagent] { display:flex; width:100%; min-height:32px; align-items:center; border-radius:10px; padding:6px 8px; text-align:left; font-size:12px; background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; }
+${DETAIL}[aria-label="서브에이전트"] [data-bb-chat-ui-subagent]:is(:hover, :focus-visible) { background:color-mix(in oklab,var(--foreground) 6%,transparent) !important; }
 [${MARK}-kind] { font-size:12px; }
 [${MARK}-kind] h3 { margin:0 0 8px; font-size:12px; font-weight:600; }
 [${MARK}-kind] p { white-space:pre-wrap; margin:6px 0; }
@@ -1101,6 +1105,7 @@ export function injectComposerInfo(document: Document): () => void {
       return available.length ? available : [{ key:kind.key, label:kind.label }];
     });
     const describe = (item: InfoItem) => {
+      if (item.key === "subagents") return item.node.getAttribute("data-bb-chat-ui-subagent-summary") || item.label;
       if (item.key === "diff" && awaitingDiff()) return "불러오는 중";
       if (item.key === "annotations") return `${annotationCount(item)} staged`;
       if (item.key === "queue" && queueCount(item)) return `${queueCount(item)} queued`;
@@ -1250,11 +1255,15 @@ export function injectComposerInfo(document: Document): () => void {
       if (summary && item.key === "todos") text.textContent = item.trigger?.textContent?.trim().replace(/\s+/g, " ").slice(0, 30) || item.label;
       if (summary && item.key === "queue") text.textContent = queueCount(item) || item.label;
       if (summary && item.key === "annotations") text.textContent = annotationCount(item);
+      if (summary && item.key === "subagents") {
+        const full = describe(item);
+        text.textContent = full.length > 24 ? `${full.slice(0, 23)}…` : full;
+      }
       const presentation = item.key === "diff" ? readDiff()?.presentation : null;
       const icon = (summary && presentation && presentation.mode !== "working" ? emptyIcon("diff") : null)
         ?? (item.key === "annotations" ? emptyIcon("annotations") : null)
         ?? (item.key === "queue" ? emptyIcon("queue") : null)
-        ?? (["plan", "status", "machine", "other"].includes(item.key) ? emptyIcon(item.key) : null)
+        ?? (["plan", "status", "machine", "other", "subagents"].includes(item.key) ? emptyIcon(item.key) : null)
         ?? (!summary ? emptyIcon(item.key) : null)
         ?? item.trigger?.querySelector("svg, [data-icon-root]") ?? item.node.querySelector("svg, [data-icon-root]") ?? emptyIcon(item.key);
       button.replaceChildren();
@@ -2175,6 +2184,7 @@ export function injectComposerInfo(document: Document): () => void {
   function sync() {
     frame = 0;
     if (disposed) return;
+    syncSubagentCards(document);
     for (const [stack, state] of states) if (!stack.isConnected) { state.cleanup(); states.delete(stack); }
     for (const stack of Array.from(document.querySelectorAll<HTMLElement>(STACK))) {
       if (!states.has(stack) && !stack.querySelector(`[${SOURCE}]`)) continue;
@@ -2232,6 +2242,7 @@ export function injectComposerInfo(document: Document): () => void {
     view.removeEventListener("resize", schedule);
     for (const state of states.values()) state.cleanup();
     states.clear();
+    clearSubagentCards(document);
     style.remove();
   };
 }

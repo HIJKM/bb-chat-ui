@@ -38,6 +38,14 @@ export default definePluginApp((app) => {
       createElement("path", { d:"M12.1248 12H11.9998M8.125 12H8M12.2498 12C12.2498 12.1381 12.1379 12.25 11.9998 12.25C11.8618 12.25 11.7498 12.1381 11.7498 12C11.7498 11.8619 11.8618 11.75 11.9998 11.75C12.1379 11.75 12.2498 11.8619 12.2498 12ZM8.25 12C8.25 12.1381 8.13807 12.25 8 12.25C7.86193 12.25 7.75 12.1381 7.75 12C7.75 11.8619 7.86193 11.75 8 11.75C8.13807 11.75 8.25 11.8619 8.25 12Z" }),
       createElement("path", { d:"M18 6L19 5M22 6C22 8.20914 20.2091 10 18 10C15.7909 10 14 8.20914 14 6C14 3.79086 15.7909 2 18 2C20.2091 2 22 3.79086 22 6Z" })),
   });
+  app.experimental_icons.register({
+    name:"bb-chat-ui-subagent",
+    component:({ className }) => createElement("svg", { viewBox:"0 0 24 24", className, fill:"none", stroke:"currentColor", strokeWidth:1.5, strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":true },
+      createElement("path", { d:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" }),
+      createElement("circle", { cx:"9", cy:"7", r:"4" }),
+      createElement("path", { d:"M22 21v-2a4 4 0 0 0-3-3.87" }),
+      createElement("path", { d:"M16 3.13a4 4 0 0 1 0 7.75" })),
+  });
   app.slots.settingsSection({
     id:"composer-info",
     title:"컴포저 위 정보",
