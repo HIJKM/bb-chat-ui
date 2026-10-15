@@ -1577,8 +1577,9 @@ export function injectComposerInfo(document: Document): () => void {
     const fit = (motion = true) => {
       const hadStack = appeared.has("all") && !iconStack.hidden && stackIcons.size > 0;
       const previouslyVisible = new Set([...buttons.values()].filter(button => !button.hidden && positions.has(button)));
+      // Reveal candidates together so width reads share one layout calculation.
+      for (const button of buttons.values()) button.hidden = false;
       const widths = [...buttons].map(([key, button]) => {
-        button.hidden = false;
         // Entry transforms change visual bounds, but must not change which pills fit.
         return { key, width:widthAnimations.get(button)?.width ?? (button.offsetWidth || button.getBoundingClientRect().width) };
       });

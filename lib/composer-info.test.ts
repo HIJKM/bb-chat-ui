@@ -88,6 +88,38 @@ test("unrelated chat mutations do not recalculate composer info, while composer 
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("fitting reveals all candidate pills before reading their widths", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+  const observers: { targets:Set<Element>; callback:() => void }[] = [];
+  class RecordingResizeObserver {
+    targets = new Set<Element>();
+    callback: () => void;
+    constructor(callback:() => void) { this.callback = callback; observers.push(this); }
+    observe(node:Element) { this.targets.add(node); }
+    unobserve(node:Element) { this.targets.delete(node); }
+    disconnect() { this.targets.clear(); }
+  }
+  f.dom.window.ResizeObserver = RecordingResizeObserver as unknown as typeof ResizeObserver;
+  stack.getBoundingClientRect = () => ({ width:100 } as DOMRect);
+  Object.defineProperty(f.dom.window.HTMLElement.prototype, "offsetWidth", { configurable:true, get() { return this.hasAttribute("data-bb-chat-ui-info-trigger") ? 80 : 0; } });
+  const stop = injectComposerInfo(f.document);
+  try {
+    await f.tick(); await f.tick();
+    const buttons = [...stack.querySelectorAll<HTMLButtonElement>('[data-bb-chat-ui-info-trigger]')];
+    assert.ok(buttons.some(button => button.hidden), 'a narrow row starts with folded candidates');
+    const reads: boolean[] = [];
+    for (const button of buttons) Object.defineProperty(button, 'offsetWidth', {
+      configurable:true, get() { reads.push(buttons.every(candidate => !candidate.hidden)); return 80; },
+    });
+    const resize = observers.find(observer => observer.targets.has(stack));
+    assert.ok(resize); resize.callback();
+    assert.equal(reads.length, buttons.length, 'each candidate is measured once');
+    assert.ok(reads.every(Boolean), 'visibility writes cannot interleave with candidate width reads');
+    assert.ok(buttons.some(button => button.hidden), 'fit still folds the overflow after measuring');
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("late nested composers and device markers still trigger discovery and removal cleanup", async () => {
   const f = fixture();
   const shell = f.document.querySelector<HTMLElement>('[data-promptbox-shell]')!;
