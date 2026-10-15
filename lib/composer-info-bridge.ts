@@ -2,16 +2,10 @@ import { createElement, Fragment, useEffect, useMemo, useState, useLayoutEffect,
 import { experimental_Icon, experimental_ProviderIcon, experimental_useProviders, UrlLink, useBbNavigate, useComposer, useSdk, useSettings } from "@get-bb/plugin-sdk/app";
 import { publishInfoData, clearComposerData } from "./composer-data.ts";
 import { infoKinds } from "./composer-info-settings.ts";
-import { childEventRefreshes, childListArgs, childState, visibleChildren } from "./composer-child.ts";
-import { loadParent, type ParentSummary } from "./composer-parent.ts";
+import { childState } from "./composer-child.ts";
+import { startComposerInfoRefresh, type ComposerInfoSnapshot } from "./composer-info-refresh.ts";
 import { createThreadRestorer, type RestoreState } from "./composer-restore.ts";
 
-type Sdk = ReturnType<typeof useSdk>;
-type Timeline = Awaited<ReturnType<Sdk["threads"]["timeline"]>>;
-type Children = Awaited<ReturnType<Sdk["threads"]["list"]>>;
-type Queue = Awaited<ReturnType<Sdk["threads"]["queuedMessages"]["list"]>>;
-type PullRequest = Awaited<ReturnType<Sdk["environments"]["pullRequest"]>>;
-interface Snapshot { threadId: string; timeline: Timeline; children: Children; queue: Queue; pullRequest: PullRequest | null; readOnly:{label:string|null; canRestore:boolean}; parent: ParentSummary | null; }
 const mark = "data-bb-chat-ui-info";
 
 export function ComposerInfoBridge() {
@@ -21,7 +15,7 @@ export function ComposerInfoBridge() {
   const { values } = useSettings();
   const { providers } = experimental_useProviders();
   const threadId = scope.kind === "thread" ? scope.threadId : null;
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<ComposerInfoSnapshot | null>(null);
   const [error, setError] = useState(false);
   const [restoreStates, setRestoreStates] = useState<Record<string, RestoreState>>({});
   const source = useRef<HTMLSpanElement>(null);
@@ -41,79 +35,9 @@ export function ComposerInfoBridge() {
   const restore = useMemo(() => createThreadRestorer(sdk.threads, state => setRestoreStates(previous => ({ ...previous, [state.threadId]:state }))), [sdk]);
   useEffect(() => {
     if (!threadId) return;
-    const controller = new AbortController();
-    const { signal } = controller;
-    let timer = 0;
-    let fetching = false;
-    let again = false;
-    let childIds = new Set<string>();
-    let parentId: string | null = null;
-    const refresh = async () => {
-      if (signal.aborted) return;
-      if (fetching) { again = true; return; }
-      fetching = true;
-      try {
-        const timelinePromise = sdk.threads.timeline({ threadId, summaryOnly:"true", signal });
-        const readOnlyPromise = (async () => {
-          const thread = await sdk.threads.get({ threadId, include:"environment", signal });
-          const environment = "environment" in thread ? thread.environment : null;
-          const lifecycle = environment?.hostLifecycle;
-          const label = thread.archivedAt !== null ? "Archived thread" : lifecycle === "removed" ? "Machine removed"
-            : lifecycle === "removing" ? "Machine removal in progress" : lifecycle === "cleanup-failed" ? "Machine cleanup failed"
-            : environment?.status === "destroyed" ? "Environment unavailable" : null;
-          const readOnly = { label, canRestore:thread.canRestoreEnvironment };
-          const parentThreadId = thread.parentThreadId;
-          if (!label) return { queue:[] as Queue, pullRequest:null, readOnly, parentThreadId };
-          const results = await Promise.allSettled([
-            sdk.threads.queuedMessages.list({ threadId, signal }),
-            thread.environmentId ? sdk.environments.pullRequest({ environmentId:thread.environmentId, signal }) : Promise.resolve(null),
-          ]);
-          return { queue:results[0].status === "fulfilled" ? results[0].value : [], pullRequest:results[1].status === "fulfilled" ? results[1].value : null, readOnly, parentThreadId };
-        })();
-        const childrenPromise = (async () => {
-          const children: Children = [];
-          for (let offset = 0; !signal.aborted; offset += 100) {
-            const page = await sdk.threads.list(childListArgs(threadId, offset, signal));
-            children.push(...page);
-            if (page.length < 100) break;
-          }
-          return children;
-        })();
-        const [timeline, listed, context] = await Promise.all([timelinePromise, childrenPromise, readOnlyPromise]);
-        const children = visibleChildren(listed);
-        const parent = await loadParent(
-          (parentThreadId, parentSignal) => sdk.threads.get({ threadId:parentThreadId, signal:parentSignal }),
-          threadId,
-          { id:threadId, parentThreadId:context.parentThreadId },
-          signal,
-        );
-        if (!signal.aborted) {
-          parentId = parent?.id ?? null;
-          childIds = new Set(children.map(child => child.id));
-          setSnapshot({ threadId, timeline, children, parent, queue:context.queue, pullRequest:context.pullRequest, readOnly:context.readOnly });
-          setError(false);
-        }
-      } catch {
-        if (!signal.aborted) setError(true);
-      } finally {
-        fetching = false;
-        if (again && !signal.aborted) { again = false; schedule(); }
-      }
-    };
-    const schedule = () => {
-      if (timer || signal.aborted) return;
-      timer = window.setTimeout(() => { timer = 0; void refresh(); }, 250);
-    };
-    // Include child changes, and coalesce rapid stream updates into one request.
-    const stop = sdk.subscribe({ event:"thread:changed", callback:event => {
-      if (childEventRefreshes(event, { threadId, parentId, childIds })) schedule();
-    } });
-    const stopConnection = sdk.subscribe({ event:"realtime:connection", callback:event => {
-      if (event.state === "connected" && event.reconnected) schedule();
-    } });
-    window.addEventListener("focus", schedule);
-    void refresh();
-    return () => { controller.abort(); stop(); stopConnection(); window.clearTimeout(timer); window.removeEventListener("focus", schedule); };
+    const refresh = startComposerInfoRefresh(sdk, threadId, setSnapshot, setError);
+    window.addEventListener("focus", refresh.refresh);
+    return () => { refresh.stop(); window.removeEventListener("focus", refresh.refresh); };
   }, [sdk, threadId]);
   if (!threadId) return null;
   const data = snapshot?.threadId === threadId ? snapshot : null;
