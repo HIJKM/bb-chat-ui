@@ -729,8 +729,9 @@ export function injectComposerInfo(document: Document): () => void {
     const updateBodyFades = () => {
       const live = new Set<HTMLElement>();
       const liveClips = new Set<HTMLElement>();
-      const anchor = stack.getBoundingClientRect();
+      let anchor: DOMRect | undefined;
       for (const scroller of Array.from(stack.querySelectorAll<HTMLElement>(BODY_SCROLLER))) {
+        anchor ??= stack.getBoundingClientRect();
         live.add(scroller);
         let pair = bodyFades.get(scroller);
         if (!pair) {

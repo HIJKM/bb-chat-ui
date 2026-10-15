@@ -3233,6 +3233,20 @@ function manualFrames(view: Window) {
   };
 }
 
+test("body fade updates do not measure the stack when no Plan or Approval body exists", async () => {
+  const f=fixture(),stack=f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+  let reads=0;
+  stack.getBoundingClientRect=()=>{reads++;return {top:0,left:0,width:900} as DOMRect;};
+  const stop=injectComposerInfo(f.document);
+  try {
+    await f.tick();await f.tick();reads=0;
+    stack.dispatchEvent(new f.dom.window.Event('animationend',{bubbles:true}));
+    stack.dispatchEvent(new f.dom.window.Event('animationcancel',{bubbles:true}));
+    stack.dispatchEvent(new f.dom.window.Event('scroll'));
+    assert.equal(reads,0,'scroll and animation notifications have no body-fade geometry to read');
+  } finally {stop();f.dom.window.close();}
+});
+
 test("a stationary plan card does not reinsert body fades", async () => {
   const f = fixture();
   const stack = f.document.querySelector("[data-promptbox-shell] > .grid")!;
