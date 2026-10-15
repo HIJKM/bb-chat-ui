@@ -17,14 +17,14 @@ export const infoKinds = [
 ] as const;
 
 export type InfoKind = typeof infoKinds[number]["key"];
-export const infoSettingsNotice = "각 정보의 표시 방식을 선택하세요. 상단 표시는 공간이 부족하면 자동으로 전체 정보 버튼 안에 접힙니다. 목록에만 표시는 현재 정보가 없어도 목록에 남습니다. 끄기는 상단과 목록에서 모두 숨깁니다. 정보가 없어도 상단 아이콘 표시를 켜면 상단 표시로 선택한 계열은 빈 상태에서도 아이콘이 남습니다. 입력 요청 중에는 요청만 표시합니다.";
-export const composerInfoSettings = Object.fromEntries([...infoKinds.map(kind => [kind.setting, {
+export const infoSettingsNotice = "상단 표시는 활동이 있을 때 pill로 표시합니다. 내용이 없거나 공간이 부족하면 아이콘 스택에 들어갑니다. 스택은 최대 3개와 +N을 표시하며, 접힌 활성 정보는 앞쪽에 배치하고 점으로 표시합니다. 목록에만 표시는 스택과 전체 목록에서 열 수 있고, 끄기는 모든 곳에서 숨깁니다. 입력 요청 중에는 요청만 표시합니다.";
+export const composerInfoSettings = Object.fromEntries(infoKinds.map(kind => [kind.setting, {
   type: "select" as const,
   label: kind.label,
   description: kind.key === "diff" ? infoSettingsNotice : undefined,
   options: ["상단 표시", "목록에만 표시", "끄기"],
   default: kind.default ? "상단 표시" : "목록에만 표시",
-}]), ["showEmptyIcons", { type:"boolean", label:"정보가 없어도 상단 아이콘 표시", description:"상단 표시로 선택한 항목을 빈 상태에서도 아이콘으로 표시합니다. 공간이 부족하면 전체 정보 버튼 안에 접힙니다. 목록에만 표시와 끄기 항목에는 적용하지 않습니다.", default:false }]]);
+}]));
 
 // Boolean values can still arrive from a frontend loaded before the settings upgrade.
 export function exposedInfo(values: Record<string, unknown> = {}): InfoKind[] {

@@ -1201,10 +1201,11 @@ test("pill bubbles wait for visible space and requests, and respect reduced moti
     f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings', '{"showGoal":"상단 표시"}');
     Object.defineProperty(f.dom.window.HTMLElement.prototype, 'offsetWidth', { get:() => 120 });
     f.dom.window.HTMLElement.prototype.getBoundingClientRect = () => ({ width:10 } as DOMRect);
-    const animated:string[] = [];
+    const animated:string[] = [], reveals:string[] = [];
     f.dom.window.HTMLElement.prototype.animate = function(_frames,options) {
       const key = this.getAttribute('data-bb-chat-ui-info-trigger');
       if (key && (options as KeyframeAnimationOptions).duration === 460) animated.push(key);
+      if (key && (options as KeyframeAnimationOptions).duration === 240) reveals.push(key);
       return { cancel() {} } as Animation;
     };
     const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
@@ -1213,16 +1214,18 @@ test("pill bubbles wait for visible space and requests, and respect reduced moti
     const request = f.document.createElement('div'); request.setAttribute('data-testid','user-question-banner'); stack.append(request);
     const stop = injectComposerInfo(f.document);
     assert.deepEqual(animated, []);
-    width = 200; f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+    width = 260; f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
     assert.deepEqual(animated, [], 'hidden request state does not consume entry motion');
     request.remove(); await f.tick();
     assert.deepEqual(animated, reduced ? [] : ['diff']);
     assert.equal(f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-trigger="goal"]')!.hidden, true, 'bubble scale does not make overflow pills fit');
     width = 500; f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
-    assert.deepEqual(animated, reduced ? [] : ['diff', 'goal'], 'an overflow pill waits until it first becomes visible');
-    width = 200; f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
+    assert.deepEqual(animated, reduced ? [] : ['diff','goal'], 'a first visible pill retains the bounce even if it started in the stack');
+    assert.deepEqual(reveals,[],'first appearances are not mistaken for returns');
+    width = 260; f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
     width = 500; f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
-    assert.deepEqual(animated, reduced ? [] : ['diff', 'goal']);
+    assert.deepEqual(animated, reduced ? [] : ['diff','goal']);
+    assert.deepEqual(reveals,[],'the remote behavior adds no returning-pill fade');
     stop(); f.dom.window.close();
   }
 });
@@ -1294,8 +1297,9 @@ test("custom Status icon wrappers use the same centered size as builtin icons", 
   const f = fixture();
   f.document.head.insertAdjacentHTML('beforeend', '<style>.size-6 { width:24px; height:24px; }</style>');
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
-  source.setAttribute('data-bb-chat-ui-info-settings', '{"showEmptyIcons":true}');
+  source.setAttribute('data-bb-chat-ui-info-settings',JSON.stringify(Object.fromEntries(infoKinds.map(k=>[k.setting,['machine','fallback','status','other'].includes(k.key)?'목록에만 표시':'끄기']))));
   source.insertAdjacentHTML('beforeend', '<span data-bb-chat-ui-info-icon="status"><span class="inline-flex size-6 shrink-0" data-icon-root data-icon="bb-chat-ui-status"><svg class="size-full" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg></span></span>');
+  f.document.querySelector(".plugin-banner")!.remove();
   const stop = injectComposerInfo(f.document);
   try {
     for (const available of [false, true]) {
@@ -1304,7 +1308,7 @@ test("custom Status icon wrappers use the same centered size as builtin icons", 
         await f.tick();
       }
       f.click('[data-bb-chat-ui-info-all]');
-      for (const selector of ['[data-bb-chat-ui-info-trigger="status"]', '[data-bb-chat-ui-info-choice="status"]']) {
+      for (const selector of ['[data-bb-chat-ui-info-stack-kind="status"]', '[data-bb-chat-ui-info-choice="status"]']) {
         const icon = f.document.querySelector(`${selector} > [data-icon-root]`)!;
         assert.ok(icon, selector);
         const style = f.dom.window.getComputedStyle(icon);
@@ -1693,7 +1697,7 @@ test("Agentation replaces its native glyph when the SDK picker icon finishes loa
   } finally { stop(); f.dom.window.close(); }
 });
 
-test("empty top icons can be enabled and disabled without exposing catalog-only or disabled families", async () => {
+test("inactive icons stay collapsed regardless of a legacy empty-icon choice and honor disabled families", async () => {
   const f = fixture();
   const stack = f.document.querySelector('[data-promptbox-shell] > .grid')!;
   const source = f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
@@ -1705,16 +1709,16 @@ test("empty top icons can be enabled and disabled without exposing catalog-only 
   const stop = injectComposerInfo(f.document);
   assert.equal(f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]').length, 0);
   settings.showEmptyIcons = true; publish(); await f.tick();
-  const icons = f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]');
-  assert.deepEqual([...icons].map(icon => icon.getAttribute('data-bb-chat-ui-info-trigger')), infoKinds.filter(kind => kind.key !== 'goal' && kind.key !== 'plan').map(kind => kind.key));
+  const icons = f.document.querySelectorAll('[data-bb-chat-ui-info-stack-kind]');
+  assert.deepEqual([...icons].map(icon => icon.getAttribute('data-bb-chat-ui-info-stack-kind')), ['diff','children','plan']);
   for (const icon of icons) {
     assert.equal(icon.textContent, '');
     assert.ok(icon.querySelector('[data-placeholder-icon]'));
     assert.ok(icon.getAttribute('aria-label')?.includes('현재 없음'));
   }
-  f.click('[data-bb-chat-ui-info-trigger="diff"]');
+  f.click('[data-bb-chat-ui-info-stack-kind="diff"]');
   assert.ok(f.document.querySelector('[data-bb-chat-ui-info-empty]')?.textContent?.includes('현재 정보 없음'));
-  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')?.getAttribute('aria-expanded'), 'true');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-stack-kind="diff"]')?.getAttribute('aria-expanded'), 'true');
   const diff = f.document.createElement('span'); diff.hidden = true;
   diff.setAttribute('data-bb-chat-ui-head-diff', JSON.stringify({ insertions:8, deletions:2, files:1, branch:'bb/review' })); stack.append(diff);
   await f.tick();
@@ -3308,11 +3312,10 @@ test("restoring returns to normal pills before the SDK read-only snapshot catche
       assert.ok(f.document.querySelector('[data-bb-chat-ui-info-trigger="goal"]'));
       assert.equal(f.document.querySelector('[data-bb-chat-ui-info-archived-detail]'),null);
       const pill=f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-trigger="status"]');
-      if (showEmptyIcons) {
-        assert.equal(pill?.getAttribute('aria-label'),'스레드 상태 · 현재 없음');
-        assert.ok(pill?.querySelector('[data-placeholder-icon="status"]'));
-        assert.notEqual(f.dom.window.getComputedStyle(pill!).width,'100%','the requested empty icon uses its normal size');
-      } else assert.equal(pill,null);
+      assert.equal(pill,null,'restored empty status belongs to the stack or its +N catalog, never a full pill');
+      f.click('[data-bb-chat-ui-info-all]');
+      assert.ok(f.document.querySelector('[data-bb-chat-ui-info-choice="status"]'),'inactive status remains reachable');
+      f.click('[data-bb-chat-ui-info-close]');
       source.removeAttribute('data-bb-chat-ui-info-read-only-label'); await f.tick();
       assert.equal(bar.hasAttribute('data-bb-chat-ui-info-archived'),false);
     } finally { stop(); f.dom.window.close(); }
@@ -4031,7 +4034,7 @@ test("every queued addition sends a droplet, including equal-count replacement a
   add('e'); count.textContent='4'; await f.tick();
   assert.equal(flights().length,4);
   const finishOrb = flights()[3].animation.onfinish as (() => void) | null; finishOrb?.();
-  assert.equal(records.filter(record => record.options.duration===380).at(-1)?.node,f.document.querySelector('[data-bb-chat-ui-info-all]'),'without a queue pill the all-information button absorbs the droplet');
+  assert.equal(records.filter(record => record.options.duration===380).at(-1)?.node,f.document.querySelector('[data-bb-chat-ui-info-stack-kind="queue"]'),'without a queue pill its visible stack circle absorbs the droplet');
   settings.setAttribute('data-bb-chat-ui-info-thread','other-thread'); await f.tick();
   assert.equal(flights().length,4,'thread changes reset the baseline');
   assert.ok(flights().filter(record => record.node.isConnected).length===0,'scope changes remove flying droplets');
@@ -4122,14 +4125,14 @@ test("queued addition motion respects reduced motion and disabled queue settings
 test("existing pills slide sideways when a new pill enters ahead of them", async () => {
   const f=fixture();
   f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings','{"showGoal":"상단 표시"}');
-  f.document.querySelector('[data-promptbox-shell] > .grid')!.getBoundingClientRect=()=>({width:230} as DOMRect);
+  f.document.querySelector('[data-promptbox-shell] > .grid')!.getBoundingClientRect=()=>({width:310} as DOMRect);
   const source=f.document.createElement('span');
   const publish=(visible:boolean) => source.setAttribute('data-bb-chat-ui-head-diff',JSON.stringify({insertions:0,deletions:0,files:0,presentation:{mode:'branch',visible,branch:'feature/chat',label:'feature/c…'}}));
   publish(false); f.document.querySelector('[data-promptbox-shell] > .grid')!.append(source);
   Object.defineProperty(f.dom.window.HTMLElement.prototype,'offsetWidth',{get(){return this.hasAttribute('data-bb-chat-ui-info-trigger') ? 64 : 0;}});
   Object.defineProperty(f.dom.window.HTMLElement.prototype,'offsetLeft',{get(){let x=0; for(let n=this.previousElementSibling;n;n=n.previousElementSibling) if(!n.hidden) x+=72; return x;}});
   const moves:{node:HTMLElement;frames:Keyframe[];cancelled:boolean}[]=[];
-  f.dom.window.HTMLElement.prototype.animate=function(frames){const record={node:this,frames:frames as Keyframe[],cancelled:false}; if(record.frames[0].translate) moves.push(record); return {cancel(){record.cancelled=true;}} as Animation;};
+  f.dom.window.HTMLElement.prototype.animate=function(frames){const record={node:this,frames:frames as Keyframe[],cancelled:false}; if(record.frames[0].translate && record.frames[0].opacity === undefined && !this.parentElement?.hasAttribute("data-bb-chat-ui-info-stack-icons")) moves.push(record); return {cancel(){record.cancelled=true;}} as Animation;};
   const stop=injectComposerInfo(f.document);
   assert.equal(moves.length,0,'initial entry retains its droplet animation');
   const child=f.document.querySelector('[data-bb-chat-ui-info-trigger="children"]');
@@ -4235,7 +4238,7 @@ function jumpFixture(settings: Record<string, unknown> = {}) {
   return { ...f, jump, stack, jumps:() => jumps, setWidth:(next:number) => { width = next; }, shown, folded };
 }
 
-test("latest-event layout follows the desktop device marker, not width, rotation, or a stored choice", async () => {
+test("Latest stays on the right across devices, widths, rotation and stored choices", async () => {
   const phone = jumpFixture({ infoButtonLayout:"오른쪽 캡슐" });
   const phoneMarker = phone.document.createElement("span");
   phoneMarker.hidden = true;
@@ -4246,7 +4249,7 @@ test("latest-event layout follows the desktop device marker, not width, rotation
   const stopPhone = injectComposerInfo(phone.document);
   try {
     const layout = () => phone.document.querySelector("[data-bb-chat-ui-info-bar]")!.getAttribute("data-bb-chat-ui-info-layout");
-    assert.equal(layout(), "center", "a stored capsule choice does not dock a phone");
+    assert.equal(layout(), "center", "a phone keeps its centered Latest");
     for (const width of [240, 2000]) {
       phone.setWidth(width);
       phone.dom.window.dispatchEvent(new phone.dom.window.Event("resize"));
@@ -4262,7 +4265,7 @@ test("latest-event layout follows the desktop device marker, not width, rotation
   const stop = injectComposerInfo(desktop.document);
   try {
     const layout = () => desktop.document.querySelector("[data-bb-chat-ui-info-bar]")!.getAttribute("data-bb-chat-ui-info-layout");
-    assert.equal(layout(), "center", "the row stays centred until a desktop marker exists");
+    assert.equal(layout(), "center", "without a device marker Latest stays centered");
     const marker = desktop.document.createElement("span");
     marker.hidden = true;
     marker.setAttribute("data-bb-chat-ui-device", "desktop");
@@ -4279,10 +4282,10 @@ test("latest-event layout follows the desktop device marker, not width, rotation
     marker.setAttribute("data-bb-chat-ui-orientation", "landscape");
     marker.setAttribute("data-bb-chat-ui-viewport", "wide");
     await desktop.tick();
-    assert.equal(layout(), "center", "changing the marker to a wide landscape phone recentres");
+    assert.equal(layout(), "center", "a wide landscape phone stays centered");
     marker.setAttribute("data-bb-chat-ui-device", "tablet");
     await desktop.tick();
-    assert.equal(layout(), "center", "tablet stays centred");
+    assert.equal(layout(), "center", "tablet stays centered");
     marker.setAttribute("data-bb-chat-ui-device", "desktop");
     await desktop.tick();
     assert.equal(layout(), "dock");
@@ -4296,91 +4299,41 @@ test("latest-event layout follows the desktop device marker, not width, rotation
   desktop.dom.window.close();
 });
 
-test("a desktop row joins the all-information button and an expanding latest-event button", async () => {
-  const f = jumpFixture();
-  markDevice(f.document, "desktop", { viewport:"narrow" });
-  const stop = injectComposerInfo(f.document);
+test("a desktop row keeps an A tail and a separate Latest button at the right edge", async () => {
+  const f=jumpFixture(); markDevice(f.document,'desktop',{viewport:'narrow'});
+  const stop=injectComposerInfo(f.document);
   try {
-    const bar = f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
-    const dock = bar.querySelector<HTMLElement>(':scope > [data-bb-chat-ui-info-dock]')!;
-    assert.ok(dock, 'the capsule sits directly in the information row');
-    assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'), 'dock');
-    const all = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-all]')!;
-    const proxy = f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-jump]')!;
-    assert.equal(all.parentElement, dock); assert.equal(proxy.parentElement, dock);
-    assert.ok(all.compareDocumentPosition(proxy) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'latest-event extends to the right of the all-information button');
-    for (const pill of f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(dock) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING, 'the capsule ends the row');
-    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-orb]'), null, 'the particle orb is replaced by the approved glyph');
-    assert.deepEqual([...all.querySelectorAll('svg[data-bb-chat-ui-info-glyph] path')].map(path => path.getAttribute('d')), ['m12 3 9 5-9 5-9-5z', 'm3 13 9 5 9-5'], 'the capsule uses the same layers icon');
-    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true, 'an invisible host button keeps the capsule closed');
-    assert.equal(dock.hasAttribute('data-bb-chat-ui-info-jumping'), false);
-    assert.equal(f.shown(), 3, 'without latest-event only the 32px capsule is reserved');
-    const badge = all.querySelector<HTMLElement>('[data-bb-chat-ui-info-badge]')!;
-    assert.equal(badge.textContent, `+${f.folded()}`, 'the badge counts folded pills');
-    assert.equal(badge.hidden, false);
-    assert.equal(f.jump.hasAttribute('data-bb-chat-ui-info-jump-source'), true, 'the host button stays mounted for its own scroll logic');
-    assert.equal(f.dom.window.getComputedStyle(f.jump).visibility, 'hidden');
-    f.jump.classList.remove('invisible'); await f.tick();
-    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), false);
-    assert.ok(dock.hasAttribute('data-bb-chat-ui-info-jumping'));
-    assert.equal(f.shown(), 2, 'the expanded capsule reserves another 32px');
-    assert.equal(badge.textContent, `+${f.folded()}`);
-    proxy.click();
-    assert.equal(f.jumps(), 1, 'the capsule forwards to the host scroll action');
-    f.jump.classList.add('invisible'); await f.tick();
-    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true); assert.equal(f.shown(), 3);
-    f.setWidth(2000); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
-    assert.equal(f.folded(), 0); assert.equal(badge.hidden, true, 'nothing folded leaves only the glyph');
-  } finally { stop(); }
-  assert.equal(f.jump.hasAttribute('data-bb-chat-ui-info-jump-source'), false, 'unload restores the host button');
-  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'), null);
-  f.dom.window.close();
+    const bar=f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
+    const all=f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-all]')!;
+    const proxy=f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-jump]')!;
+    assert.equal(all.parentElement!.parentElement,bar);assert.equal(proxy.parentElement,bar);
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'),null);
+    assert.notEqual(f.dom.window.getComputedStyle(all.parentElement!).marginLeft,'auto');
+    assert.equal(f.dom.window.getComputedStyle(proxy).right,'0px');
+    for(const pill of f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(all)&f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'),true);
+    assert.equal(f.shown(),2,'the avatar stack reserves its four overlapping circles');
+    assert.equal(all.querySelector('[data-bb-chat-ui-info-count]')!.textContent,`+${15-f.shown()-3}`);
+    f.jump.classList.remove('invisible');await f.tick();
+    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'),false);
+    assert.equal(f.shown(),1,'the standalone Latest reserves another 32px plus an 8px gap');
+    proxy.click();assert.equal(f.jumps(),1);
+    f.jump.classList.add('invisible');await f.tick();assert.equal(f.shown(),2);
+    f.setWidth(2000);f.dom.window.dispatchEvent(new f.dom.window.Event('resize'));await f.tick();
+    assert.equal(f.folded(),0);assert.equal(all.hidden,false,'inactive families remain in the overflow circle');
+  } finally {stop();f.dom.window.close();}
+});
+test("a phone keeps centered Latest beside an independent information stack", async () => {
+ const f=jumpFixture();markDevice(f.document,'phone');const stop=injectComposerInfo(f.document);
+ try{const bar=f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
+ assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'),'center');
+ assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'),null);
+ f.jump.classList.remove('invisible');await f.tick();
+ const jump=f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-jump]')!;
+ assert.equal(jump.getAttribute('data-bb-chat-ui-info-jump-off'),null);jump.click();assert.equal(f.jumps(),1);
+ }finally{stop();f.dom.window.close();}
 });
 
-test("a phone row pins the all-information button right and floats a latest-event chip above the row", async () => {
-  const f = jumpFixture({ infoButtonLayout:"오른쪽 캡슐" });
-  const marker = markDevice(f.document, "phone", { viewport:"wide", orientation:"landscape" });
-  const stop = injectComposerInfo(f.document);
-  try {
-    const bar = f.document.querySelector('[data-bb-chat-ui-info-bar]')!;
-    assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'), 'center');
-    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'), null);
-    const all = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-all]')!;
-    const proxy = f.document.querySelector<HTMLButtonElement>('[data-bb-chat-ui-info-jump]')!;
-    assert.equal(all.parentElement, bar); assert.equal(proxy.parentElement, bar);
-    for (const pill of f.document.querySelectorAll('[data-bb-chat-ui-info-trigger]')) assert.ok(pill.compareDocumentPosition(all) & f.dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
-    assert.deepEqual([...all.querySelectorAll('svg[data-bb-chat-ui-info-glyph] path')].map(path => path.getAttribute('d')), ['m12 3 9 5-9 5-9-5z', 'm3 13 9 5 9-5']);
-    const glyph = all.querySelector('svg[data-bb-chat-ui-info-glyph]');
-    assert.equal(proxy.querySelector('[data-bb-chat-ui-info-jump-label]')!.textContent, 'Latest');
-    assert.deepEqual([...proxy.querySelectorAll('svg path')].map(path => path.getAttribute('d')), ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'], 'the chip points down to a bottom line');
-    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true);
-    assert.equal(f.shown(), 2, 'a folded count widens the button by 8px before fitting');
-    assert.ok(all.hasAttribute('data-bb-chat-ui-info-folded'));
-    assert.equal(all.querySelector('[data-bb-chat-ui-info-count]')!.textContent, `+${f.folded()}`);
-    f.jump.classList.remove('invisible'); await f.tick();
-    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), false);
-    assert.equal(f.shown(), 2, 'the chip above the row never takes pill width');
-    f.click('[data-bb-chat-ui-info-all]');
-    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), true, 'an open popover covers the chip area, so the chip steps aside');
-    f.click('[data-bb-chat-ui-info-all]');
-    assert.equal(proxy.hasAttribute('data-bb-chat-ui-info-jump-off'), false);
-    proxy.click(); assert.equal(f.jumps(), 1);
-    f.setWidth(2000); f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); await f.tick();
-    assert.equal(all.hasAttribute('data-bb-chat-ui-info-folded'), false);
-    marker.setAttribute("data-bb-chat-ui-device", "desktop");
-    marker.setAttribute("data-bb-chat-ui-viewport", "narrow");
-    await f.tick();
-    const dock = f.document.querySelector('[data-bb-chat-ui-info-dock]')!;
-    assert.ok(dock, 'a device change applies to the open composer');
-    assert.equal(all.querySelector('svg[data-bb-chat-ui-info-glyph]'), glyph, 'switching layouts keeps one icon');
-    assert.equal(all.parentElement, dock); assert.equal(proxy.parentElement, dock);
-    assert.equal(bar.getAttribute('data-bb-chat-ui-info-layout'), 'dock');
-    marker.setAttribute("data-bb-chat-ui-device", "phone");
-    await f.tick();
-    assert.equal(all.parentElement, bar);
-    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-dock]'), null);
-  } finally { stop(); f.dom.window.close(); }
-});
 
 test("read-only rows and input requests leave the host latest-event button unmanaged", async () => {
   const f = jumpFixture();
@@ -4391,7 +4344,7 @@ test("read-only rows and input requests leave the host latest-event button unman
     f.document.querySelector('.space-y-2')!.insertAdjacentHTML('beforeend', '<section aria-label="Thread history"><div aria-label="Archived thread"></div></section>');
     await f.tick();
     assert.equal(f.jump.hasAttribute('data-bb-chat-ui-info-jump-source'), false, 'the full-width state does not hide the host scroll button');
-    assert.equal(f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-dock]')!.hidden, true);
+    assert.equal(f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-all]')!.hidden, true);
   } finally { stop(); f.dom.window.close(); }
 });
 
@@ -4403,7 +4356,7 @@ test("the Child Thread stack shows three, two or one latest avatars by the room 
   let count = 6;
   const publish = () => source.setAttribute('data-bb-chat-ui-info-children', JSON.stringify(children.slice(0, count)));
   publish();
-  // 30px circles overlap by 8px; the children pill has 7px right padding and the Diff pill is 140px.
+  // 30px circles overlap by 12px; the children pill has no extra gutter and the Diff pill is 140px.
   Object.defineProperty(f.dom.window.HTMLElement.prototype, 'offsetWidth', { configurable:true, get() {
     const key = this.getAttribute('data-bb-chat-ui-info-trigger');
     if (key === 'children') return 7 + 30 + 22 * (this.querySelectorAll('[data-bb-chat-ui-info-avatar], [data-bb-chat-ui-info-avatar-more]').length - 1);
@@ -4417,26 +4370,26 @@ test("the Child Thread stack shows three, two or one latest avatars by the room 
   try {
     await resize(400);
     assert.deepEqual(shown(), ['child-3','child-4','child-5']); assert.equal(more(), '+3');
-    await resize(280);
+    await resize(342);
     assert.deepEqual(shown(), ['child-4','child-5'], 'a narrower row keeps the two latest avatars');
     assert.equal(more(), '+4'); assert.equal(pill().hidden, false);
-    await resize(255);
+    await resize(321);
     assert.deepEqual(shown(), ['child-5']); assert.equal(more(), '+5');
     assert.equal(f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-trigger="diff"]')!.hidden, false, 'Code Diff stays beside the shortened stack');
     assert.match(pill().getAttribute('aria-label') ?? '', /6개/, 'the label keeps the full child count');
     count = 7; publish(); await f.tick();
     assert.deepEqual(shown(), ['child-6']); assert.equal(more(), '+6', 'new data keeps the current room limit');
-    await resize(291);
-    assert.equal(shown().length, 3, 'exact room returns all three');
+    await resize(363);
+    assert.equal(shown().length, 3, 'room returns all three before Latest appears');
     f.jump.classList.remove('invisible'); await f.tick();
-    assert.deepEqual(shown(), ['child-6'], 'the expanded capsule takes room from the stack first');
+    assert.deepEqual(shown(), ['child-6'], 'the standalone Latest takes room from the stack first');
     assert.equal(more(), '+6');
     f.jump.classList.add('invisible'); await f.tick();
     assert.equal(shown().length, 3); assert.equal(more(), '+4');
-    count = 2; publish(); await resize(255);
+    count = 2; publish(); await resize(321);
     assert.deepEqual(shown(), ['child-0','child-1'], 'two faces take the same room as one face and +1');
     assert.equal(more(), null, 'no overflow circle when every child is shown');
-    await resize(200);
+    await resize(140);
     assert.equal(pill().hidden, true, 'without room even for one avatar the stack folds into the menu');
   } finally { stop(); f.dom.window.close(); }
 });
@@ -4510,7 +4463,7 @@ test("pressing a pill squashes and pops it without moving its neighbours", async
       assert.equal(removed.cancelled, true, `${device}: removing the pill cancels its held press`);
       const all = f.document.querySelector<HTMLElement>('[data-bb-chat-ui-info-all]')!;
       point(all, 'pointerdown');
-      const slot = device === "desktop" ? f.document.querySelector('[data-bb-chat-ui-info-dock]') : all;
+      const slot = all;
       assert.equal(presses().at(-1)!.node, slot, 'the all-information control presses as one visible object');
       stop();
       assert.ok(presses().every(record => record.cancelled), 'unload cancels presses');
@@ -4518,23 +4471,17 @@ test("pressing a pill squashes and pops it without moving its neighbours", async
   }
 });
 
-test("latest-event appears and leaves with a longer eased transition in both layouts", () => {
+test("right-edge Latest keeps its eased entrance and exit", () => {
   const rule = (selector:string) => composerInfoCss.split('\n').find(line => line.startsWith(`${selector} {`)) ?? '';
   const timing = (css:string, property:string) => {
     const match = css.match(new RegExp(`${property} (\\d+)ms(?: (?:[a-z-]+\\([^)]*\\)|[a-z-]+))?(?: (\\d+)ms)?`));
     return { duration:Number(match?.[1] ?? 0), delay:Number(match?.[2] ?? 0) };
   };
   const end = (css:string) => Math.max(...['width','opacity','translate','scale'].map(property => { const t = timing(css, property); return t.duration + t.delay; }));
-  const dock = '[data-bb-chat-ui-info-dock] > [data-bb-chat-ui-info-jump]';
-  const center = '[data-bb-chat-ui-info-bar][data-bb-chat-ui-info-layout="center"] > [data-bb-chat-ui-info-jump]';
-  assert.ok(timing(rule(dock), 'width').duration >= 400, 'the capsule opens slowly enough to read');
-  assert.ok(timing(rule(`${dock}[data-bb-chat-ui-info-jump-off]`), 'width').duration >= 320, 'and closes without snapping');
-  assert.ok(timing(rule(`${dock}[data-bb-chat-ui-info-jump-off]`), 'width').delay > 0, 'the arrow fades before the capsule narrows');
-  assert.ok(timing(rule('[data-bb-chat-ui-info-dock-sep]'), 'width').duration >= 400, 'the divider follows the capsule');
-  assert.match(rule(`${dock}[data-bb-chat-ui-info-jump-off] svg`), /scale:\.6/, 'the arrow shrinks inside the closing capsule');
-  for (const property of ['translate','scale']) assert.ok(timing(rule(center), property).duration >= 400, `the chip ${property} eases in`);
-  assert.match(rule(`${center}[data-bb-chat-ui-info-jump-off]`), /scale:\.92/, 'the chip grows from slightly smaller');
-  for (const selector of [dock, center]) {
+  const dock = '[data-bb-chat-ui-info-bar][data-bb-chat-ui-info-layout="dock"] > [data-bb-chat-ui-info-jump]';
+  for(const property of ['translate','scale']) assert.ok(timing(rule(dock),property).duration>=400,'the standalone right Latest keeps its eased entrance');
+  assert.match(rule(`${dock}[data-bb-chat-ui-info-jump-off]`),/scale:\.92/,'Latest shrinks gently on exit');
+  for (const selector of [dock]) {
     const hidden = rule(`${selector}[data-bb-chat-ui-info-jump-off]`);
     const visibility = Number(hidden.match(/visibility 0s (\d+)ms/)?.[1] ?? 0);
     assert.ok(visibility >= end(hidden), `${selector}: it stays visible until the exit finishes`);
@@ -4698,4 +4645,23 @@ test("Parent popover hides the native sentence, person icon, and Diff without mo
     assert.equal(card.innerHTML, alone);
     assert.equal(card.parentElement, sectionParent);
   } finally { stop(); f.dom.window.close(); }
+});
+
+
+
+test('information circles open their own details and disabled families disappear from the stack',async()=>{
+ const f=fixture();const source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+ source.setAttribute('data-bb-chat-ui-info-settings',JSON.stringify(Object.fromEntries(infoKinds.map(k=>['show'+k.key[0].toUpperCase()+k.key.slice(1),'목록에만 표시']))));
+ const stop=injectComposerInfo(f.document);
+ try {
+  const circles=()=>[...f.document.querySelectorAll('[data-bb-chat-ui-info-stack-kind]')];
+  assert.equal(circles().length,3,'active and empty families share three icon slots');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-count]')!.textContent,'+12');
+  const key=circles()[0].getAttribute('data-bb-chat-ui-info-stack-kind')!;
+  (circles()[0] as HTMLButtonElement).click();
+  assert.ok(f.document.querySelector(`[data-bb-chat-ui-info-open="${key}"]`)||f.document.querySelector('[data-bb-chat-ui-info-menu]'),'a circle opens that family directly');
+  const settings=JSON.parse(source.getAttribute('data-bb-chat-ui-info-settings')!);settings['show'+key[0].toUpperCase()+key.slice(1)]='끄기';source.setAttribute('data-bb-chat-ui-info-settings',JSON.stringify(settings));await f.tick();
+  assert.equal(f.document.querySelector(`[data-bb-chat-ui-info-stack-kind="${key}"]`),null);
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-count]')!.textContent,'+11');
+ } finally {stop();f.dom.window.close();}
 });
