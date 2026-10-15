@@ -87,7 +87,12 @@ test('detaching an animating composer cancels its frame, timer, and radius liste
     scroller.remove();await f.tick();
     assert.equal(f.frames.size,0,'pin RAF is cancelled');assert.equal(f.timers.size,0,'height finish timer is cancelled');
     assert.equal(listeners.size,0,'radius listener is removed even if animationend never fires');
+    assert.equal(composer.style.height,'','a cancelled finish timer cannot leave an inline height on reattachment');
+    assert.equal(composer.style.animation,'','a detached radius animation is cleared before reattachment');
     composer.style.animation='';composer.removeAttribute('data-promptbox-compact');await f.tick();
     assert.equal(composer.style.animation,'','a detached composer cannot restart plugin motion');
+    f.document.body.append(scroller);await f.tick();assert.equal(f.watchers(composer),1);
+    composer.setAttribute('data-promptbox-compact','');await f.tick();
+    assert.match(composer.style.animation,/bb-chat-ui-composer-radius/,'reattached DOM starts new motion normally');
   } finally {stop();f.cleanup();}
 });

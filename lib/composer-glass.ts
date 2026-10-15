@@ -837,10 +837,14 @@ export function injectComposerGlass(document: Document): () => void {
     });
     radiusWatches.set(composer, () => {
       changes.disconnect();
-      if (radiusEnd) composer.removeEventListener("animationend", radiusEnd);
+      if (radiusEnd) {
+        composer.removeEventListener("animationend", radiusEnd);
+        if (composer.style.animation.includes("bb-chat-ui-composer-radius")) composer.style.animation = "";
+      }
       radiusEnd = null;
       stopFinish();
-      stopPin();
+      if (motion) finishMotion();
+      else stopPin();
       animating.delete(composer);
     });
   };
