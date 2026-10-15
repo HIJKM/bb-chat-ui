@@ -173,6 +173,34 @@ test("unrelated chat mutations do not recalculate composer info, while composer 
   } finally { stop(); f.dom.window.close(); }
 });
 
+test("rendered info controls do not feed their own mutations back into fit", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+  let measurements = 0;
+  stack.getBoundingClientRect = () => { measurements++; return { width:900 } as DOMRect; };
+  const stop = injectComposerInfo(f.document);
+  try {
+    await f.tick(); await f.tick(); measurements = 0;
+    const count = stack.querySelector('[data-bb-chat-ui-info-count]')!;
+    const all = stack.querySelector('[data-bb-chat-ui-info-all]')!;
+    count.textContent = '+12';
+    all.setAttribute('aria-label', '전체 정보 · 펼침 중');
+    all.setAttribute('title', '펼침 중');
+    stack.querySelector('[data-bb-chat-ui-info-trigger="goal"]')!.setAttribute('aria-expanded', 'true');
+    await f.tick(); await f.tick();
+    assert.equal(measurements, 0, 'stack fan counts and control labels are rendered output, not new layout input');
+
+    stack.querySelector('section[aria-label="Queued messages"] header button')!.textContent = '3';
+    await f.tick();
+    assert.ok(measurements > 0, 'native queue changes still update and fit');
+    assert.match(stack.querySelector('[data-bb-chat-ui-info-trigger="queue"]')!.getAttribute('aria-label')!, /3/);
+    f.click('[data-bb-chat-ui-info-trigger="goal"]'); await f.tick();
+    assert.equal(stack.querySelector('section[aria-label="Goal"]')!.getAttribute('data-bb-chat-ui-info-open'), 'goal', 'native popover opening remains observable');
+    f.click('[data-bb-chat-ui-info-dismiss]'); await f.tick();
+    assert.equal(stack.querySelector('section[aria-label="Goal"]')!.hasAttribute('data-bb-chat-ui-info-open'), false);
+  } finally { stop(); f.dom.window.close(); }
+});
+
 test("fitting reveals all candidate pills before reading their widths", async () => {
   const f = fixture();
   const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
@@ -1806,6 +1834,20 @@ test("child avatars use host provider artwork, including late and updated logos,
     assert.ok(avatars()[0].querySelector('[data-provider]')?.getAttribute('style')?.includes('/codex-updated.svg'),'provider metadata refresh updates a same-id avatar');
     assert.equal(avatars()[0].hasAttribute('data-new'),false,'artwork arrival does not replay the new-child droplet');
     assert.equal(source.querySelectorAll('[data-bb-chat-ui-info-child-icon]').length,2,'the SDK artwork remains on its original parent');
+  } finally {stop();f.dom.window.close();}
+});
+
+test("provider artwork style changes are observed as source input without a control mutation", async () => {
+  const f=fixture(),source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  source.setAttribute('data-bb-chat-ui-info-children',JSON.stringify([{id:'child',title:'Review',providerId:'codex',state:'run'}]));
+  source.insertAdjacentHTML('beforeend','<span data-bb-chat-ui-info-child-icon="child"><span style="mask-image:url(/first.svg)"></span></span>');
+  const stop=injectComposerInfo(f.document);
+  try {
+    await f.tick(); await f.tick();
+    source.querySelector('[data-bb-chat-ui-info-child-icon] span')!.setAttribute('style','mask-image:url(/updated.svg)');
+    await f.tick();
+    const artwork=f.document.querySelector('[data-bb-chat-ui-info-avatar] span[style]');
+    assert.match(artwork?.getAttribute('style') ?? '', /updated\.svg/);
   } finally {stop();f.dom.window.close();}
 });
 

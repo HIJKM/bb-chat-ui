@@ -422,6 +422,8 @@ export function injectComposerInfo(document: Document): () => void {
     let jumpSource: HTMLButtonElement | null = null;
     let jumpVisible = false;
     const jumpWatch = new view!.MutationObserver(() => schedule());
+    let watchedSource: Element | null = null;
+    const sourceWatch = new view!.MutationObserver(() => schedule());
     const syncJump = () => {
       const host = readOnlyLabel === null && !bar.hidden ? stack.closest("[data-scroll-footer]")?.querySelector<HTMLButtonElement>(HOST_JUMP) ?? null : null;
       if (host !== jumpSource) {
@@ -1858,6 +1860,12 @@ export function injectComposerInfo(document: Document): () => void {
     const sync = () => {
       pruneDisconnected();
       const source = stack.querySelector(`[${SOURCE}]`);
+      if (source !== watchedSource) {
+        sourceWatch.disconnect();
+        watchedSource = source;
+        // Provider artwork can change only its mask/class on the hidden SDK source.
+        if (source) sourceWatch.observe(source, { attributes:true, subtree:true });
+      }
       if (!source) {
         stack.toggleAttribute(`${MARK}-request`, stack.querySelector(REQUEST) !== null);
         if (!suspended) {
@@ -2131,6 +2139,7 @@ export function injectComposerInfo(document: Document): () => void {
       resize?.disconnect();
       edgeResize?.disconnect();
       jumpWatch.disconnect();
+      sourceWatch.disconnect();
       jumpSource?.removeAttribute(`${MARK}-jump-source`);
       stack.removeEventListener("scroll", updateScrollHints, true);
       stack.removeEventListener("animationend", updateScrollHints, true);
@@ -2184,6 +2193,9 @@ export function injectComposerInfo(document: Document): () => void {
       (node.matches(discovery) || !!node.querySelector(discovery));
     if (records.some(record => {
       const target = record.target instanceof view.Element ? record.target : record.target.parentElement;
+      // Counts, labels and popover markup in our bar are output. Re-reading them
+      // would turn each fan/count animation step into another full sync and fit.
+      if (target?.closest(`[${MARK}-bar]`)) return false;
       // Only changed subtrees are searched: searching body would always find an existing composer.
       return record.attributeName === "data-bb-chat-ui-device" || !!target?.closest(`[data-promptbox-shell], ${HOST_JUMP}`) ||
         Array.from(record.addedNodes).some(discoversInfo) || Array.from(record.removedNodes).some(discoversInfo);
