@@ -487,6 +487,24 @@ export function injectComposerInfo(document: Document): () => void {
     };
     let signature = "";
     let catalogCount = 0;
+    let stackMore = 0;
+    const stackCountTimers = new Map<HTMLElement, number>();
+    const renderStackCount = () => {
+      const pending = Array.from(stackCountTimers.keys()).filter(node => node.parentElement === iconStack).length;
+      const more = stackMore + pending;
+      const count = `+${more}`;
+      if (foldedCount.textContent !== count) foldedCount.textContent = count;
+      const label = `전체 정보 ${catalogCount}개 · 더 보기 ${more}개`;
+      if (orb.getAttribute("aria-label") !== label) { orb.setAttribute("aria-label", label); orb.title = label; }
+    };
+    const finishStackCount = (node:HTMLElement, timer:number | undefined) => {
+      if (timer === undefined || stackCountTimers.get(node) !== timer) return;
+      view!.clearTimeout(timer); stackCountTimers.delete(node); renderStackCount();
+    };
+    const cancelStackCount = () => {
+      for (const timer of stackCountTimers.values()) view!.clearTimeout(timer);
+      stackCountTimers.clear(); renderStackCount();
+    };
     let avatarCap = 3;
     let childTotal = 0;
     let childStates = new Map<string, ChildState>();
@@ -1603,10 +1621,8 @@ export function injectComposerInfo(document: Document): () => void {
         if(node.getAttribute("aria-expanded")!==String(active===key))node.setAttribute("aria-expanded",String(active===key));node.toggleAttribute(`${MARK}-active`,activeKinds.has(key));node.style.zIndex=String(index+1);
         const at=iconStack.children[index];if(at!==node) iconStack.insertBefore(node,at??orb);
       });
-      const count=`+${folded.more}`;if(foldedCount.textContent!==count)foldedCount.textContent=count;
+      stackMore = folded.more; renderStackCount();
       orb.hidden=folded.more===0 || readOnlyLabel!==null;orb.toggleAttribute(`${MARK}-active`,folded.moreActive);orb.style.zIndex="4";
-      const label=`전체 정보 ${catalogCount}개 · 더 보기 ${folded.more}개`;
-      if (orb.getAttribute("aria-label")!==label){orb.setAttribute("aria-label",label);orb.title=label;}
       iconStack.hidden=readOnlyLabel!==null || folded.width===0;
       for (const [key, button] of buttons) {
         if (visible.has(key)) cancelExit(key);
@@ -1631,6 +1647,7 @@ export function injectComposerInfo(document: Document): () => void {
         positions.set(button,after);
       }
       for (const button of positions.keys()) if (!moving.includes(button as HTMLButtonElement)) { positions.delete(button); moves.get(button)?.cancel(); moves.delete(button); }
+      if (bar.hidden || reduced()) cancelStackCount();
       if (bar.hidden) return;
       let entryDelay = 0;
       const tailFans: Animation[] = [];
@@ -1655,8 +1672,17 @@ export function injectComposerInfo(document: Document): () => void {
               { translate:`${-circle.offsetLeft}px 0`, opacity:0 },
               { translate:"0px 0", opacity:1 },
             ], { duration:280, delay:entryDelay + 460 + index * 45, fill:"backwards", easing:"cubic-bezier(.22,1,.36,1)" });
-            if (fan) { tailFans.push(fan); entryAnimations.add(fan); fan.onfinish = fan.oncancel = () => entryAnimations.delete(fan); }
+            if (fan) {
+              tailFans.push(fan); entryAnimations.add(fan);
+              let timer:number | undefined;
+              if (!orb.hidden) {
+                timer = view!.setTimeout(() => finishStackCount(circle, timer), entryDelay + 460 + index * 45);
+                stackCountTimers.set(circle, timer);
+              }
+              fan.onfinish = fan.oncancel = () => { entryAnimations.delete(fan); finishStackCount(circle, timer); };
+            }
           }
+          renderStackCount();
           button = anchor;
         }
         if (button.querySelector(`[${MARK}-avatars]`)) {
@@ -1842,7 +1868,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (!source) return;
       const nextThreadId = source.getAttribute(`${MARK}-thread`);
       if (nextThreadId !== threadId) {
-        cancelQueueMotion(); cancelOwnedMotion(); queueSnapshot = null;
+        cancelStackCount(); cancelQueueMotion(); cancelOwnedMotion(); queueSnapshot = null;
         cancelExit(); positions.clear(); moves.clear();
         close(false, true);
         for (const animation of entryAnimations) animation.cancel();
@@ -2086,6 +2112,7 @@ export function injectComposerInfo(document: Document): () => void {
       document.removeEventListener("pointercancel", cancelPress);
       view!.removeEventListener("blur", cancelPress);
       releaseSecrets();
+      cancelStackCount();
       clearTitleIcon();
       cancelQueueMotion();
       cancelOwnedMotion();

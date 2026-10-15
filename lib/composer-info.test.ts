@@ -4759,3 +4759,70 @@ test('information circles open their own details and disabled families disappear
   }finally{stop();f.dom.window.close();}
  }
  });
+
+test('the initial +N count includes icons until each one starts unfolding',async()=>{
+ const f=fixture(),source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+ source.setAttribute('data-bb-chat-ui-info-settings',JSON.stringify(Object.fromEntries(infoKinds.map(k=>[k.setting,['diff','children'].includes(k.key)?'상단 표시':'목록에만 표시']))));
+ const records:ReturnType<ReturnType<typeof stubAnimations>>[]=[];const animate=stubAnimations(f.dom.window);
+ f.dom.window.HTMLElement.prototype.animate=function(frames,options){const r=animate.call(this,frames,options);records.push(r);return r.animation;};
+ const timers=new Map<number,{fn:()=>void;delay:number}>();let serial=0;
+ f.dom.window.setTimeout=((fn:()=>void,delay:number)=>{const id=++serial;timers.set(id,{fn,delay});return id;}) as typeof f.dom.window.setTimeout;
+ f.dom.window.clearTimeout=(id:number)=>{timers.delete(id);};
+ const stop=injectComposerInfo(f.document);
+ try{
+  const count=()=>f.document.querySelector('[data-bb-chat-ui-info-count]')!.textContent;
+  assert.equal(count(),'+13','one collapsed circle initially represents all thirteen hidden families');
+  f.dom.window.dispatchEvent(new f.dom.window.Event('resize'));await new Promise(resolve=>setTimeout(resolve,40));
+  assert.equal(count(),'+13','routine fitting must not jump to the final count');
+  const fans=records.filter(r=>r.node.hasAttribute('data-bb-chat-ui-info-stack-kind')&&r.options.duration===280&&r.frames[0].opacity===0);
+  const delays=fans.map(r=>Number(r.options.delay));assert.equal(delays.length,3);
+  const steps=delays.map(delay=>[...timers.entries()].find(([,timer])=>timer.delay===delay));
+  assert.ok(steps.every(Boolean),'count steps follow the three fan starts');
+  for(const [index,step]of steps.entries()){
+   const [id,timer]=step!;timers.delete(id);timer.fn();
+   assert.equal(count(),`+${12-index}`);
+   assert.match(f.document.querySelector('[data-bb-chat-ui-info-all]')!.getAttribute('aria-label')!,new RegExp(`더 보기 ${12-index}개`));
+  }
+  f.dom.window.dispatchEvent(new f.dom.window.Event('resize'));await new Promise(resolve=>setTimeout(resolve,40));
+  assert.equal(count(),'+10','later layout passes retain the actual remainder');
+ }finally{stop();assert.equal(timers.size,0,'unload clears deferred count updates');f.dom.window.close();}
+});
+
+
+test('unfinished stack count steps stop on unload and reduced motion',async()=>{
+ for(const action of ['unload','reduce']){
+  const f=fixture();let reduced=false;
+  Object.defineProperty(f.dom.window,'matchMedia',{value:()=>({matches:reduced})});
+  const animate=stubAnimations(f.dom.window);
+  f.dom.window.HTMLElement.prototype.animate=function(frames,options){return animate.call(this,frames,options).animation;};
+  const timers=new Map<number,()=>void>();let serial=0;
+  f.dom.window.setTimeout=((fn:()=>void)=>{const id=++serial;timers.set(id,fn);return id;}) as typeof f.dom.window.setTimeout;
+  f.dom.window.clearTimeout=(id:number)=>{timers.delete(id);};
+  const stop=injectComposerInfo(f.document);
+  try{
+   assert.equal(timers.size,3,'the initial count has three deferred icon steps');
+   if(action==='unload')stop();
+   else{reduced=true;f.dom.window.dispatchEvent(new f.dom.window.Event('resize'));await new Promise(resolve=>setTimeout(resolve,40));}
+   assert.equal(timers.size,0,'no deferred count changes survive cancellation');
+  }finally{stop();f.dom.window.close();}
+ }
+});
+
+test('late cancellation of a previous thread fan cannot finish the new count steps',async()=>{
+ const f=fixture(),source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+ source.setAttribute('data-bb-chat-ui-info-settings',JSON.stringify(Object.fromEntries(infoKinds.map(k=>[k.setting,['diff','children'].includes(k.key)?'상단 표시':'목록에만 표시']))));
+ const late:(()=>void)[]=[];const animate=stubAnimations(f.dom.window);
+ f.dom.window.HTMLElement.prototype.animate=function(frames,options){const r=animate.call(this,frames,options);r.animation.cancel=()=>{r.cancelled=true;const handler=r.animation.oncancel;if(handler)late.push(()=>handler.call(r.animation,new f.dom.window.Event('cancel') as AnimationPlaybackEvent));};return r.animation;};
+ const timers=new Map<number,()=>void>();let serial=0;
+ f.dom.window.setTimeout=((fn:()=>void)=>{const id=++serial;timers.set(id,fn);return id;}) as typeof f.dom.window.setTimeout;
+ f.dom.window.clearTimeout=(id:number)=>{timers.delete(id);};
+ const stop=injectComposerInfo(f.document);
+ try{
+  source.setAttribute('data-bb-chat-ui-info-thread','new-count-thread');await new Promise(resolve=>setTimeout(resolve,40));
+  assert.equal(timers.size,3);assert.equal(f.document.querySelector('[data-bb-chat-ui-info-count]')!.textContent,'+13');
+  assert.ok(late.length,'WAAPI cancellation events may arrive after the new fan is scheduled');
+  for(const callback of late.splice(0))callback();
+  assert.equal(timers.size,3,'old animation callbacks must leave the new timers intact');
+  assert.equal(f.document.querySelector('[data-bb-chat-ui-info-count]')!.textContent,'+13');
+ }finally{stop();f.dom.window.close();}
+});
