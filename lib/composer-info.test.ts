@@ -65,6 +65,54 @@ function stubAnimations(window: { HTMLElement: { prototype: HTMLElement & { anim
   };
 }
 
+test("unrelated chat mutations do not recalculate composer info, while composer changes still do", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+  let measurements = 0;
+  stack.getBoundingClientRect = () => { measurements++; return { width:900 } as DOMRect; };
+  const chat = f.document.createElement('article');
+  chat.textContent = 'stream'; f.document.body.prepend(chat);
+  const stop = injectComposerInfo(f.document);
+  try {
+    await f.tick(); await f.tick(); measurements = 0;
+    chat.firstChild!.textContent = 'stream update';
+    chat.title = 'unrelated title';
+    chat.append(f.document.createElement('span'));
+    f.document.body.append(f.document.createElement('aside'));
+    await f.tick();
+    assert.equal(measurements, 0, 'chat text, attributes and unrelated body children cannot trigger fit');
+    stack.querySelector('section[aria-label="Queued messages"] header button')!.textContent = '3';
+    await f.tick();
+    assert.ok(measurements > 0, 'native queue text still triggers fit');
+    assert.match(stack.querySelector('[data-bb-chat-ui-info-trigger="queue"]')!.getAttribute('aria-label')!, /3/);
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("late nested composers and device markers still trigger discovery and removal cleanup", async () => {
+  const f = fixture();
+  const shell = f.document.querySelector<HTMLElement>('[data-promptbox-shell]')!;
+  shell.remove();
+  const stop = injectComposerInfo(f.document);
+  try {
+    const wrapper = f.document.createElement('div'); wrapper.append(shell); f.document.body.append(wrapper);
+    await f.tick();
+    const stack = shell.querySelector<HTMLElement>('.grid')!;
+    assert.ok(stack.querySelector('[data-bb-chat-ui-info-bar]'));
+    let measurements = 0;
+    stack.getBoundingClientRect = () => { measurements++; return { width:900 } as DOMRect; };
+    const marker = f.document.createElement('span');
+    marker.setAttribute('data-bb-chat-ui-device', 'phone'); f.document.body.append(marker);
+    await f.tick(); assert.ok(measurements > 0);
+    measurements = 0; marker.setAttribute('data-bb-chat-ui-device', 'desktop');
+    await f.tick(); assert.ok(measurements > 0);
+    measurements = 0; marker.removeAttribute('data-bb-chat-ui-device');
+    await f.tick(); assert.ok(measurements > 0, 'device marker attribute removal also invalidates');
+    wrapper.remove(); await f.tick();
+    assert.equal(stack.hasAttribute('data-bb-chat-ui-info-stack'), false);
+    assert.equal(stack.querySelector('[data-bb-chat-ui-info-bar]'), null);
+  } finally { stop(); f.dom.window.close(); }
+});
+
 function pointer(f: ReturnType<typeof fixture>, type: 'pointerover' | 'pointerout', target: Element, relatedTarget: Element | null = null, pointerType = 'mouse') {
   const event = new f.dom.window.MouseEvent(type, { bubbles:true, relatedTarget });
   Object.defineProperty(event, 'pointerType', { value:pointerType });

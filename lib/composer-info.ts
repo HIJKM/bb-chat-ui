@@ -2166,7 +2166,17 @@ export function injectComposerInfo(document: Document): () => void {
     }
   }
   const schedule = () => { if (!frame && !disposed) frame = view.requestAnimationFrame(sync); };
-  const observer = new view.MutationObserver(schedule);
+  const discovery = `[data-promptbox-shell], [data-bb-chat-ui-device], ${HOST_JUMP}`;
+  const observer = new view.MutationObserver(records => {
+    const discoversInfo = (node: Node) => node instanceof view.Element &&
+      (node.matches(discovery) || !!node.querySelector(discovery));
+    if (records.some(record => {
+      const target = record.target instanceof view.Element ? record.target : record.target.parentElement;
+      // Only changed subtrees are searched: searching body would always find an existing composer.
+      return record.attributeName === "data-bb-chat-ui-device" || !!target?.closest(`[data-promptbox-shell], ${HOST_JUMP}`) ||
+        Array.from(record.addedNodes).some(discoversInfo) || Array.from(record.removedNodes).some(discoversInfo);
+    })) schedule();
+  });
   observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-parent`, `${MARK}-children`, `${MARK}-child-providers`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "data-bb-chat-ui-device", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
