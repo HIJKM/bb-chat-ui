@@ -1,7 +1,8 @@
 const CARD = "data-bb-chat-ui-subagent-card";
-const LINE = /^(Running|Ran|Failed|Interrupted) subagent:\s+(\S.*)$/;
-const COUNT = /^Running (\d+) subagents?$/;
-const STATUS = { Running: "running", Ran: "done", Failed: "failed", Interrupted: "interrupted" } as const;
+// Live rows use the presentation label "Running subagent" with no colon. The older
+// activity copy "Running subagent:" remains valid.
+const LINE = /^(?:Running|Launching) subagent\b:?\s*(.*)$/;
+const COUNT = /(?:Running|Launching) (\d+) subagents?\b/;
 
 export interface SubagentHit {
     status: "running" | "done" | "failed" | "interrupted";
@@ -9,8 +10,15 @@ export interface SubagentHit {
     node: HTMLElement | null;
 }
 
-function plain(node: HTMLElement): string {
-    return (node.textContent ?? "").replace(/\s+/g, " ").trim();
+function plain(value: string | null | undefined): string {
+    return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function rowText(node: HTMLElement): string {
+    const title = plain(node.getAttribute("title"));
+    if (title) return title;
+    const text = plain(node.textContent);
+    return text.length <= 240 ? text : "";
 }
 
 function skipped(node: HTMLElement): boolean {
@@ -23,11 +31,11 @@ export function readSubagentLines(root: ParentNode): SubagentHit[] {
     const counts: SubagentHit[] = [];
     for (const node of nodes) {
         if (skipped(node)) continue;
-        const text = plain(node);
-        if (text.length > 180) continue;
+        const text = rowText(node);
+        if (!text) continue;
         const line = text.match(LINE);
         if (line) {
-            hits.push({ status: STATUS[line[1] as keyof typeof STATUS], label: line[2], node });
+            hits.push({ status: "running", label: line[1] || "실행 중", node });
             continue;
         }
         const count = text.match(COUNT);
@@ -45,7 +53,7 @@ function summaryOf(hits: SubagentHit[]): string {
 
 export function syncSubagentCards(document: Document): void {
     for (const stack of Array.from(document.querySelectorAll<HTMLElement>("[data-promptbox-shell] > .grid"))) {
-        const root = stack.closest("[data-scroll-footer]")?.parentElement ?? document;
+        const root = stack.closest("[data-page-scroll-viewport]") ?? stack.closest("[data-scroll-footer]")?.parentElement ?? document;
         const hits = readSubagentLines(root);
         let card = stack.querySelector<HTMLElement>(`[${CARD}]`);
         if (!hits.length) {

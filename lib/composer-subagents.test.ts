@@ -21,17 +21,18 @@ const thread = (activity: string) => `
 
 test("running subagent lines are the innermost rows and finished lines stay out", () => {
     const { document } = page(thread(`
-        <div>Working <span>Running subagent: review the diff (explore)</span> and more</div>
-        <span>Ran subagent: old notes</span>
-        <div data-promptbox-shell><span>Running subagent: inside composer</span></div>
+        <div>Working <span title="Running subagent review the diff (explore)">Running subagent review the diff (explore) 1.2s</span> and more</div>
+        <span title="Subagent finished old notes">Subagent finished old notes</span>
+        <span>Running subagent: quoted form</span>
+        <div data-promptbox-shell><span>Running subagent inside composer</span></div>
     `));
     const hits = readSubagentLines(document.getElementById("thread")!);
-    assert.deepEqual(hits.map(hit => hit.label), ["review the diff (explore)"]);
+    assert.deepEqual(hits.map(hit => hit.label), ["review the diff (explore)", "quoted form"]);
     assert.equal(hits[0].node?.tagName, "SPAN");
 });
 
 test("a collapsed running count is used when individual lines are absent", () => {
-    const { document } = page(thread(`<div><span>Running 2 subagents</span></div>`));
+    const { document } = page(thread(`<div><span title="Explored 3 files, Running 2 subagents">Explored 3 files, Running 2 subagents</span></div>`));
     assert.deepEqual(readSubagentLines(document).map(hit => hit.label), ["2명 실행 중"]);
 });
 
