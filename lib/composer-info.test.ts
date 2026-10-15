@@ -1100,6 +1100,7 @@ test("pills use a sequential droplet entrance once, preserving avatar motion and
   ]);
   assert.deepEqual(pills()[0].frames.map(frame => frame.offset), [0,.35,.65,.82,1], 'stretch, landing squash and gentle recovery fit inside one quick entrance');
   assert.equal(pills()[0].options.duration, 460);
+  assert.ok(pills()[0].frames.every(frame => frame.opacity === undefined),'ordinary pill entrance keeps the remote opacity behavior');
   assert.deepEqual(pills().map(entry => entry.options.delay), [0,180,225,270,315,360], 'visible pills and child avatars enter from the left in 45ms steps');
   assert.ok(pills().every(entry => entry.options.fill === 'backwards'), 'delayed pills hold their starting pose until their turn');
   assert.deepEqual([...f.document.querySelectorAll<HTMLElement>('[data-bb-chat-ui-info-avatar][data-new]')].map(avatar => avatar.style.animationDelay), ['45ms','90ms','135ms']);
@@ -4713,4 +4714,48 @@ test('information circles open their own details and disabled families disappear
    assert.equal(f.dom.window.getComputedStyle(f.document.querySelector('[data-bb-chat-ui-info-bar]')!).gap,'8px');
    assert.equal(f.dom.window.getComputedStyle(f.document.querySelector('[data-bb-chat-ui-info-stack-icons]')!).position,'relative','circle offsets start at the stack, not a distant row ancestor');
   }finally{stop();f.dom.window.close();}
+ });
+
+ test('the tail fans out from its last circle after sequential pill entrances',async()=>{
+ for(const reduced of [false,true]) for(const more of [false,true]){
+  const f=fixture();
+  Object.defineProperty(f.dom.window,'matchMedia',{value:()=>({matches:reduced})});
+  if(!more) f.document.querySelector('[data-bb-chat-ui-info-settings]')!.setAttribute('data-bb-chat-ui-info-settings',JSON.stringify(Object.fromEntries(infoKinds.map(k=>[k.setting,['goal','plan','machine'].includes(k.key)?'상단 표시':'끄기']))));
+  Object.defineProperty(f.dom.window.HTMLElement.prototype,'offsetLeft',{get(){return this.parentElement?.hasAttribute('data-bb-chat-ui-info-stack-icons') ? Array.from(this.parentElement.children).indexOf(this)*18 : 0;}});
+  const records:ReturnType<ReturnType<typeof stubAnimations>>[]=[];const animate=stubAnimations(f.dom.window);
+  f.dom.window.HTMLElement.prototype.animate=function(frames,options){const r=animate.call(this,frames,options);records.push(r);return r.animation;};
+  const stop=injectComposerInfo(f.document);
+  try{
+   const group=f.document.querySelector('[data-bb-chat-ui-info-stack-icons]')!;
+   const circles=Array.from(group.children).filter(n=>!(n as HTMLElement).hidden);
+   const anchor=circles.at(-1)!;
+   const anchorEntry=records.find(r=>r.node===anchor&&r.options.duration===460);
+   const fans=()=>records.filter(r=>r.node.parentElement===group&&r.options.duration===280&&r.frames[0].opacity===0);
+   if(reduced){assert.equal(anchorEntry,undefined);assert.equal(fans().length,0);continue;}
+   assert.ok(anchorEntry,'the +N or last icon enters after the pills');
+   assert.equal(records.some(r=>r.node===group&&r.options.duration===460),false,'the whole expanded stack does not bounce together');
+   const lastPillStart=Math.max(0,...records.filter(r=>r.node.hasAttribute('data-bb-chat-ui-info-trigger')&&r.options.duration===460).map(r=>Number(r.options.delay)));
+   assert.ok(Number(anchorEntry.options.delay)>lastPillStart);
+   assert.equal(fans().length,circles.length-1);
+   const start=Number(anchorEntry.options.delay)+460;
+   for(const [i,node]of circles.slice(0,-1).entries()){
+    const fan=fans().find(r=>r.node===node)!;
+    assert.deepEqual(fan.frames.map(k=>k.translate),[`${-i*18}px 0`,'0px 0']);
+    assert.deepEqual(fan.frames.map(k=>k.opacity),[0,1]);
+    assert.equal(fan.options.delay,start+i*45,'icons open left to right and push the last circle');
+    assert.equal(fan.options.fill,'backwards');
+   }
+   const push=records.find(r=>r.node===anchor&&r.frames[0].translate!==undefined)!;
+   assert.ok(push,'the +N starts at the left edge and is pushed right');
+   assert.deepEqual(push.frames.map(k=>k.translate),[`${-(circles.length-1)*18}px 0`,'0px 0']);
+   assert.equal(push.options.delay,start);
+   const growth=records.find(r=>r.node===group&&r.frames[0].width)!;
+   assert.ok(growth,'the stack grows from one circle instead of occupying its final width immediately');
+   assert.deepEqual(growth.frames.map(k=>k.width),['32px',`${32+(circles.length-1)*18}px`]);
+   assert.equal(growth.options.delay,start);
+   const count=fans().length;await f.tick();f.dom.window.dispatchEvent(new f.dom.window.Event('resize'));await f.tick();
+   assert.equal(fans().length,count,'routine updates do not fan the stack out again');
+   stop();assert.ok(fans().every(r=>r.cancelled),'unload cancels delayed fan animations');
+  }finally{stop();f.dom.window.close();}
+ }
  });

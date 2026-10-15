@@ -1633,11 +1633,32 @@ export function injectComposerInfo(document: Document): () => void {
       for (const button of positions.keys()) if (!moving.includes(button as HTMLButtonElement)) { positions.delete(button); moves.get(button)?.cancel(); moves.delete(button); }
       if (bar.hidden) return;
       let entryDelay = 0;
-      for (const button of [...Array.from(pills.children) as HTMLElement[], slot()]) {
+      const tailFans: Animation[] = [];
+      for (let button of [...Array.from(pills.children) as HTMLElement[], slot()]) {
         const key = button === slot() ? "all" : button.getAttribute(`${MARK}-trigger`) as InfoKind;
         if (button.hidden || appeared.has(key)) continue;
         appeared.add(key);
         if (reduced()) continue;
+        if (key === "all") {
+          const circles = Array.from(iconStack.children).filter(node => !(node as HTMLElement).hidden) as HTMLElement[];
+          const anchor = circles.at(-1);
+          if (!anchor) continue;
+          // One circle starts beside the last pill; the icons open and push it right.
+          if (circles.length > 1) {
+            const options = { duration:280 + (circles.length - 2) * 45, delay:entryDelay + 460, fill:"backwards" as FillMode, easing:"cubic-bezier(.22,1,.36,1)" };
+            const growth = iconStack.animate?.([{ width:"32px" }, { width:`${iconStack.offsetWidth || 32 + (circles.length - 1) * 18}px` }], options);
+            const push = anchor.animate?.([{ translate:`${-anchor.offsetLeft}px 0` }, { translate:"0px 0" }], options);
+            for (const animation of [growth, push]) if (animation) { tailFans.push(animation); entryAnimations.add(animation); animation.onfinish = animation.oncancel = () => entryAnimations.delete(animation); }
+          }
+          for (const [index, circle] of circles.slice(0, -1).entries()) {
+            const fan = circle.animate?.([
+              { translate:`${-circle.offsetLeft}px 0`, opacity:0 },
+              { translate:"0px 0", opacity:1 },
+            ], { duration:280, delay:entryDelay + 460 + index * 45, fill:"backwards", easing:"cubic-bezier(.22,1,.36,1)" });
+            if (fan) { tailFans.push(fan); entryAnimations.add(fan); fan.onfinish = fan.oncancel = () => entryAnimations.delete(fan); }
+          }
+          button = anchor;
+        }
         if (button.querySelector(`[${MARK}-avatars]`)) {
           const avatars = button.querySelectorAll<HTMLElement>(`[${MARK}-avatar][data-new]`);
           avatars.forEach((avatar, index) => { avatar.style.animationDelay = `${entryDelay + index * 45}ms`; });
@@ -1654,8 +1675,9 @@ export function injectComposerInfo(document: Document): () => void {
         entryDelay += 45;
         if (animation) {
           entering.add(button);
+          if (key === "all") entering.add(iconStack);
           entryAnimations.add(animation);
-          animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); entering.delete(button); };
+          animation.onfinish = animation.oncancel = () => { entryAnimations.delete(animation); entering.delete(button); if (key === "all") entering.delete(iconStack); };
         }
       }
     };
