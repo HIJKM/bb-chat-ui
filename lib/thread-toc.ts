@@ -118,7 +118,17 @@ export function injectThreadToc(document: Document): () => void {
       if (node instanceof HTMLElement) syncHoveredMessage(node);
     }
   };
-  const observer = new MutationObserver(paint);
+  // Only TOC markup changes need a repaint; transcript batches (scroll, streaming) are skipped.
+  const tocNode = (node: Node) => node.nodeType === 1 &&
+    ((node as Element).matches("[data-thread-toc]") || (node as Element).querySelector("[data-thread-toc]") !== null);
+  const observer = new MutationObserver((records) => {
+    if (!records?.length || records.some((record) => {
+      const target = record.target.nodeType === 1 ? record.target as Element : record.target.parentElement;
+      if (target?.closest("[data-thread-toc]")) return true;
+      if (target?.closest("[data-timeline-items]")) return false;
+      return Array.from(record.addedNodes).some(tocNode) || Array.from(record.removedNodes).some(tocNode);
+    })) paint();
+  });
   observer.observe(document.body, { childList: true, subtree: true });
   paint();
 
