@@ -857,6 +857,14 @@ export function injectComposerGlass(document: Document): () => void {
     }
   };
 
+  // Layout reads inside mutation callbacks force a full style+layout per React commit.
+  // Coalesce every trigger into one frame-aligned sync instead.
+  let syncFrame = 0;
+  const scheduleSync = () => {
+    const view = document.defaultView;
+    if (syncFrame || !view) return;
+    syncFrame = view.requestAnimationFrame(() => { syncFrame = 0; sync(); });
+  };
   const sync = () => {
     releaseDetachedComposers();
     const footers = document.querySelectorAll(FOOTER);
@@ -888,7 +896,7 @@ export function injectComposerGlass(document: Document): () => void {
     observed = footer;
     if (footer instanceof HTMLElement) {
       observer = new ResizeObserver(() => {
-        sync();
+        scheduleSync();
       });
       observer.observe(footer);
     }
@@ -903,7 +911,7 @@ export function injectComposerGlass(document: Document): () => void {
     stackObserved = stack;
     if (!stack || typeof MutationObserver === "undefined") return;
     stackMutations = new MutationObserver(() => {
-      sync();
+      scheduleSync();
     });
     stackMutations.observe(footer ?? stack, {
       childList: true, subtree: true, attributes: true,
@@ -921,13 +929,14 @@ export function injectComposerGlass(document: Document): () => void {
         ));
         if (!addedComposer) return;
       }
-      sync();
+      scheduleSync();
     });
     mutations.observe(document.body, { childList: true, subtree: true });
   }
   sync();
 
   return () => {
+    if (syncFrame) document.defaultView?.cancelAnimationFrame(syncFrame);
     mutations?.disconnect();
     stackMutations?.disconnect();
     observer?.disconnect();
