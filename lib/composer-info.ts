@@ -2199,20 +2199,38 @@ export function injectComposerInfo(document: Document): () => void {
   };
   document.addEventListener(composerDataChanged, onData);
   const discovery = `[data-promptbox-shell], [data-bb-chat-ui-device], ${HOST_JUMP}`;
-  const observer = new view.MutationObserver(records => {
-    const discoversInfo = (node: Node) => node instanceof view.Element &&
-      (node.matches(discovery) || !!node.querySelector(discovery));
+  const discoversInfo = (node: Node) => node instanceof view.Element &&
+    (node.matches(discovery) || !!node.querySelector(discovery));
+  // Composer details (text, labels, attributes) are only observed inside composer shells.
+  const shellObserver = new view.MutationObserver(records => {
     if (records.some(record => {
       const target = record.target instanceof view.Element ? record.target : record.target.parentElement;
       // Counts, labels and popover markup in our bar are output. Re-reading them
       // would turn each fan/count animation step into another full sync and fit.
-      if (target?.closest(`[${MARK}-bar]`)) return false;
-      // Only changed subtrees are searched: searching body would always find an existing composer.
-      return record.attributeName === "data-bb-chat-ui-device" || !!target?.closest(`[data-promptbox-shell], ${HOST_JUMP}`) ||
-        Array.from(record.addedNodes).some(discoversInfo) || Array.from(record.removedNodes).some(discoversInfo);
+      return !target?.closest(`[${MARK}-bar]`);
     })) schedule();
   });
-  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[`${MARK}-thread`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "data-bb-chat-ui-device", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
+  const watchedShells = new WeakSet<Element>();
+  const watchShells = () => {
+    for (const shell of Array.from(document.querySelectorAll("[data-promptbox-shell]"))) {
+      if (watchedShells.has(shell)) continue;
+      watchedShells.add(shell);
+      shellObserver.observe(shell, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[`${MARK}-thread`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "data-bb-chat-ui-device", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
+    }
+  };
+  // The body only tells us when composer shells (or the host jump button) mount or unmount.
+  // Transcript rows never contain them, so streaming and scrolling batches are skipped early.
+  const observer = new view.MutationObserver(records => {
+    if (records.some(record => {
+      if (record.attributeName === "data-bb-chat-ui-device") return true;
+      const target = record.target instanceof view.Element ? record.target : record.target.parentElement;
+      if (target?.closest("[data-timeline-items]")) return false;
+      return Array.from(record.addedNodes).some(discoversInfo) || Array.from(record.removedNodes).some(discoversInfo);
+    })) { watchShells(); schedule(); }
+  });
+  // Only the plugin's own device marker is watched as an attribute; BB never writes it.
+  observer.observe(document.body, { childList:true, subtree:true, attributes:true, attributeFilter:["data-bb-chat-ui-device"] });
+  watchShells();
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     for (const [stack, state] of states) if (stack.contains(event.target as Node) || event.target === document) state.close(true);
@@ -2234,6 +2252,7 @@ export function injectComposerInfo(document: Document): () => void {
   return () => {
     disposed = true;
     observer.disconnect();
+    shellObserver.disconnect();
     document.removeEventListener(composerDataChanged, onData);
     if (frame) view.cancelAnimationFrame(frame);
     document.removeEventListener("keydown", onKey);
