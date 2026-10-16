@@ -228,12 +228,12 @@ export function injectMentionPills(doc: Document): () => void {
 
   const paint = () => {
     for (const pill of Array.from(doc.querySelectorAll<HTMLElement>(PILL))) {
-      pill.setAttribute(MARK, "");
+      if (!pill.hasAttribute(MARK)) pill.setAttribute(MARK, "");
       const resource = readResource(pill);
       const hash = commitHash(resource);
       const wide = hash !== null || resource?.icon === "FileDiff" ||
         (resource?.kind === "path" && /:\d+(?:[-–]\d+)?$/.test(resource.label ?? ""));
-      pill.toggleAttribute(WIDE, wide);
+      if (pill.hasAttribute(WIDE) !== wide) pill.toggleAttribute(WIDE, wide);
       const label = pill.querySelector<HTMLElement>(":scope > .truncate");
       if (hash && label && label.textContent !== hash) {
         labels.set(label, { original: label.textContent ?? "", display: hash });
