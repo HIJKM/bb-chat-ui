@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import { injectComposerInfo, fitComposerInfo, composerInfoCss, scrollOverflowEdges } from "./composer-info.ts";
 import { infoKinds } from "./composer-info-settings.ts";
 import { queuedMessagesCss } from "./queued-messages.ts";
+import { publishInfoData, publishDiffData, readInfoData, readDiffData } from "./composer-data.ts";
 
 let pageDocument: PropertyDescriptor | undefined;
 beforeEach(() => { pageDocument = Object.getOwnPropertyDescriptor(globalThis, "document"); });
@@ -23,6 +24,7 @@ function fixture() {
     <section aria-label="Queued messages"><header data-queued-messages-mode="collapsed"><button aria-expanded="false" aria-controls="queue">2</button></header><div id="queue" hidden><div data-queued-messages-scroll-frame><button>Edit message</button></div></div></section>
   </div><div data-follow-up-composer-anchor><div data-follow-up-composer><textarea>keep draft</textarea></div></div></div></div></div></body></html>`, { pretendToBeVisual: true });
   const { document } = dom.window;
+  bridgeFixtureData(dom);
   Object.defineProperty(globalThis, "document", { configurable:true, writable:true, value:document });
   for (const toggle of document.querySelectorAll('button[aria-expanded]')) {
     toggle.addEventListener("click", () => {
@@ -40,6 +42,43 @@ function fixture() {
     return button;
   };
   return { dom, document, tick, click };
+}
+
+// The historical DOM fixtures encode SDK responses as JSON. Adapt only the fixtures;
+// production bridges publish typed objects and never read these attributes.
+function bridgeFixtureData(dom: JSDOM) {
+  const { document, Element, MutationObserver } = dom.window;
+  const marker='data-bb-chat-ui-info-settings', diff='data-bb-chat-ui-head-diff';
+  const parse=(text:string | null, fallback:unknown) => {try{return text ? JSON.parse(text) : fallback;}catch{return fallback;}};
+  const actions=new WeakMap<Element,(id:string)=>void>();
+  const syncInfo=(source:Element) => {
+    let openThread=actions.get(source);
+    if (!openThread) { openThread=id=>{
+      const target=Array.from(source.querySelectorAll<HTMLButtonElement>('[data-bb-chat-ui-info-parent-open]')).find(n=>n.getAttribute('data-bb-chat-ui-info-parent-open')===id);
+      if(target)target.click();
+      else source.closest('[data-promptbox-shell]')?.querySelector<HTMLAnchorElement>('section[aria-label="Thread context before sending"] a[href*="/threads/"]')?.click();
+    };actions.set(source,openThread); }
+    publishInfoData(source,{settings:parse(source.getAttribute(marker),{}) as Record<string,unknown>,children:parse(source.getAttribute('data-bb-chat-ui-info-children'),[]) as never,parent:parse(source.getAttribute('data-bb-chat-ui-info-parent'),null) as never,openThread});
+  };
+  const syncDiff=(source:Element) => {
+    const summary=parse(source.getAttribute(diff),null) as never;
+    publishDiffData(source,{threadId:source.closest('[data-promptbox-shell]')?.querySelector(`[${marker}]`)?.getAttribute('data-bb-chat-ui-info-thread') ?? 'fixture',summary,state:source.getAttribute(`${diff}-state`)==='unavailable'?'unavailable':summary?'ready':'loading'});
+  };
+  const hydrate=(node:Element) => {
+    if(node.hasAttribute(marker)&&!readInfoData(node))syncInfo(node);
+    if(node.hasAttribute(diff)&&!readDiffData(node))syncDiff(node);
+    for(const source of node.querySelectorAll(`[${marker}]`))if(!readInfoData(source))syncInfo(source);
+    for(const source of node.querySelectorAll(`[${diff}]`))if(!readDiffData(source))syncDiff(source);
+  };
+  hydrate(document.documentElement);
+  const set=Element.prototype.setAttribute,remove=Element.prototype.removeAttribute;
+  const update=(node:Element,name:string) => {
+    if([marker,'data-bb-chat-ui-info-children','data-bb-chat-ui-info-parent'].includes(name)&&node.hasAttribute(marker))syncInfo(node);
+    if([diff,`${diff}-state`].includes(name)&&node.hasAttribute(diff))syncDiff(node);
+  };
+  Element.prototype.setAttribute=function(name:string,value:string){set.call(this,name,value);update(this,name);};
+  Element.prototype.removeAttribute=function(name:string){remove.call(this,name);update(this,name);};
+  new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node instanceof Element)hydrate(node);}).observe(document.body,{subtree:true,childList:true});
 }
 
 function stubAnimations(window: { HTMLElement: { prototype: HTMLElement & { animate: Function; getAnimations: Function } } }) {
@@ -65,6 +104,52 @@ function stubAnimations(window: { HTMLElement: { prototype: HTMLElement & { anim
   };
 }
 
+test("SDK objects render Diff and child pills without data attributes and update an open Diff", async () => {
+  const f=fixture();
+  const source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  const diffSource=f.document.createElement('span');diffSource.hidden=true;
+  diffSource.setAttribute('data-bb-chat-ui-head-diff','');source.parentElement!.append(diffSource);
+  const children=[{id:'sdk-child',title:'SDK child',providerId:'codex',state:'run' as const}];
+  publishInfoData(source,{settings:{showGoal:'끄기'},children,parent:null});
+  const snapshot={insertions:7,deletions:2,files:1,branch:'feature/ui',presentation:{mode:'working' as const,visible:true,branch:'feature/ui',branchLabel:null,label:'+7 −2 · 1 file'},detail:{branch:'feature/ui',basis:'HEAD',baseRef:'origin/main',files:[{path:'lib/direct.ts',status:'M',insertions:7,deletions:2}],commits:[]}};
+  publishDiffData(diffSource,{threadId:'sdk-thread',state:'ready',summary:snapshot});
+  const stop=injectComposerInfo(f.document);
+  try {
+    await f.tick();
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-trigger="goal"]'),null);
+    assert.match(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!.textContent!,/\+7/);
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-avatar]')?.getAttribute('title'),'SDK child · codex');
+    f.click('[data-bb-chat-ui-info-trigger="diff"]');await f.tick();
+    assert.match(f.document.querySelector('[data-bb-chat-ui-info-menu]')!.textContent!,/lib\/direct.ts/);
+    publishDiffData(diffSource,{threadId:'sdk-thread',state:'ready',summary:{...snapshot,insertions:9,presentation:{...snapshot.presentation,label:'+9 −2 · 1 file'},detail:{...snapshot.detail,files:[{...snapshot.detail.files[0],path:'lib/updated.ts',insertions:9}]}}});
+    await f.tick();
+    assert.match(f.document.querySelector('[data-bb-chat-ui-info-trigger="diff"]')!.textContent!,/\+9/);
+    assert.match(f.document.querySelector('[data-bb-chat-ui-info-menu]')!.textContent!,/lib\/updated.ts/);
+    assert.equal(diffSource.getAttribute('data-bb-chat-ui-head-diff'),'');
+    assert.equal(source.hasAttribute('data-bb-chat-ui-info-children'),false);
+  } finally {stop();f.dom.window.close();}
+});
+
+test("Parent navigation reads the current SDK action without a hidden proxy button", async () => {
+  const f=fixture(),source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  f.document.querySelector('section[aria-label="Thread context before sending"]')!.insertAdjacentHTML('beforeend','<a href="/threads/native-parent">Native parent</a>');
+  const moves:string[]=[];
+  const data={settings:{},children:[],parent:{id:'one',title:'첫 부모',providerId:'codex'},openThread:(id:string)=>moves.push(id)};
+  publishInfoData(source,data);
+  const stop=injectComposerInfo(f.document);
+  try {
+    await f.tick();f.click('[data-bb-chat-ui-info-trigger="parent"]');await f.tick();
+    f.click('[data-bb-chat-ui-info-parent-row]');assert.deepEqual(moves,['one']);
+    publishInfoData(source,{...data,parent:{id:'two',title:'다음 부모',providerId:'codex'}});
+    await f.tick();
+    assert.match(f.document.querySelector('[data-bb-chat-ui-info-parent-row]')!.textContent!,/다음 부모/);
+    f.click('[data-bb-chat-ui-info-parent-row]');assert.deepEqual(moves,['one','two']);
+    publishInfoData(source,{...data,parent:null});await f.tick();
+    assert.equal(f.document.querySelector('[data-bb-chat-ui-info-parent-row]'),null);
+    assert.equal(source.querySelector('[data-bb-chat-ui-info-parent-open]'),null);
+  } finally {stop();f.dom.window.close();}
+});
+
 test("unrelated chat mutations do not recalculate composer info, while composer changes still do", async () => {
   const f = fixture();
   const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
@@ -85,6 +170,34 @@ test("unrelated chat mutations do not recalculate composer info, while composer 
     await f.tick();
     assert.ok(measurements > 0, 'native queue text still triggers fit');
     assert.match(stack.querySelector('[data-bb-chat-ui-info-trigger="queue"]')!.getAttribute('aria-label')!, /3/);
+  } finally { stop(); f.dom.window.close(); }
+});
+
+test("rendered info controls do not feed their own mutations back into fit", async () => {
+  const f = fixture();
+  const stack = f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+  let measurements = 0;
+  stack.getBoundingClientRect = () => { measurements++; return { width:900 } as DOMRect; };
+  const stop = injectComposerInfo(f.document);
+  try {
+    await f.tick(); await f.tick(); measurements = 0;
+    const count = stack.querySelector('[data-bb-chat-ui-info-count]')!;
+    const all = stack.querySelector('[data-bb-chat-ui-info-all]')!;
+    count.textContent = '+12';
+    all.setAttribute('aria-label', '전체 정보 · 펼침 중');
+    all.setAttribute('title', '펼침 중');
+    stack.querySelector('[data-bb-chat-ui-info-trigger="goal"]')!.setAttribute('aria-expanded', 'true');
+    await f.tick(); await f.tick();
+    assert.equal(measurements, 0, 'stack fan counts and control labels are rendered output, not new layout input');
+
+    stack.querySelector('section[aria-label="Queued messages"] header button')!.textContent = '3';
+    await f.tick();
+    assert.ok(measurements > 0, 'native queue changes still update and fit');
+    assert.match(stack.querySelector('[data-bb-chat-ui-info-trigger="queue"]')!.getAttribute('aria-label')!, /3/);
+    f.click('[data-bb-chat-ui-info-trigger="goal"]'); await f.tick();
+    assert.equal(stack.querySelector('section[aria-label="Goal"]')!.getAttribute('data-bb-chat-ui-info-open'), 'goal', 'native popover opening remains observable');
+    f.click('[data-bb-chat-ui-info-dismiss]'); await f.tick();
+    assert.equal(stack.querySelector('section[aria-label="Goal"]')!.hasAttribute('data-bb-chat-ui-info-open'), false);
   } finally { stop(); f.dom.window.close(); }
 });
 
@@ -1724,6 +1837,20 @@ test("child avatars use host provider artwork, including late and updated logos,
   } finally {stop();f.dom.window.close();}
 });
 
+test("provider artwork style changes are observed as source input without a control mutation", async () => {
+  const f=fixture(),source=f.document.querySelector('[data-bb-chat-ui-info-settings]')!;
+  source.setAttribute('data-bb-chat-ui-info-children',JSON.stringify([{id:'child',title:'Review',providerId:'codex',state:'run'}]));
+  source.insertAdjacentHTML('beforeend','<span data-bb-chat-ui-info-child-icon="child"><span style="mask-image:url(/first.svg)"></span></span>');
+  const stop=injectComposerInfo(f.document);
+  try {
+    await f.tick(); await f.tick();
+    source.querySelector('[data-bb-chat-ui-info-child-icon] span')!.setAttribute('style','mask-image:url(/updated.svg)');
+    await f.tick();
+    const artwork=f.document.querySelector('[data-bb-chat-ui-info-avatar] span[style]');
+    assert.match(artwork?.getAttribute('style') ?? '', /updated\.svg/);
+  } finally {stop();f.dom.window.close();}
+});
+
 test("child status dots sit on the left of each avatar, including the done check", () => {
   const dom = new JSDOM("<!doctype html><html><head></head><body></body></html>");
   const style = dom.window.document.createElement("style");
@@ -3105,6 +3232,20 @@ function manualFrames(view: Window) {
     },
   };
 }
+
+test("body fade updates do not measure the stack when no Plan or Approval body exists", async () => {
+  const f=fixture(),stack=f.document.querySelector<HTMLElement>('[data-promptbox-shell] > .grid')!;
+  let reads=0;
+  stack.getBoundingClientRect=()=>{reads++;return {top:0,left:0,width:900} as DOMRect;};
+  const stop=injectComposerInfo(f.document);
+  try {
+    await f.tick();await f.tick();reads=0;
+    stack.dispatchEvent(new f.dom.window.Event('animationend',{bubbles:true}));
+    stack.dispatchEvent(new f.dom.window.Event('animationcancel',{bubbles:true}));
+    stack.dispatchEvent(new f.dom.window.Event('scroll'));
+    assert.equal(reads,0,'scroll and animation notifications have no body-fade geometry to read');
+  } finally {stop();f.dom.window.close();}
+});
 
 test("a stationary plan card does not reinsert body fades", async () => {
   const f = fixture();

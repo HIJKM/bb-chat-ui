@@ -115,6 +115,7 @@ test("queue actions stay beside the first line in compact rows with appropriate 
   for (const small of [true,false]) {
     const f=fixture();
     f.document.body.insertAdjacentHTML('beforeend',`<span hidden data-bb-chat-ui-hit-target="${small?'small':'large'}"></span>`);
+    f.document.documentElement.setAttribute('data-bb-chat-ui-root-hit-target',small?'small':'large');
     const row=f.queue.querySelector('[data-queued-message-row]')!;
     const text=row.querySelector('.min-w-0')!;
     text.querySelector('.truncate')!.textContent='A longer queued message that wraps across multiple lines.';

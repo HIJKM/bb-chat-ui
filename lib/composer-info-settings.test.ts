@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { composerInfoSettings, exposedInfo, infoKinds, listedInfo } from './composer-info-settings.ts';
+import { composerInfoReads, composerInfoSettings, exposedInfo, infoKinds, listedInfo } from './composer-info-settings.ts';
 
 test('visibility supports top, catalog-only and off while retaining legacy checkbox choices', () => {
   const keys = infoKinds.map(kind => kind.key);
@@ -30,4 +30,20 @@ test('chat ui settings omit the latest layout choice and ignore a stored value',
   assert.deepEqual(exposedInfo({ infoButtonLayout:'오른쪽 캡슐', showDiff:'끄기' }), keys.filter(key => key !== 'diff'));
   assert.equal(listedInfo({ infoButtonLayout:'오른쪽 캡슐', showDiff:'끄기' }).includes('diff'), false);
   assert.equal(listedInfo({ infoButtonLayout:'가운데 최신으로' }).length, keys.length);
+});
+
+test('read gates stop only explicit off and share the timeline across Plan, Goal and todos', () => {
+  assert.deepEqual(composerInfoReads(),{timeline:true,children:true,parent:true,queue:true,pullRequest:true});
+  const off=Object.fromEntries(infoKinds.map(kind=>[kind.setting,'끄기']));
+  assert.deepEqual(composerInfoReads(off),{timeline:false,children:false,parent:false,queue:false,pullRequest:false});
+  for(const key of ['showPlan','showGoal','showTodos']) {
+    for(const value of ['상단 표시','목록에만 표시',false,undefined,'unknown']) {
+      assert.equal(composerInfoReads({...off,[key]:value}).timeline,true);
+    }
+  }
+  for(const value of ['상단 표시','목록에만 표시',false,undefined,'unknown']) {
+    assert.equal(composerInfoReads({...off,showChildren:value}).children,true);
+    assert.equal(composerInfoReads({...off,showParent:value}).parent,true);
+    assert.equal(listedInfo({...off,showDiff:value}).includes('diff'),true);
+  }
 });

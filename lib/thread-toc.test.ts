@@ -98,6 +98,11 @@ test("keeps rail clicks and leave working after the button is replaced", () => {
       this.tag = tag;
       this.classList = className.split(/\s+/).filter(Boolean);
     }
+    get isConnected() {
+      let root: DomNode = this;
+      while (root.parent) root = root.parent;
+      return root === body;
+    }
     get style() {
       const el = this;
       return {

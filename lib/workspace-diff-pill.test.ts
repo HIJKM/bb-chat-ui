@@ -128,3 +128,34 @@ test("leaves an open Diff panel alone", () => {
     [],
   );
 });
+
+test("SDK-driven information rows leave the hidden native Diff untouched and retain standalone rendering", async () => {
+  const { JSDOM } = await import('jsdom');
+  const { injectWorkspaceDiffPill } = await import('./workspace-diff-pill.ts');
+  const { publishDiffData } = await import('./composer-data.ts');
+  const dom=new JSDOM('<html><head></head><body><div class="chat-prompt-box"><div data-bb-chat-ui-info-stack><section><div><button id="thread-prompt-banner-git-toggle"><span>+12 −4 · 3 files</span></button></div></section><span data-bb-chat-ui-head-diff=""></span></div></div></body></html>');
+  const saved=new Map<string,PropertyDescriptor | undefined>();
+  for(const key of ['document','Element','HTMLElement','HTMLButtonElement','MutationObserver']) {
+    saved.set(key,Object.getOwnPropertyDescriptor(globalThis,key));
+    Object.defineProperty(globalThis,key,{configurable:true,writable:true,value:(dom.window as unknown as Record<string,unknown>)[key]});
+  }
+  const document=dom.window.document,button=document.querySelector('button')!,source=document.querySelector('span[data-bb-chat-ui-head-diff]')!;
+  const original=button.innerHTML;
+  const stop=injectWorkspaceDiffPill(document);
+  try {
+    publishDiffData(source,{threadId:'one',state:'ready',summary:{insertions:7,deletions:1,files:2,branch:null}});
+    await new Promise<void>(resolve=>setImmediate(resolve));
+    assert.equal(button.innerHTML,original,'the SDK renderer does not rewrite a native label it will never display');
+    document.querySelector('[data-bb-chat-ui-info-stack]')!.removeAttribute('data-bb-chat-ui-info-stack');
+    publishDiffData(source,{threadId:'one',state:'ready',summary:{insertions:8,deletions:1,files:2,branch:null}});
+    await new Promise<void>(resolve=>setImmediate(resolve));
+    assert.match(button.textContent!,/\+8/,'standalone native Diff still uses the typed snapshot');
+  } finally {
+    stop();
+    for(const [key,descriptor] of saved) {
+      if(descriptor)Object.defineProperty(globalThis,key,descriptor);
+      else Reflect.deleteProperty(globalThis,key);
+    }
+    dom.window.close();
+  }
+});

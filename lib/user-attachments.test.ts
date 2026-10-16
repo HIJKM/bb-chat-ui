@@ -89,7 +89,7 @@ test("thickens user file chips and paints a file icon", () => {
 test("enlarges sent file chips only for phones with a narrow helper viewport", () => {
   const css = userAttachmentsCss();
   const chip = `${USER_BUBBLE} > \\.mt-2\\.space-y-2 > \\.flex:not\\(:has\\(img\\)\\) > :is\\(a, button, span\\)`;
-  const marker = 'html:has([data-bb-chat-ui-device="phone"][data-bb-chat-ui-viewport="narrow"])';
+  const marker = 'html[data-bb-chat-ui-root-device="phone"][data-bb-chat-ui-root-viewport="narrow"]';
   const start = css.indexOf(marker);
   const base = css.slice(0, start);
   const touch = start < 0 ? "" : css.slice(start);

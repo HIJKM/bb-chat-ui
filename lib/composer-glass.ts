@@ -622,14 +622,12 @@ export function injectComposerGlass(document: Document): () => void {
   let observer: ResizeObserver | null = null;
   let stackObserved: Element | null = null;
   let stackMutations: MutationObserver | null = null;
-  const radiusWatches = new Set<() => void>();
-  const watchedComposers = new WeakSet<HTMLElement>();
+  const radiusWatches = new Map<HTMLElement, () => void>();
   const idleHeights = new WeakMap<HTMLElement, number>();
   const animating = new WeakSet<HTMLElement>();
 
   const bindComposerRadius = (composer: HTMLElement) => {
-    if (watchedComposers.has(composer) || typeof MutationObserver === "undefined") return;
-    watchedComposers.add(composer);
+    if (radiusWatches.has(composer) || typeof MutationObserver === "undefined") return;
     let compact = composer.hasAttribute("data-promptbox-compact");
     let generation = 0;
     let motion: ComposerHeightMotion | null = null;
@@ -639,6 +637,7 @@ export function injectComposerGlass(document: Document): () => void {
     let lastPinned: number | null = null;
     let anchorHold: { node: HTMLElement; previous: string } | null = null;
     let liftPlate: HTMLElement | null = null;
+    let radiusEnd: ((event: AnimationEvent) => void) | null = null;
     const viewOf = () => composer.ownerDocument.defaultView;
 
     const clearDesktopHold = () => {
@@ -771,12 +770,15 @@ export function injectComposerGlass(document: Document): () => void {
       if (change != null) {
         const current = ++generation;
         applyComposerRadius(composer, change);
+        if (radiusEnd) composer.removeEventListener("animationend", radiusEnd);
         const onEnd = (event: AnimationEvent) => {
           if (event.animationName !== "bb-chat-ui-composer-radius") return;
           composer.removeEventListener("animationend", onEnd);
+          radiusEnd = null;
           if (current !== generation) return;
           composer.style.animation = "";
         };
+        radiusEnd = onEnd;
         composer.addEventListener("animationend", onEnd);
       }
 
@@ -833,15 +835,30 @@ export function injectComposerGlass(document: Document): () => void {
       attributes: true,
       attributeFilter: ["data-promptbox-compact", "style"],
     });
-    radiusWatches.add(() => {
+    radiusWatches.set(composer, () => {
       changes.disconnect();
+      if (radiusEnd) {
+        composer.removeEventListener("animationend", radiusEnd);
+        if (composer.style.animation.includes("bb-chat-ui-composer-radius")) composer.style.animation = "";
+      }
+      radiusEnd = null;
       stopFinish();
-      stopPin();
+      if (motion) finishMotion();
+      else stopPin();
       animating.delete(composer);
     });
   };
 
+  const releaseDetachedComposers = () => {
+    for (const [composer, stop] of radiusWatches) {
+      if (composer.isConnected) continue;
+      stop();
+      radiusWatches.delete(composer);
+    }
+  };
+
   const sync = () => {
+    releaseDetachedComposers();
     const footers = document.querySelectorAll(FOOTER);
     for (let index = 0; index < footers.length; index += 1) {
       const footerNode = footers.item(index);
@@ -867,6 +884,7 @@ export function injectComposerGlass(document: Document): () => void {
       return;
     }
     observer?.disconnect();
+    observer = null;
     observed = footer;
     if (footer instanceof HTMLElement) {
       observer = new ResizeObserver(() => {
@@ -881,6 +899,7 @@ export function injectComposerGlass(document: Document): () => void {
     const stack = footer?.querySelector(STACK) ?? null;
     if (stack === stackObserved) return;
     stackMutations?.disconnect();
+    stackMutations = null;
     stackObserved = stack;
     if (!stack || typeof MutationObserver === "undefined") return;
     stackMutations = new MutationObserver(() => {
@@ -894,10 +913,14 @@ export function injectComposerGlass(document: Document): () => void {
 
   let mutations: MutationObserver | null = null;
   if (document.body && typeof MutationObserver !== "undefined") {
-    mutations = new MutationObserver(() => {
-      if (observed?.isConnected && stackObserved?.isConnected) return;
-      observed = null;
-      stackObserved = null;
+    mutations = new MutationObserver((records) => {
+      if (records.some(record => record.removedNodes.length > 0)) releaseDetachedComposers();
+      if (observed?.isConnected && stackObserved?.isConnected) {
+        const addedComposer = records.some(record => Array.from(record.addedNodes).some(node =>
+          node instanceof HTMLElement && (node.matches(COMPOSER) || node.querySelector(COMPOSER) !== null),
+        ));
+        if (!addedComposer) return;
+      }
       sync();
     });
     mutations.observe(document.body, { childList: true, subtree: true });
@@ -908,7 +931,7 @@ export function injectComposerGlass(document: Document): () => void {
     mutations?.disconnect();
     stackMutations?.disconnect();
     observer?.disconnect();
-    for (const stop of radiusWatches) stop();
+    for (const stop of radiusWatches.values()) stop();
     radiusWatches.clear();
     style.remove();
     const frames = document.querySelectorAll("[data-thread-window]");

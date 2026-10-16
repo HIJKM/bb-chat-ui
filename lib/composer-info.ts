@@ -1,6 +1,6 @@
+import { composerDataChanged, readInfoData, readDiffData } from "./composer-data.ts";
 import { exposedInfo, infoKinds, listedInfo, type InfoKind } from "./composer-info-settings.ts";
-import { HEAD_DIFF_MARK, openChangesPanel, type HeadDiffDetail } from "./workspace-diff-pill.ts";
-import type { WorkspaceDiffSnapshot } from "./workspace-diff-data.ts";
+import { HEAD_DIFF_MARK, openChangesPanel } from "./workspace-diff-pill.ts";
 import { commitIcon, fileStatusIcon } from "./composer-diff-icons.ts";
 import { childInitial, type ChildState, type ChildSummary } from "./composer-child.ts";
 import { DARK_GLASS_FACE, LIGHT_GLASS_FACE } from "./glass-surface.ts";
@@ -422,6 +422,8 @@ export function injectComposerInfo(document: Document): () => void {
     let jumpSource: HTMLButtonElement | null = null;
     let jumpVisible = false;
     const jumpWatch = new view!.MutationObserver(() => schedule());
+    let watchedSource: Element | null = null;
+    const sourceWatch = new view!.MutationObserver(() => schedule());
     const syncJump = () => {
       const host = readOnlyLabel === null && !bar.hidden ? stack.closest("[data-scroll-footer]")?.querySelector<HTMLButtonElement>(HOST_JUMP) ?? null : null;
       if (host !== jumpSource) {
@@ -566,15 +568,7 @@ export function injectComposerInfo(document: Document): () => void {
       }
       const item = items.find(item => item.node === activeNode && item.key === active);
       const escapeAttr = (value: string) => view?.CSS?.escape(value) ?? value.replace(/["\\]/g, "\\$&");
-      const readParent = () => {
-        try {
-          const raw = stack.querySelector(`[${SOURCE}]`)?.getAttribute(`${MARK}-parent`);
-          if (!raw) return null;
-          const value = JSON.parse(raw) as { id?: unknown; title?: unknown; providerId?: unknown };
-          if (!value || typeof value.id !== "string" || typeof value.title !== "string" || typeof value.providerId !== "string") return null;
-          return { id:value.id, title:value.title, providerId:value.providerId };
-        } catch { return null; }
-      };
+      const readParent = () => readInfoData(stack.querySelector(`[${SOURCE}]`))?.value.parent ?? null;
       const parentHost = item?.key === "parent" && item.node.hasAttribute(OPEN) ? item.node : null;
       for (const [host, row] of parentRows) if (host !== parentHost) { row.remove(); parentRows.delete(host); }
       if (parentHost) {
@@ -596,8 +590,8 @@ export function injectComposerInfo(document: Document): () => void {
             parentRow.addEventListener("click", () => {
               const current = readParent();
               if (current) {
-                const opener = stack.querySelector<HTMLButtonElement>(`[${MARK}-parent-open="${escapeAttr(current.id)}"]`);
-                if (opener) { opener.click(); return; }
+                const openThread = readInfoData(stack.querySelector(`[${SOURCE}]`))?.value.openThread;
+                if (openThread) { openThread(current.id); return; }
                 nativeParentLink()?.click();
                 return;
               }
@@ -735,8 +729,9 @@ export function injectComposerInfo(document: Document): () => void {
     const updateBodyFades = () => {
       const live = new Set<HTMLElement>();
       const liveClips = new Set<HTMLElement>();
-      const anchor = stack.getBoundingClientRect();
+      let anchor: DOMRect | undefined;
       for (const scroller of Array.from(stack.querySelectorAll<HTMLElement>(BODY_SCROLLER))) {
+        anchor ??= stack.getBoundingClientRect();
         live.add(scroller);
         let pair = bodyFades.get(scroller);
         if (!pair) {
@@ -1019,14 +1014,9 @@ export function injectComposerInfo(document: Document): () => void {
     };
     const childIcon = (id:string) => Array.from(stack.querySelectorAll(`[${MARK}-child-icon]`))
       .find(node => node.getAttribute(`${MARK}-child-icon`) === id)?.firstElementChild;
-    const readDiff = ():Partial<WorkspaceDiffSnapshot> | null => {
-      try { return JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "null"); }
-      catch { return null; }
-    };
-    const awaitingDiff = () => {
-      const source = stack.querySelector(`[${HEAD_DIFF_MARK}]`);
-      return !!source && source.getAttribute(`${HEAD_DIFF_MARK}-state`) !== "unavailable" && !readDiff();
-    };
+    const diffData = () => readDiffData(stack.querySelector(`[${HEAD_DIFF_MARK}]`));
+    const readDiff = () => diffData()?.value.summary ?? null;
+    const awaitingDiff = () => diffData()?.value.state === "loading";
     const diffNumber = (value:string, key:string) => {
       const number = document.createElement("span");
       number.setAttribute(`${MARK}-diff-number`, key); number.setAttribute(`${MARK}-diff-value`, value);
@@ -1128,8 +1118,7 @@ export function injectComposerInfo(document: Document): () => void {
         .map(button => button.getAttribute(`${MARK}-diff-toggle`)));
       const summary = document.createElement("p"); summary.textContent = describeDiff(item);
       container.replaceChildren(summary);
-      let detail: HeadDiffDetail | undefined;
-      try { detail = JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "{}").detail; } catch { /* Summary remains usable while data loads. */ }
+      const detail = readDiff()?.detail;
       if (!detail || !Array.isArray(detail.files) || !Array.isArray(detail.commits)) return;
       container.replaceChildren();
       const overview = document.createElement("div");
@@ -1272,8 +1261,7 @@ export function injectComposerInfo(document: Document): () => void {
       if (summary && item.key === "children") {
         const avatars = document.createElement("span");
         avatars.setAttribute(`${MARK}-avatars`, "");
-        let children: ChildSummary[] = [];
-        try { children = JSON.parse(stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`) ?? "[]"); } catch { /* Host card remains usable. */ }
+        let children: readonly ChildSummary[] = readInfoData(stack.querySelector(`[${SOURCE}]`))?.value.children ?? [];
         if (!children.length) children = [{ id:"native", title:describe(item).replace(/^.*?:\s*/, ""), state:describe(item).startsWith("Active child") ? "run" : "wait" }];
         childCount = childTotal = children.length;
         const stateOf = (child: ChildSummary): ChildState => child.state ?? (child.running ? "run" : "done");
@@ -1873,6 +1861,12 @@ export function injectComposerInfo(document: Document): () => void {
     const sync = () => {
       pruneDisconnected();
       const source = stack.querySelector(`[${SOURCE}]`);
+      if (source !== watchedSource) {
+        sourceWatch.disconnect();
+        watchedSource = source;
+        // Provider artwork can change only its mask/class on the hidden SDK source.
+        if (source) sourceWatch.observe(source, { attributes:true, subtree:true });
+      }
       if (!source) {
         stack.toggleAttribute(`${MARK}-request`, stack.querySelector(REQUEST) !== null);
         if (!suspended) {
@@ -1938,7 +1932,7 @@ export function injectComposerInfo(document: Document): () => void {
       syncPanelActions();
       if (!items.some(item => item.key === "diff")) {
         try {
-          const summary = JSON.parse(stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK) || "null");
+          const summary = readDiff();
           if (awaitingDiff() || summary && Number.isFinite(summary.files) && Number.isFinite(summary.insertions) && Number.isFinite(summary.deletions)) {
             if (!diffSupplement) {
               diffSupplement = document.createElement("section");
@@ -1949,7 +1943,7 @@ export function injectComposerInfo(document: Document): () => void {
               bar.append(diffSupplement);
             }
             const button = diffSupplement.querySelector("button")!;
-            const text = awaitingDiff() ? "불러오는 중" : summary.presentation?.label ?? `+${summary.insertions} −${summary.deletions} · ${summary.files} files`;
+            const text = awaitingDiff() || !summary ? "불러오는 중" : summary.presentation?.label ?? `+${summary.insertions} −${summary.deletions} · ${summary.files} files`;
             if (button.textContent !== text) button.textContent = text;
             const title = summary?.branch ?? "Code Diff";
             if (button.title !== title) button.title = title;
@@ -1973,8 +1967,8 @@ export function injectComposerInfo(document: Document): () => void {
         const item = items.find(item => item.node === activeNode && item.key === "status");
         if (item) renderArchiveRestore(menu.querySelector("div")!, item);
       }
-      let settings: Record<string, unknown> = {};
-      try { settings = JSON.parse(source.getAttribute(SOURCE) || "{}"); } catch { /* Defaults work while settings load. */ }
+      const data = readInfoData(source);
+      const settings = data?.value.settings ?? {};
       listed = listedInfo(settings);
       if (readOnlyLabel && !listed.includes("status")) listed.push("status");
       if (active && active !== "all" && !listed.includes(active)) close();
@@ -1982,12 +1976,12 @@ export function injectComposerInfo(document: Document): () => void {
       bar.hidden = request || !listed.length && !editing();
       syncJump();
       const diff = readDiff();
-      const unavailableDiff = stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(`${HEAD_DIFF_MARK}-state`) === "unavailable";
+      const unavailableDiff = diffData()?.value.state === "unavailable";
       const exposed: InfoKind[] = readOnlyLabel ? ["status"] : exposedInfo(settings).filter(key => key !== "diff" || !unavailableDiff && diff?.presentation?.visible !== false);
       if (request || reduced() || bar.hidden) { cancelExit(); cancelOwnedMotion(); }
       if (active === "annotations" && items.find(item => item.node === activeNode && item.key === active)?.trigger?.getAttribute("aria-expanded") === "false") close(true);
       const childIcons = Array.from(source.querySelectorAll(`[${MARK}-child-icon]`)).map(node => node.outerHTML);
-      const next = JSON.stringify([settings, readOnlyLabel, infoKinds.map(kind => emptyIcon(kind.key)?.outerHTML), childIcons, items.map(item => [item.key, describe(item)]), stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`), stack.querySelector(`[${HEAD_DIFF_MARK}]`)?.getAttribute(HEAD_DIFF_MARK), unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
+      const next = JSON.stringify([settings, readOnlyLabel, infoKinds.map(kind => emptyIcon(kind.key)?.outerHTML), childIcons, items.map(item => [item.key, describe(item)]), data?.revision, diffData()?.revision, unavailableDiff, stack.style.getPropertyValue("--bb-chat-ui-feedback-icon")]);
       let widthChange: { button:HTMLButtonElement; from:number } | null = null;
       let hopTargets: HTMLElement[] = [];
       const stackContent = () => JSON.stringify(Array.from(iconStack.children).map(node => [node.getAttribute("aria-label"), node.hasAttribute(`${MARK}-active`), node.innerHTML]));
@@ -2023,7 +2017,7 @@ export function injectComposerInfo(document: Document): () => void {
           const content = JSON.stringify([item ? describe(item) : null, item?.trigger?.title,
             key === "status" ? readOnlyLabel : null,
             emptyIcon(key)?.outerHTML ?? item?.trigger?.querySelector("svg, [data-icon-root]")?.outerHTML ?? item?.node.querySelector("svg, [data-icon-root]")?.outerHTML,
-            key === "children" ? stack.querySelector(`[${MARK}-children]`)?.getAttribute(`${MARK}-children`) : null,
+            key === "children" ? data?.childrenRevision : null,
             key === "children" ? childIcons : null,
             key === "diff" ? [diff?.presentation, diff?.detail?.commitCount] : null]);
           const previousContent = buttonContent.get(button);
@@ -2146,6 +2140,7 @@ export function injectComposerInfo(document: Document): () => void {
       resize?.disconnect();
       edgeResize?.disconnect();
       jumpWatch.disconnect();
+      sourceWatch.disconnect();
       jumpSource?.removeAttribute(`${MARK}-jump-source`);
       stack.removeEventListener("scroll", updateScrollHints, true);
       stack.removeEventListener("animationend", updateScrollHints, true);
@@ -2189,18 +2184,25 @@ export function injectComposerInfo(document: Document): () => void {
     }
   }
   const schedule = () => { if (!frame && !disposed) frame = view.requestAnimationFrame(sync); };
+  const onData = (event: Event) => {
+    if ((event.target as Element)?.closest?.("[data-promptbox-shell]")) schedule();
+  };
+  document.addEventListener(composerDataChanged, onData);
   const discovery = `[data-promptbox-shell], [data-bb-chat-ui-device], ${HOST_JUMP}`;
   const observer = new view.MutationObserver(records => {
     const discoversInfo = (node: Node) => node instanceof view.Element &&
       (node.matches(discovery) || !!node.querySelector(discovery));
     if (records.some(record => {
       const target = record.target instanceof view.Element ? record.target : record.target.parentElement;
+      // Counts, labels and popover markup in our bar are output. Re-reading them
+      // would turn each fan/count animation step into another full sync and fit.
+      if (target?.closest(`[${MARK}-bar]`)) return false;
       // Only changed subtrees are searched: searching body would always find an existing composer.
       return record.attributeName === "data-bb-chat-ui-device" || !!target?.closest(`[data-promptbox-shell], ${HOST_JUMP}`) ||
         Array.from(record.addedNodes).some(discoversInfo) || Array.from(record.removedNodes).some(discoversInfo);
     })) schedule();
   });
-  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[SOURCE, HEAD_DIFF_MARK, `${HEAD_DIFF_MARK}-state`, `${MARK}-thread`, `${MARK}-parent`, `${MARK}-children`, `${MARK}-child-providers`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "data-bb-chat-ui-device", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
+  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[`${MARK}-thread`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "data-bb-chat-ui-device", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     for (const [stack, state] of states) if (stack.contains(event.target as Node) || event.target === document) state.close(true);
@@ -2222,6 +2224,7 @@ export function injectComposerInfo(document: Document): () => void {
   return () => {
     disposed = true;
     observer.disconnect();
+    document.removeEventListener(composerDataChanged, onData);
     if (frame) view.cancelAnimationFrame(frame);
     document.removeEventListener("keydown", onKey);
     document.removeEventListener("click", onDismiss);

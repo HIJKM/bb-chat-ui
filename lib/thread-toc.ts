@@ -100,8 +100,13 @@ export function injectThreadToc(document: Document): () => void {
   style.textContent = threadTocCss;
   document.head.append(style);
 
-  const cleanups: Array<() => void> = [];
+  const cleanups = new Map<HTMLElement, () => void>();
   const paint = () => {
+    for (const [node, cleanup] of cleanups) {
+      if (node.isConnected) continue;
+      cleanup();
+      cleanups.delete(node);
+    }
     for (const node of Array.from(
       document.querySelectorAll("[data-thread-toc] button.no-scrollbar"),
     )) {
@@ -119,12 +124,13 @@ export function injectThreadToc(document: Document): () => void {
 
   return () => {
     observer.disconnect();
-    for (const cleanup of cleanups) cleanup();
+    for (const cleanup of cleanups.values()) cleanup();
+    cleanups.clear();
     style.remove();
   };
 }
 
-function bindRail(button: HTMLButtonElement, cleanups: Array<() => void>) {
+function bindRail(button: HTMLButtonElement, cleanups: Map<HTMLElement, () => void>) {
   if (button.hasAttribute(RAIL_MARK)) return;
   button.setAttribute(RAIL_MARK, "");
   const root = button.closest("[data-thread-toc]");
@@ -146,12 +152,13 @@ function bindRail(button: HTMLButtonElement, cleanups: Array<() => void>) {
   button.addEventListener("mouseenter", onMove);
   button.addEventListener("mousemove", onMove);
   button.addEventListener("click", onClick);
-  cleanups.push(() => {
+  cleanups.set(button, () => {
     button.removeEventListener("mouseenter", onMove);
     button.removeEventListener("mousemove", onMove);
     button.removeEventListener("click", onClick);
     button.removeAttribute(RAIL_MARK);
     clearTickWidths(button);
+    for (const tick of tickElements(button)) tick.removeAttribute(SELECTED_MARK);
     if (root instanceof HTMLElement) {
       hoveredTickByRoot.delete(root);
       pendingNavigationByRoot.delete(root);
@@ -160,7 +167,7 @@ function bindRail(button: HTMLButtonElement, cleanups: Array<() => void>) {
   if (root instanceof HTMLElement) bindRootLeave(root, cleanups);
 }
 
-function bindRootLeave(root: HTMLElement, cleanups: Array<() => void>) {
+function bindRootLeave(root: HTMLElement, cleanups: Map<HTMLElement, () => void>) {
   if (root.hasAttribute(ROOT_MARK)) return;
   root.setAttribute(ROOT_MARK, "");
   const onLeave = (event: MouseEvent) => {
@@ -175,9 +182,14 @@ function bindRootLeave(root: HTMLElement, cleanups: Array<() => void>) {
     hoveredTickByRoot.delete(root);
   };
   root.addEventListener("mouseleave", onLeave, true);
-  cleanups.push(() => {
+  cleanups.set(root, () => {
     root.removeEventListener("mouseleave", onLeave, true);
     root.removeAttribute(ROOT_MARK);
+    clearTickWidths(root);
+    for (const tick of tickElements(root)) tick.removeAttribute(SELECTED_MARK);
+    for (const item of Array.from(root.querySelectorAll(`[${CURRENT_MARK}]`))) item.removeAttribute(CURRENT_MARK);
+    hoveredTickByRoot.delete(root);
+    pendingNavigationByRoot.delete(root);
   });
 }
 

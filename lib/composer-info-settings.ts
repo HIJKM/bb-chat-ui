@@ -40,3 +40,13 @@ export function exposedInfo(values: Record<string, unknown> = {}): InfoKind[] {
 export function listedInfo(values: Record<string, unknown> = {}): InfoKind[] {
   return infoKinds.filter(kind => values[kind.setting] !== "끄기").map(kind => kind.key);
 }
+
+// Off stops dedicated SDK work; catalog-only and legacy checkbox false stay readable.
+export function composerInfoReads(values:Record<string,unknown> = {}) {
+  const listed=listedInfo(values);
+  return {
+    timeline:listed.some(kind=>kind==="plan" || kind==="goal" || kind==="todos"),
+    children:listed.includes("children"), parent:listed.includes("parent"),
+    queue:listed.includes("queue"), pullRequest:listed.includes("pullRequest"),
+  };
+}

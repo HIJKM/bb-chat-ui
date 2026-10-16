@@ -1,9 +1,9 @@
 import type { useSdk } from "@get-bb/plugin-sdk/app";
-import { readWorkspaceDiff } from "./workspace-diff-data.ts";
+import { readWorkspaceDiff, type WorkspaceDiffSnapshot } from "./workspace-diff-data.ts";
 
 type Sdk = Pick<ReturnType<typeof useSdk>, "threads" | "environments" | "subscribe">;
 
-export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(summary:string) => void) {
+export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(summary:WorkspaceDiffSnapshot | null) => void) {
   const controller = new AbortController();
   const { signal } = controller;
   let environmentId:string | null = null;
@@ -13,14 +13,18 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
   let fetching = false;
   let pending = false;
   let published = false;
+  let prDirty = true;
+  let prCache:{ environmentId:string; expiresAt:number; value:Awaited<ReturnType<Sdk["environments"]["pullRequest"]>> } | null = null;
   const startedAt = Date.now();
-  const refresh = async () => {
+  const refresh = async (forcePr = false) => {
     if (signal.aborted) return;
+    if (forcePr) { prDirty = true; revision++; }
     if (fetching) { pending = true; return; }
     fetching = true;
     const current = revision;
+    const refreshAt = Date.now();
     const stale = () => signal.aborted || current !== revision;
-    const update = async (summary:string) => {
+    const update = async (summary:WorkspaceDiffSnapshot | null) => {
       if (stale()) return;
       const remaining = published ? 0 : 500 - (Date.now() - startedAt);
       if (remaining > 0) await new Promise<void>(resolve => {
@@ -36,7 +40,7 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
         const thread = await sdk.threads.get({ threadId, signal });
         if (stale()) return;
         const id = thread.environmentId;
-        if (!id) { environmentId = null; await update(""); return; }
+        if (!id) { environmentId = null; await update(null); return; }
         const environment = await sdk.environments.get({ environmentId:id, signal });
         if (stale()) return;
         environmentId = id;
@@ -44,14 +48,33 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
         contextDirty = false;
       }
       if (!environmentId) return;
-      const result = await readWorkspaceDiff(sdk.environments, environmentId, mergeBaseBranch, signal);
+      const result = await readWorkspaceDiff({
+        status:args => sdk.environments.status(args),
+        diffFiles:args => sdk.environments.diffFiles(args),
+        pullRequest:async args => {
+          const cached = prCache?.environmentId === args.environmentId ? prCache : null;
+          if (!prDirty && cached && Date.now() < cached.expiresAt) return cached.value;
+          // Keep the regular 30s boundary even after a forced read between ticks.
+          const expiresAt = startedAt + (Math.floor((refreshAt - startedAt) / 30000) + 1) * 30000;
+          try {
+            const value = await sdk.environments.pullRequest(args);
+            if (value.outcome === "unavailable") return cached?.value ?? value;
+            if (!stale()) { prCache = { environmentId:args.environmentId, expiresAt, value }; prDirty = false; }
+            return value;
+          } catch (error) {
+            // Preserve a known PR base during failure, but retry next tick.
+            if (cached) return cached.value;
+            throw error;
+          }
+        },
+      }, environmentId, mergeBaseBranch, signal);
       if (!stale()) {
-        if (result) await update(JSON.stringify(result));
-        else if (result === undefined || !published) await update("");
+        if (result) await update(result);
+        else if (result === undefined || !published) await update(null);
       }
     } catch {
       // Keep the last summary during a temporary disconnect.
-      if (!stale() && !published) await update("");
+      if (!stale() && !published) await update(null);
     } finally {
       fetching = false;
       if (pending && !signal.aborted) { pending = false; void refresh(); }
@@ -60,6 +83,7 @@ export function startWorkspaceDiffRefresh(sdk:Sdk, threadId:string, publish:(sum
   const invalidate = () => {
     revision++;
     contextDirty = true;
+    prDirty = true;
     void refresh();
   };
   const stopThread = sdk.subscribe({

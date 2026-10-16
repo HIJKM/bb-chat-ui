@@ -114,19 +114,19 @@ test("uses more translucent glass and soft highlights across composer controls",
   );
   assert.match(
     css,
-    /html:has\(\[data-bb-chat-ui-device="phone"\]\[data-bb-chat-ui-viewport="narrow"\]\)[\s\S]*\[data-promptbox\]\s*\{[^}]*box-shadow:\s*0 6px 16px -10px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 22%, transparent\),/,
+    /html\[data-bb-chat-ui-root-device="phone"\]\[data-bb-chat-ui-root-viewport="narrow"\][\s\S]*\[data-promptbox\]\s*\{[^}]*box-shadow:\s*0 6px 16px -10px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 22%, transparent\),/,
   );
   assert.match(
     css,
-    /html:has\(\[data-bb-chat-ui-device="phone"\]\[data-bb-chat-ui-viewport="narrow"\]\)[\s\S]*\[data-promptbox\]:focus-within\s*\{[^}]*box-shadow:\s*0 8px 20px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 34%, transparent\),/,
+    /html\[data-bb-chat-ui-root-device="phone"\]\[data-bb-chat-ui-root-viewport="narrow"\][\s\S]*\[data-promptbox\]:focus-within\s*\{[^}]*box-shadow:\s*0 8px 20px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 34%, transparent\),/,
   );
   assert.match(
     css,
-    /html:has\(\[data-bb-chat-ui-device="phone"\]\[data-bb-chat-ui-viewport="narrow"\]\)[\s\S]*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\]\s*\{[^}]*box-shadow:\s*0 6px 16px -10px color-mix\(in oklab, black 60%, transparent\),/,
+    /html\[data-bb-chat-ui-root-device="phone"\]\[data-bb-chat-ui-root-viewport="narrow"\][\s\S]*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\]\s*\{[^}]*box-shadow:\s*0 6px 16px -10px color-mix\(in oklab, black 60%, transparent\),/,
   );
   assert.match(
     css,
-    /html:has\(\[data-bb-chat-ui-device="phone"\]\[data-bb-chat-ui-viewport="narrow"\]\)[\s\S]*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\]:focus-within\s*\{[^}]*box-shadow:\s*0 8px 20px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 34%, transparent\),/,
+    /html\[data-bb-chat-ui-root-device="phone"\]\[data-bb-chat-ui-root-viewport="narrow"\][\s\S]*\.dark \[data-scroll-footer\]:has\(\.chat-prompt-box\) \[data-promptbox\]:focus-within\s*\{[^}]*box-shadow:\s*0 8px 20px -12px color-mix\(in oklab, var\(--ink, var\(--foreground\)\) 34%, transparent\),/,
   );
   assert.match(
     css,
@@ -159,11 +159,11 @@ test("keeps the collapsing composer on the bottom edge", () => {
   );
   assert.match(
     css,
-    /html:has\(\[data-bb-chat-ui-viewport="narrow"\]\)[\s\S]*:has\(\[data-promptbox-compact\]\)[\s\S]*max-height:\s*100dvh;[\s\S]*\[data-promptbox-shell\] > \.grid\s*\{[^}]*overflow-y:\s*auto;/,
+    /html\[data-bb-chat-ui-root-viewport="narrow"\][\s\S]*:has\(\[data-promptbox-compact\]\)[\s\S]*max-height:\s*100dvh;[\s\S]*\[data-promptbox-shell\] > \.grid\s*\{[^}]*overflow-y:\s*auto;/,
   );
   const desktop = css.slice(
-    css.indexOf('html:has([data-bb-chat-ui-viewport="medium"], [data-bb-chat-ui-viewport="wide"])'),
-    css.indexOf('html:has([data-bb-chat-ui-hit-target="small"])'),
+    css.indexOf('html:is([data-bb-chat-ui-root-viewport="medium"], [data-bb-chat-ui-root-viewport="wide"])'),
+    css.indexOf('html[data-bb-chat-ui-root-hit-target="small"]'),
   );
   assert.ok(desktop);
   assert.match(desktop, /:has\(\[data-promptbox-compact\]\)/);
@@ -212,7 +212,7 @@ test("eases composer height and corner with small hit targets", () => {
   assert.match(css, /@keyframes bb-chat-ui-composer-radius/);
   assert.match(
     css,
-    /html:has\(\[data-bb-chat-ui-hit-target="small"\]\)[\s\S]*?\[data-promptbox\]\s*\{[^}]*height 360ms cubic-bezier\(0\.22, 1, 0\.36, 1\),\s*border-radius 480ms cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
+    /html\[data-bb-chat-ui-root-hit-target="small"\][\s\S]*?\[data-promptbox\]\s*\{[^}]*height 360ms cubic-bezier\(0\.22, 1, 0\.36, 1\),\s*border-radius 480ms cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
   );
   assert.match(
     css,

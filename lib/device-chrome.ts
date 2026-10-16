@@ -1,13 +1,25 @@
-import { createElement } from "react";
+import { createElement, useLayoutEffect, useRef } from "react";
 import { useDeviceChrome } from "./use-device.ts";
+import { mountDeviceRoot } from "./device-root.ts";
 
-export const PHONE_NARROW = 'html:has([data-bb-chat-ui-device="phone"][data-bb-chat-ui-viewport="narrow"])';
-export const NARROW_VIEWPORT = 'html:has([data-bb-chat-ui-viewport="narrow"])';
-export const ROOMY_VIEWPORT = 'html:has([data-bb-chat-ui-viewport="medium"], [data-bb-chat-ui-viewport="wide"])';
-export const SMALL_HIT_TARGET = 'html:has([data-bb-chat-ui-hit-target="small"])';
+export const PHONE_NARROW = 'html[data-bb-chat-ui-root-device="phone"][data-bb-chat-ui-root-viewport="narrow"]';
+export const NARROW_VIEWPORT = 'html[data-bb-chat-ui-root-viewport="narrow"]';
+export const ROOMY_VIEWPORT = 'html:is([data-bb-chat-ui-root-viewport="medium"], [data-bb-chat-ui-root-viewport="wide"])';
+export const SMALL_HIT_TARGET = 'html[data-bb-chat-ui-root-hit-target="small"]';
 
 export function DeviceChromeBridge() {
-  const { device, orientation, viewport, hitTarget } = useDeviceChrome();
+  const chrome = useDeviceChrome();
+  const { device, orientation, viewport, hitTarget } = chrome;
+  const lease = useRef<ReturnType<typeof mountDeviceRoot> | null>(null);
+  useLayoutEffect(() => {
+    lease.current = mountDeviceRoot(document, chrome);
+    return () => {
+      lease.current?.dispose(); lease.current = null;
+    };
+  }, []);
+  useLayoutEffect(() => {
+    lease.current?.update(chrome);
+  }, [device, orientation, viewport, hitTarget]);
   return createElement("span", {
     hidden: true,
     "data-bb-chat-ui-device": device,
