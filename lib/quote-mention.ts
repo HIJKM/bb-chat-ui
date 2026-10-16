@@ -54,8 +54,15 @@ export function injectQuoteMentions(doc: Document): () => void {
     }
   };
 
-  const observer = new MutationObserver(lock);
-  observer.observe(root, { childList: true, subtree: true });
+  // Only batches that add a mention can need work; scrolling and streaming add none.
+  const observer = new MutationObserver((records) => {
+    for (const record of records) for (const node of Array.from(record.addedNodes)) {
+      if (node.nodeType !== 1) continue;
+      const element = node as Element;
+      if (element.matches(`[${MENTION_RESOURCE}]`) || element.querySelector(`[${MENTION_RESOURCE}]`)) { lock(); return; }
+    }
+  });
+  observer.observe(doc.body, { childList: true, subtree: true });
   const onQuoteGesture = (event: Event) => {
     const gesture = quoteGestureFromTarget(event.target);
     if (!gesture) return;
@@ -94,9 +101,10 @@ function lockQuoteMentions(doc: Document) {
   for (const node of Array.from(doc.querySelectorAll(`[${MENTION_RESOURCE}]`))) {
     if (!(node instanceof HTMLElement) || !isQuoteMentionElement(node)) continue;
     const root = mentionRoot(node) ?? node;
-    root.contentEditable = "false";
-    root.style.maxWidth = "100%";
-    root.style.whiteSpace = "nowrap";
+    // Same-value writes still queue mutation records and invalidate style; write only on change.
+    if (root.getAttribute("contenteditable") !== "false") root.contentEditable = "false";
+    if (root.style.maxWidth !== "100%") root.style.maxWidth = "100%";
+    if (root.style.whiteSpace !== "nowrap") root.style.whiteSpace = "nowrap";
     paintMentionIcon(root, mentionResource(node), doc);
   }
 }
@@ -116,18 +124,19 @@ function paintMentionIcon(root: HTMLElement, resource: unknown, doc: Document) {
   const code =
     record.icon === QUOTE_CODE_ICON ||
     (typeof record.label === "string" && record.label.startsWith("diff --git "));
+  const mark = (value: string) => { if (root.getAttribute(ICON_MARK) !== value) root.setAttribute(ICON_MARK, value); };
   if (code) {
-    root.setAttribute(ICON_MARK, "code");
+    mark("code");
     paintCodeIcon(root, doc);
     return;
   }
   if (record.icon === QUOTE_WHOLE_ICON) {
-    root.setAttribute(ICON_MARK, "whole");
+    mark("whole");
     const icon = iconRoot(root);
     if (icon) clearQuoteGlyph(icon);
     return;
   }
-  root.setAttribute(ICON_MARK, "selection");
+  mark("selection");
   paintMessageIcon(root);
 }
 
@@ -155,7 +164,7 @@ function paintMessageIcon(root: HTMLElement) {
   const parent = icon.parentElement;
   if (!parent) return;
   icon.querySelector(`[${CODE_CLONE}]`)?.remove();
-  if (icon instanceof HTMLElement || icon instanceof SVGElement) {
+  if ((icon instanceof HTMLElement || icon instanceof SVGElement) && icon.style.display !== "none") {
     icon.style.display = "none";
   }
   if (parent.querySelector(`:scope > [${MESSAGE_GLYPH}]`)) return;
@@ -174,7 +183,7 @@ function paintMessageIcon(root: HTMLElement) {
 
 function clearQuoteGlyph(icon: Element) {
   icon.parentElement?.querySelector(`:scope > [${MESSAGE_GLYPH}]`)?.remove();
-  if (icon instanceof HTMLElement || icon instanceof SVGElement) {
+  if ((icon instanceof HTMLElement || icon instanceof SVGElement) && icon.style.display !== "") {
     icon.style.display = "";
   }
 }
