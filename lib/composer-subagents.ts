@@ -28,13 +28,6 @@ function skipped(node: HTMLElement): boolean {
     return !!node.closest("[data-bb-chat-ui-info-stack], [data-promptbox-shell]");
 }
 
-function inLatestTurn(root: ParentNode, node: HTMLElement): boolean {
-    const markers = Array.from(root.querySelectorAll<HTMLElement>("[data-message-column]"));
-    const last = markers[markers.length - 1];
-    if (!last || last.contains(node)) return !last;
-    return (last.compareDocumentPosition(node) & 4) !== 0;
-}
-
 function innermost(hits: SubagentHit[]): SubagentHit[] {
     return hits.filter(hit => !hits.some(other => other.node && hit.node && other.node !== hit.node && hit.node.contains(other.node)));
 }
@@ -45,8 +38,12 @@ export function readSubagentLines(root: ParentNode): SubagentHit[] {
     const done: SubagentHit[] = [];
     const liveCounts: SubagentHit[] = [];
     const doneCounts: SubagentHit[] = [];
+    // One marker query per scan (was one per candidate node).
+    const markers = root.querySelectorAll<HTMLElement>("[data-message-column]");
+    const last = markers.item(markers.length - 1);
+    const latest = (node: HTMLElement) => !last ? true : !last.contains(node) && (last.compareDocumentPosition(node) & 4) !== 0;
     for (const node of nodes) {
-        if (skipped(node) || !inLatestTurn(root, node)) continue;
+        if (!latest(node) || skipped(node)) continue;
         const text = rowText(node);
         if (!text) continue;
         const running = text.match(LIVE);
