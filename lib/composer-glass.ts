@@ -7,6 +7,9 @@ const FOOTER = "[data-scroll-footer]:has(.chat-prompt-box)";
 const GLASS_MARK = "data-bb-chat-ui-glass";
 const FOOTER_MARK = `[data-scroll-footer][${GLASS_MARK}]`;
 const AGENTATION_SLOT = "data-bb-chat-ui-agentation-slot";
+const COMPACT_MARK = "data-bb-chat-ui-compact-footer";
+const HAS_IMAGE = "data-bb-chat-ui-has-image";
+const DIFF_SECTION = "data-bb-chat-ui-diff-section";
 const PLATE = ":scope > .relative";
 const COMPOSER = "[data-promptbox]";
 const FADE_HEIGHT = "--bb-chat-ui-fade-height";
@@ -147,42 +150,42 @@ ${FOOTER_MARK} [data-promptbox] {
     0 12px 32px -14px ${LIGHT_SHADOW},
     inset 0 1px 3px ${LIGHT_COMPOSER_EDGE};
 }
-  ${NARROW_VIEWPORT} ${FOOTER_MARK}:has([data-promptbox-compact]) {
+  ${NARROW_VIEWPORT} ${FOOTER_MARK}[${COMPACT_MARK}] {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
     max-height: 100dvh;
   }
-  ${NARROW_VIEWPORT} ${FOOTER_MARK}:has([data-promptbox-compact]) > .relative,
-  ${NARROW_VIEWPORT} ${FOOTER_MARK}:has([data-promptbox-compact]) .chat-prompt-box,
-  ${NARROW_VIEWPORT} ${FOOTER_MARK}:has([data-promptbox-compact]) [data-promptbox-shell] {
+  ${NARROW_VIEWPORT} ${FOOTER_MARK}[${COMPACT_MARK}] > .relative,
+  ${NARROW_VIEWPORT} ${FOOTER_MARK}[${COMPACT_MARK}] .chat-prompt-box,
+  ${NARROW_VIEWPORT} ${FOOTER_MARK}[${COMPACT_MARK}] [data-promptbox-shell] {
     display: flex;
     min-height: 0;
     max-height: 100%;
     flex-direction: column;
     justify-content: flex-end;
   }
-  ${NARROW_VIEWPORT} ${FOOTER_MARK}:has([data-promptbox-compact]) [data-promptbox-shell] > .grid {
+  ${NARROW_VIEWPORT} ${FOOTER_MARK}[${COMPACT_MARK}] [data-promptbox-shell] > .grid {
     min-height: 0;
     overflow-y: auto;
   }
-  ${NARROW_VIEWPORT} ${FOOTER_MARK}:has([data-promptbox-compact]) [data-follow-up-composer-anchor] {
+  ${NARROW_VIEWPORT} ${FOOTER_MARK}[${COMPACT_MARK}] [data-follow-up-composer-anchor] {
     flex-shrink: 0;
   }
 
-  ${ROOMY_VIEWPORT} ${FOOTER_MARK}:has([data-promptbox-compact]) {
+  ${ROOMY_VIEWPORT} ${FOOTER_MARK}[${COMPACT_MARK}] {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
   }
-  ${ROOMY_VIEWPORT} ${FOOTER_MARK}:has([data-promptbox-compact]) > .relative,
-  ${ROOMY_VIEWPORT} ${FOOTER_MARK}:has([data-promptbox-compact]) .chat-prompt-box,
-  ${ROOMY_VIEWPORT} ${FOOTER_MARK}:has([data-promptbox-compact]) [data-promptbox-shell] {
+  ${ROOMY_VIEWPORT} ${FOOTER_MARK}[${COMPACT_MARK}] > .relative,
+  ${ROOMY_VIEWPORT} ${FOOTER_MARK}[${COMPACT_MARK}] .chat-prompt-box,
+  ${ROOMY_VIEWPORT} ${FOOTER_MARK}[${COMPACT_MARK}] [data-promptbox-shell] {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
   }
-  ${ROOMY_VIEWPORT} ${FOOTER_MARK}:has([data-promptbox-compact]) [data-follow-up-composer-anchor] {
+  ${ROOMY_VIEWPORT} ${FOOTER_MARK}[${COMPACT_MARK}] [data-follow-up-composer-anchor] {
     flex-shrink: 0;
   }
 
@@ -203,8 +206,8 @@ ${FOOTER_MARK} [data-promptbox][data-promptbox-compact] {
 ${FOOTER_MARK} [data-promptbox][data-promptbox-compact]:has([aria-label="Exit handoff"]) {
   border-radius: 1.375rem !important;
 }
-${FOOTER_MARK} [data-promptbox] button:not(:has(img)),
-${FOOTER_MARK} [data-promptbox] [role="button"]:not(:has(img)) {
+${FOOTER_MARK} [data-promptbox] button:not([${HAS_IMAGE}]),
+${FOOTER_MARK} [data-promptbox] [role="button"]:not([${HAS_IMAGE}]) {
   border-radius: 999px !important;
 }
 ${FOOTER_MARK} [data-promptbox] [data-promptbox-send-menu] {
@@ -330,7 +333,7 @@ ${FOOTER_MARK} ${STACK}[${CONTROLS}]::after {
 ${FOOTER_MARK} ${STACK} > section[aria-label="To-do list"] {
   order: 2;
 }
-${FOOTER_MARK} ${STACK} section:has(${PILL}) {
+${FOOTER_MARK} ${STACK} section[${DIFF_SECTION}] {
   position: absolute;
   bottom: var(--bb-chat-ui-controls-bottom, 0px);
   left: 0;
@@ -772,6 +775,9 @@ export function injectComposerGlass(document: Document): () => void {
           view?.matchMedia("(prefers-reduced-motion: reduce)").matches ?? false,
       });
       compact = nextCompact;
+      // Keep the footer compact marker in step before paint (was `:has([data-promptbox-compact])` in CSS).
+      const compactFooter = composer.closest("[data-scroll-footer]");
+      if (compactFooter) toggleMark(compactFooter, COMPACT_MARK, compactFooter.querySelector("[data-promptbox-compact]") !== null);
       if (change != null) {
         const current = ++generation;
         applyComposerRadius(composer, change);
@@ -871,6 +877,9 @@ export function injectComposerGlass(document: Document): () => void {
     syncFrame = view.requestAnimationFrame(() => { syncFrame = 0; sync(); });
   };
   const glassFooters = new Set<HTMLElement>();
+  // Every glass footer is watched, not only the first, so markers stay live in all of them.
+  const watchedFooters = new WeakSet<HTMLElement>();
+  const footerWatch = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => { scheduleSync(); });
   const sync = () => {
     releaseDetachedComposers();
     const footers = document.querySelectorAll(FOOTER);
@@ -879,7 +888,11 @@ export function injectComposerGlass(document: Document): () => void {
       const footerNode = footers.item(index);
       if (!(footerNode instanceof HTMLElement)) continue;
       currentFooters.add(footerNode);
-      if (!footerNode.hasAttribute(GLASS_MARK)) footerNode.setAttribute(GLASS_MARK, "");
+      markFooter(footerNode);
+      if (footerWatch && !watchedFooters.has(footerNode)) {
+        watchedFooters.add(footerNode);
+        footerWatch.observe(footerNode, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-queued-messages-mode"] });
+      }
       const composers = footerNode.querySelectorAll(COMPOSER);
       for (let composerIndex = 0; composerIndex < composers.length; composerIndex += 1) {
         const composer = composers.item(composerIndex);
@@ -908,7 +921,9 @@ export function injectComposerGlass(document: Document): () => void {
     observed = footer;
     if (footer instanceof HTMLElement) {
       observer = new ResizeObserver(() => {
-        scheduleSync();
+        // Layout is already clean here; align in this frame (before paint) rather than the next.
+        if (syncFrame) { document.defaultView?.cancelAnimationFrame(syncFrame); syncFrame = 0; }
+        sync();
       });
       observer.observe(footer);
     }
@@ -935,12 +950,18 @@ export function injectComposerGlass(document: Document): () => void {
   if (document.body && typeof MutationObserver !== "undefined") {
     mutations = new MutationObserver((records) => {
       if (records.some(record => record.removedNodes.length > 0)) releaseDetachedComposers();
-      if (observed?.isConnected && stackObserved?.isConnected) {
-        const addedComposer = records.some(record => Array.from(record.addedNodes).some(node =>
-          node instanceof HTMLElement && (node.matches(COMPOSER) || node.querySelector(COMPOSER) !== null),
-        ));
-        if (!addedComposer) return;
+      // Bind motion for new footer composers right away (no layout read), so a compact toggle
+      // in the same frame still animates; geometry waits for the batched sync.
+      let addedComposer = false;
+      for (const record of records) for (const node of Array.from(record.addedNodes)) {
+        if (!(node instanceof HTMLElement)) continue;
+        const found = node.matches(COMPOSER) ? [node] : Array.from(node.querySelectorAll<HTMLElement>(COMPOSER));
+        for (const composer of found) {
+          addedComposer = true;
+          if (composer.closest("[data-scroll-footer]")?.querySelector(".chat-prompt-box")) bindComposerRadius(composer);
+        }
       }
+      if (observed?.isConnected && stackObserved?.isConnected && !addedComposer) return;
       scheduleSync();
     });
     mutations.observe(document.body, { childList: true, subtree: true });
@@ -951,9 +972,10 @@ export function injectComposerGlass(document: Document): () => void {
     if (syncFrame) document.defaultView?.cancelAnimationFrame(syncFrame);
     for (const node of glassFooters) node.removeAttribute(GLASS_MARK);
     glassFooters.clear();
-    for (const node of Array.from(document.querySelectorAll(`[${AGENTATION_SLOT}]`))) node.removeAttribute(AGENTATION_SLOT);
+    for (const name of [AGENTATION_SLOT, COMPACT_MARK, HAS_IMAGE, DIFF_SECTION]) for (const node of Array.from(document.querySelectorAll(`[${name}]`))) node.removeAttribute(name);
     mutations?.disconnect();
     stackMutations?.disconnect();
+    footerWatch?.disconnect();
     observer?.disconnect();
     for (const stop of radiusWatches.values()) stop();
     radiusWatches.clear();
@@ -984,6 +1006,30 @@ export function injectComposerGlass(document: Document): () => void {
   };
 }
 
+function toggleMark(node: Element, name: string, on: boolean): void {
+  if (node.hasAttribute(name) !== on) node.toggleAttribute(name, on);
+}
+
+// Marker attributes the CSS reads instead of :has(). No layout is read, so this runs for every
+// glass footer on each sync.
+function markFooter(footer: HTMLElement): void {
+  toggleMark(footer, GLASS_MARK, true);
+  toggleMark(footer, COMPACT_MARK, footer.querySelector("[data-promptbox-compact]") !== null);
+  for (const button of Array.from(footer.querySelectorAll('[data-promptbox] button, [data-promptbox] [role="button"]'))) {
+    toggleMark(button, HAS_IMAGE, button.querySelector("img") !== null);
+  }
+  const stack = footer.querySelector(STACK);
+  if (!stack) return;
+  // The parent of the staging shell (was `:has(> .agentation-staging-shell)`).
+  const slot = stack.querySelector(".agentation-staging-shell")?.parentElement ?? null;
+  for (const node of Array.from(stack.querySelectorAll(`[${AGENTATION_SLOT}]`))) if (node !== slot) node.removeAttribute(AGENTATION_SLOT);
+  if (slot) toggleMark(slot, AGENTATION_SLOT, true);
+  // The section holding the Diff toggle (was `section:has(#thread-prompt-banner-git-toggle)`).
+  const diffSection = stack.querySelector(PILL)?.closest("section") ?? null;
+  for (const node of Array.from(stack.querySelectorAll(`[${DIFF_SECTION}]`))) if (node !== diffSection) node.removeAttribute(DIFF_SECTION);
+  if (diffSection) toggleMark(diffSection, DIFF_SECTION, true);
+}
+
 function alignFade(footer: HTMLElement): void {
   const plate = footer.querySelector(PLATE);
   if (!(plate instanceof HTMLElement)) return;
@@ -1008,10 +1054,6 @@ function alignComposerControls(footer: HTMLElement): void {
   const column = footer.querySelector(".chat-prompt-box");
   const stack = footer.querySelector(STACK);
   if (!(column instanceof HTMLElement) || !(stack instanceof HTMLElement)) return;
-  // Marks the parent of the staging shell (was `:has(> .agentation-staging-shell)` in CSS).
-  const slot = stack.querySelector(".agentation-staging-shell")?.parentElement ?? null;
-  for (const node of Array.from(stack.querySelectorAll(`[${AGENTATION_SLOT}]`))) if (node !== slot) node.removeAttribute(AGENTATION_SLOT);
-  if (slot && !slot.hasAttribute(AGENTATION_SLOT)) slot.setAttribute(AGENTATION_SLOT, "");
   if (stack.hasAttribute("data-bb-chat-ui-info-stack")) {
     stack.removeAttribute(CONTROLS);
     const anchor = footer.querySelector("[data-follow-up-composer-anchor]") ?? stack;
