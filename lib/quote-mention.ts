@@ -54,15 +54,22 @@ export function injectQuoteMentions(doc: Document): () => void {
     }
   };
 
-  // Only batches that add a mention can need work; scrolling and streaming add none.
+  // Work is needed when a mention appears or changes, or when the Diff icon the code
+  // quote copies mounts later. Scrolling and streaming batches touch none of these.
+  // lock() writes only on change, so its own glyph insertion settles after one more pass.
+  const RELEVANT = `[${MENTION_RESOURCE}], ${DIFF_ICON_SOURCE}, #thread-prompt-banner-git-toggle`;
   const observer = new MutationObserver((records) => {
-    for (const record of records) for (const node of Array.from(record.addedNodes)) {
-      if (node.nodeType !== 1) continue;
-      const element = node as Element;
-      if (element.matches(`[${MENTION_RESOURCE}]`) || element.querySelector(`[${MENTION_RESOURCE}]`)) { lock(); return; }
+    for (const record of records) {
+      const target = record.target.nodeType === 1 ? record.target as Element : record.target.parentElement;
+      if (target?.closest(`[${MENTION_RESOURCE}]`)) { lock(); return; }
+      for (const node of Array.from(record.addedNodes)) {
+        if (node.nodeType !== 1) continue;
+        const element = node as Element;
+        if (element.matches(RELEVANT) || element.querySelector(RELEVANT)) { lock(); return; }
+      }
     }
   });
-  observer.observe(doc.body, { childList: true, subtree: true });
+  observer.observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: [MENTION_RESOURCE] });
   const onQuoteGesture = (event: Event) => {
     const gesture = quoteGestureFromTarget(event.target);
     if (!gesture) return;

@@ -281,6 +281,8 @@ export function injectMentionPills(doc: Document): () => void {
         ? mutation.target : mutation.target.parentElement;
       if (target?.closest(".prompt-mention-pill")) return true;
       if (mutation.type === "attributes") {
+        // The compact wrapper marker must follow the editor turning compact (was a live :has()).
+        if (mutation.attributeName === "data-promptbox-compact-content") return true;
         return target?.matches('.ProseMirror, [data-promptbox-editor-scroll]') ?? false;
       }
       return Array.from(mutation.addedNodes).some((node) =>
@@ -296,7 +298,7 @@ export function injectMentionPills(doc: Document): () => void {
   });
   observer.observe(doc.body, {
     childList: true, subtree: true, characterData: true, attributes: true,
-    attributeFilter: [RESOURCE, "contenteditable", "aria-busy"],
+    attributeFilter: [RESOURCE, "contenteditable", "aria-busy", "data-promptbox-compact-content"],
   });
 
   const removeButton = (target: EventTarget | null) => {
