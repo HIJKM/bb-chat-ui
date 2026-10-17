@@ -245,7 +245,7 @@ ${DETAIL}[aria-label="Queued messages"] > [${MARK}-close-heading] { margin-botto
 ${DETAIL} [data-queued-messages-scroll-frame] { position:static !important; display:grid !important; grid-template-rows:minmax(0,1fr); flex:0 1 auto !important; width:100% !important; height:auto !important; min-height:0 !important; max-height:var(--bb-chat-ui-queue-height); overflow:hidden !important; }
 ${DETAIL} [data-queued-messages-scroll] { height:auto !important; min-height:0 !important; max-height:var(--bb-chat-ui-queue-height); padding:4px 0; overflow-y:auto !important; overflow-x:hidden !important; overscroll-behavior:contain; }
 ${DETAIL} header[data-queued-messages-mode] { display:none !important; }
-${DETAIL}[aria-label="Queued messages"] > div:has(> button[aria-label="Collapse queued messages"]) { display:none !important; }
+${DETAIL}[aria-label="Queued messages"] > [${MARK}-queue-collapse-wrap] { display:none !important; }
 ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] { display:none !important; }
 [${MARK}-stack] :is(${QUESTION}) { border-radius:18px !important; overflow:hidden; transform-origin:center bottom; animation:bb-info-enter 260ms cubic-bezier(.22,1,.36,1); }
 [${MARK}-stack] :is([data-testid="plan-review-banner"], [data-testid="approval-banner"]) { border-radius:18px !important; overflow:hidden; }
@@ -255,12 +255,12 @@ ${STACK}[${MARK}-request] [${UNIT}][${UNIT}], [${MARK}-request] [${MARK}-menu] {
 [${MARK}-stack] :is([data-testid="tool-use-ask"], [data-testid="user-question-banner"], [data-testid="approval-banner"], [data-testid="plan-review-banner"]),
 [${MARK}-stack] [data-testid="plugin-request-banner"] > [data-testid="plugin-interaction-shell"] { background:var(--bb-chat-ui-info-face) !important; border-color:transparent !important; backdrop-filter:blur(14px) saturate(1.25); -webkit-backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 12px 32px -14px var(--bb-chat-ui-info-shadow),inset 0 1px 3px var(--bb-chat-ui-info-edge) !important; }
 /* A collapsed secret shell keeps mb-2, and the grid keeps space-y margin under the hidden composer. */
-[data-promptbox-shell]:has([data-testid="plugin-interaction-shell"]:not([data-expanded])) > .grid,
+[data-promptbox-shell][${MARK}-collapsed-interaction] > .grid,
 [${MARK}-stack] [data-testid="plugin-interaction-shell"]:not([data-expanded]) { margin-bottom:0 !important; }
 [${MARK}-stack] [data-testid="plugin-interaction-shell"]:not([data-expanded]) > :first-child span { align-items:center; }
 [${MARK}-stack] [data-testid="plugin-interaction-shell"] form > .sticky { background:transparent !important; border-top:0 !important; box-shadow:none !important; }
 /* Expanded secret header hairline is the 1px line on the scroll edge. Other request shells keep it. */
-[${MARK}-stack] [data-testid="plugin-interaction-shell"][${MARK}-secret] > :first-child { border-bottom-color:transparent !important; }
+[${MARK}-stack] [data-testid="plugin-interaction-shell"][${MARK}-secret-form] > :first-child { border-bottom-color:transparent !important; }
 [${MARK}-stack] [data-testid="plan-review-request"] { position:relative; background:transparent !important; border:0 !important; border-radius:0 !important; overflow:visible !important; box-shadow:none !important; }
 [${MARK}-stack] [data-testid="plan-review-request"] > .overflow-auto { padding-left:0 !important; padding-right:0 !important; }
 [${MARK}-stack] [data-testid="plan-review-request"] > p { border-top:0 !important; padding-left:0 !important; padding-right:0 !important; }
@@ -2149,6 +2149,9 @@ export function injectComposerInfo(document: Document): () => void {
       }
       updateScrollHints();
       trackSecrets();
+      // Classification above may have created wrappers; refresh the pending-card guards now
+      // instead of relying on a later observer batch.
+      guardStack(stack);
     };
     return { sync, bar, close, editing, resize, cleanup() {
       document.removeEventListener("pointerup", releasePress);
@@ -2222,13 +2225,33 @@ export function injectComposerInfo(document: Document): () => void {
   // synchronously in the observer callbacks (before paint), so unclassified native cards still never flash.
   const GUARD = `${MARK}-guard`, HOLDS_REQUEST = `${MARK}-holds-request`;
   const toggleMark = (node: Element, name: string, on: boolean) => { if (node.hasAttribute(name) !== on) node.toggleAttribute(name, on); };
+  const QUEUE_COLLAPSE_WRAP = `${MARK}-queue-collapse-wrap`, COLLAPSED_INTERACTION = `${MARK}-collapsed-interaction`;
   const guardStack = (stack: Element) => {
     toggleMark(stack, GUARD, stack.querySelector(`[${SOURCE}]`) !== null);
-    for (const host of [stack, ...Array.from(stack.querySelectorAll(`[${WRAP}]`))]) {
-      for (const child of Array.from(host.children)) toggleMark(child, HOLDS_REQUEST, !child.matches(REQUEST) && child.querySelector(REQUEST) !== null);
+    // Every ancestor of a request card inside the stack stays visible, whether or not the
+    // rAF sync has classified it as a wrapper yet (was `:has(REQUEST)` in the CSS).
+    const holders = new Set<Element>();
+    for (const request of Array.from(stack.querySelectorAll(REQUEST))) {
+      for (let node = request.parentElement; node && node !== stack; node = node.parentElement) holders.add(node);
+    }
+    for (const node of Array.from(stack.querySelectorAll(`[${HOLDS_REQUEST}]`))) if (!holders.has(node)) node.removeAttribute(HOLDS_REQUEST);
+    for (const node of holders) toggleMark(node, HOLDS_REQUEST, true);
+    // Was `> div:has(> button[aria-label="Collapse queued messages"])` in the queue detail CSS.
+    for (const queue of Array.from(stack.querySelectorAll('section[aria-label="Queued messages"]'))) {
+      for (const child of Array.from(queue.children)) toggleMark(child, QUEUE_COLLAPSE_WRAP, child.tagName === "DIV" && child.querySelector(':scope > button[aria-label="Collapse queued messages"]') !== null);
     }
   };
-  const guardShell = (shell: Element | null | undefined) => { const stack = shell?.querySelector(":scope > .grid"); if (stack) guardStack(stack); };
+  const guardShell = (shell: Element | null | undefined) => {
+    if (!shell) return;
+    // Was `[data-promptbox-shell]:has([data-testid="plugin-interaction-shell"]:not([data-expanded])) > .grid`.
+    toggleMark(shell, COLLAPSED_INTERACTION, shell.querySelector('[data-testid="plugin-interaction-shell"]:not([data-expanded])') !== null);
+    // Follows the secret form itself, so a reused interaction card does not keep the secret header style.
+    for (const card of Array.from(shell.querySelectorAll('[data-testid="plugin-interaction-shell"]'))) {
+      toggleMark(card, `${MARK}-secret-form`, card.querySelector('form[class~="@container/secrets"]') !== null);
+    }
+    const stack = shell.querySelector(":scope > .grid");
+    if (stack) guardStack(stack);
+  };
   // Composer details (text, labels, attributes) are only observed inside composer shells.
   const shellObserver = new view.MutationObserver(records => {
     const shells = new Set<Element>();
@@ -2239,6 +2262,8 @@ export function injectComposerInfo(document: Document): () => void {
     }
     for (const shell of shells) guardShell(shell);
     if (records.some(record => {
+      // data-expanded is watched only to keep the guard markers current; as before it does not sync.
+      if (record.attributeName === "data-expanded") return false;
       const target = record.target instanceof view.Element ? record.target : record.target.parentElement;
       // Counts, labels and popover markup in our bar are output. Re-reading them
       // would turn each fan/count animation step into another full sync and fit.
@@ -2251,16 +2276,19 @@ export function injectComposerInfo(document: Document): () => void {
       guardShell(shell);
       if (watchedShells.has(shell)) continue;
       watchedShells.add(shell);
-      shellObserver.observe(shell, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[`${MARK}-thread`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "data-bb-chat-ui-device", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid"] });
+      shellObserver.observe(shell, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:[`${MARK}-thread`, `${MARK}-read-only-label`, `${MARK}-restore-error`, "data-queued-message-id", "data-bb-chat-ui-device", "aria-label", "aria-expanded", "aria-disabled", "disabled", "title", "href", "data-testid", "data-expanded"] });
     }
   };
   // The body only tells us when composer shells (or the host jump button) mount or unmount.
-  // Transcript rows never contain them, so streaming and scrolling batches are skipped early.
+  // Inside the transcript only a composer shell itself can matter (an inline editor), so
+  // scrolling and streaming batches there check one selector instead of the full discovery.
+  const shellIn = (node: Node) => node instanceof view.Element &&
+    (node.matches("[data-promptbox-shell]") || !!node.querySelector("[data-promptbox-shell]"));
   const observer = new view.MutationObserver(records => {
     if (records.some(record => {
       if (record.attributeName === "data-bb-chat-ui-device") return true;
       const target = record.target instanceof view.Element ? record.target : record.target.parentElement;
-      if (target?.closest("[data-timeline-items]")) return false;
+      if (target?.closest("[data-timeline-items]")) return Array.from(record.addedNodes).some(shellIn) || Array.from(record.removedNodes).some(shellIn);
       return Array.from(record.addedNodes).some(discoversInfo) || Array.from(record.removedNodes).some(discoversInfo);
     })) { watchShells(); schedule(); }
   });
@@ -2289,7 +2317,9 @@ export function injectComposerInfo(document: Document): () => void {
     disposed = true;
     observer.disconnect();
     shellObserver.disconnect();
-    for (const node of Array.from(document.querySelectorAll(`[${GUARD}], [${HOLDS_REQUEST}]`))) { node.removeAttribute(GUARD); node.removeAttribute(HOLDS_REQUEST); }
+    for (const node of Array.from(document.querySelectorAll(`[${GUARD}], [${HOLDS_REQUEST}], [${QUEUE_COLLAPSE_WRAP}], [${COLLAPSED_INTERACTION}], [${MARK}-secret-form]`))) {
+      for (const name of [GUARD, HOLDS_REQUEST, QUEUE_COLLAPSE_WRAP, COLLAPSED_INTERACTION, `${MARK}-secret-form`]) node.removeAttribute(name);
+    }
     document.removeEventListener(composerDataChanged, onData);
     if (frame) view.cancelAnimationFrame(frame);
     document.removeEventListener("keydown", onKey);
